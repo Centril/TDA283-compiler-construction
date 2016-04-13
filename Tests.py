@@ -68,6 +68,7 @@ class Test():
         d = dirname(jlc)
         if not d:
             d = '.'
+        print join(d,basename(jlc))
         p = Popen([join(d,basename(jlc)), self.file], stdout=PIPE, stderr=PIPE, cwd=getcwd())
         self.output, self.err = p.communicate()
         self.returncode = p.returncode
