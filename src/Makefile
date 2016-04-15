@@ -1,6 +1,6 @@
 all:
-	rm -f ../../jlc
-	cd main && ghc jlc.hs -o ../../jlc
+	rm -f ../../submission/jlc
+	cd main && ghc -O2 Jlc.hs -o ../../submission/jlc
 
 bnfc:
 	bnfc -m -haskell -o bnf contrib/Javalette.cf
