@@ -5,32 +5,35 @@ import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 import Control.Monad (when)
 
+import Data.Maybe
 import Javalette.Lex
 import Javalette.Par
 import Javalette.Skel
 import Javalette.Print
 import Javalette.Abs
 import Javalette.ErrM
+
 import Frontend.TypeCheck
 
-type Verbosity = Int
-type ParseFun a = [Token] -> Err a
+parserPhase :: String -> IO ()
+parserPhase s = case pProgram (myLexer s) of
+  Bad err  -> do
+    putStrLn "SYNTAX ERROR"
+    putStrLn err
+    exitFailure
+  Ok tree -> do
+    putStrLn ""
+    print tree
+    putStrLn ""
+    typeCheckPhase tree
 
-putStrV :: Verbosity -> String -> IO ()
-putStrV v s = when (v > 1) $ putStrLn s
-
-parseFile :: (Print a, Show a) => Verbosity -> ParseFun a -> String -> IO ()
-parseFile v p s = let ts = myLexer s in case p ts of
-             Bad s    -> do putStrLn "\nParse failed...\n"
-                            exitFailure
-             Ok  tree -> do putStrLn "\nParse successful!\n"
-                            putStrV v $ show tree
-                            putStrLn ""
-                            exitSuccess
+typeCheckPhase :: Program -> IO ()
+typeCheckPhase p = case typeCheck p of
+  Bad err -> do
+    putStrLn "TYPE ERROR"
+    putStrLn err
+    exitFailure
+  Ok _ -> putStrLn "OK"
 
 main :: IO ()
-main = do
-  getContents >>= parseFile 2 pProgram
-  typeCheck
-  hPutStrLn stderr "ERROR"
-  exitFailure
+main = getContents >>= parserPhase
