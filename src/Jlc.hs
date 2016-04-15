@@ -5,7 +5,6 @@ import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 import Control.Monad (when)
 
-import Data.Maybe
 import Javalette.Lex
 import Javalette.Par
 import Javalette.Skel
