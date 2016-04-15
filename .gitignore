@@ -17,4 +17,5 @@ cabal.sandbox.config
 .DS_Store
 grade/Grade
 src/bnf/*
-submission/*
+submission/jlc
+submission/graderTestSuite
