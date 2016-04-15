@@ -15,6 +15,6 @@ cabal.sandbox.config
 *.hp
 .stack-work/
 .DS_Store
+grade/Grade
 src/bnf/*
-grade/testsuite
-submission/graderTestSuite
+submission/*
