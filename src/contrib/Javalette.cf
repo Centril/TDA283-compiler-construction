@@ -24,7 +24,7 @@ BStmt.     Stmt ::= Block ;
 
 Decl.      Stmt ::= Type [Item] ";" ;
 
-NoInit.    Item ::= Ident ; 
+NoInit.    Item ::= Ident ;
 
 Init.      Item ::= Ident "=" Expr ;
 
@@ -57,6 +57,8 @@ Doub.      Type ::= "double" ;
 Bool.      Type ::= "boolean" ;
 
 Void.      Type ::= "void" ;
+
+internal   ConstStr. Type ::= "String" ;
 
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
