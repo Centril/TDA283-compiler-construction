@@ -58,9 +58,9 @@ emptyEnv = (Map.empty, [Map.empty])
 newBlock :: Env -> Env
 newBlock (s, c)  = (s, Map.empty:c)
 
-remBlock :: Env -> Err Env
-remBlock (s, []) = Left "There is no block left."
-remBlock (s, c)  = Right (s, tail c)
+remBlock :: Env -> Env
+remBlock (s, []) = (s, [])
+remBlock (s, c)  = (s, tail c)
 
 lookupVar :: Env -> Ident -> Maybe Type
 lookupVar (_, []) _ = Nothing
@@ -188,7 +188,8 @@ checkStms :: Env -> Type -> [Stmt] -> Err Env
 checkStms e y = foldM (`checkStm` y) e
 
 checkBlock :: Env -> Type -> Block -> Err Env
-checkBlock e y (Block b) = checkStms e y b
+checkBlock env typ (Block block) =
+    remBlock <$> checkStms (newBlock env) typ block
 
 checkFunc :: Env -> TopDef -> Err Env
 checkFunc e (FnDef y i a b) = checkBlock e y b
