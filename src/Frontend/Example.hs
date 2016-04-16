@@ -12,13 +12,7 @@ Portability : ALL
 
 Example function for the typechecker.
 -}
-module Frontend.Example (
-    -- * Types
-    Env, Sig, Context, Err, Log,
-
-    -- * Operations
-    simpleBlock
-) where
+module Frontend.Example where
 
 import Javalette.Abs
 
