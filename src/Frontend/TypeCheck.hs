@@ -117,12 +117,21 @@ inferUnary e t x1 = do
 
 -- TODO: Refactor the function: Remove do
 checkExp :: Env -> Type -> Expr -> Err Type
-checkExp e y1 x = do
-    y2 <- inferExp e x
-    case y2 == y1 of
-        True  -> return y2
-        False -> Left $ unwords ["Expected type", show y1, "for", show e,
-                             "but found:", show y2]
+checkExp env ty1 x = do
+    ty2 <- inferExp env x
+    case ty2 == ty1 of
+        True  -> return ty2
+        False -> Left $ unwords ["Expected type", show ty1, "for", show env,
+                                 "but found:", show ty2]
+
+checkExp' :: Env -> Ident -> Expr -> Err Type
+checkExp' env ident expr = do
+    ty1 <- lookupVar' env ident
+    ty2 <- inferExp env expr
+    case ty1 == ty2 of
+        True  -> return ty1
+        False -> Left $ unwords ["Expected type", show ty1, "for",
+                                 show ident, "but found:", show ty2]
 
 checkIdent :: Env -> [Type] -> Ident -> Err Type
 checkIdent env types ident = do
@@ -131,14 +140,22 @@ checkIdent env types ident = do
         True  -> return typ
         False -> Left $ "Wrong type for ident: " ++ show ident
 
+checkVoid :: Env -> Type -> Err Type
+checkVoid env typ = do
+    case typ == Void  of
+        True  -> return typ
+        False -> Left $ "Wrong type for void: " ++ show typ
+
 -- TODO: Refactor the function: Remove do
 checkStm :: Env -> Type -> Stmt -> Err Env
 checkStm env typ stmt = case stmt of
-    Empty               -> Left "Not implemented"
-    BStmt block         -> Left "Not implemented"
+    Empty               -> return env
+    BStmt block         -> checkBlock env typ block
     Decl typ item       ->
         foldM (\en iden -> extendVar en iden typ) env (itemIdent <$> item)
-    Ass ident expr      -> Left "Not implemented"
+    Ass ident expr      -> do
+        checkExp' env ident expr
+        return env
     Incr ident          -> do
         checkIdent env [Int, Doub] ident
         return env
@@ -148,7 +165,9 @@ checkStm env typ stmt = case stmt of
     Ret expr            -> do
         checkExp env typ expr
         return env
-    VRet                -> Left "Not implemented"
+    VRet                -> do
+        checkVoid env typ
+        return env
     Cond expr st        -> do
         checkExp env Bool expr
         checkStm env typ st
