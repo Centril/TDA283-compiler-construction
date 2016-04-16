@@ -10,6 +10,7 @@ import Javalette.Print
 import Javalette.Abs
 import Javalette.ErrM
 
+-- TODO: Replace Err with Either
 type Env =     (Sig, [Context])         -- functions and context stack
 type Sig =     Map Ident ([Type], Type) -- function type signature
 type Context = Map Ident Type           -- variables with their types
@@ -37,13 +38,14 @@ lookupFun (s, _) i = Map.lookup i s
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
     Nothing -> Ok (s, Map.insert i y t:r)
-    Just _  -> Bad ("The variable is already defined." ++ show i)
+    Just _  -> Bad ("The variable is already defined: " ++ show i)
 
 extendFun :: Env -> Ident -> ([Type],Type) -> Err Env
 extendFun (s, c) i y = case Map.lookup i s of
     Nothing -> Ok (Map.insert i y s, c)
-    Just _  -> Bad ("The function is already defined." ++ show i)
+    Just _  -> Bad ("The function is already defined: " ++ show i)
 
+-- TODO: Refactor the function
 inferBin :: [Type] -> Env -> Expr -> Expr -> Err Type
 inferBin t e x1 x2 = do
     y <- inferExpr e x1
@@ -51,6 +53,8 @@ inferBin t e x1 x2 = do
         then checkExpr e x2 y
         else Bad ("Wrong type of expression: " ++ show y)
 
+-- TODO: Add all possible expressions
+-- TODO: inferBin for String
 inferExpr :: Env -> Expr -> Err Type
 inferExpr e x = case x of
     ELitInt i  -> return Int
@@ -59,14 +63,15 @@ inferExpr e x = case x of
     ELitFalse  -> return Bool
     EAdd x1 addop x2 -> inferBin [Int, Doub] e x1 x2
 
+-- TODO: Implement the function
 checkExpr :: Env -> Expr -> Type -> Err Type
 checkExpr e x y = Ok Bool
 
--- check :: Env -> Expr  -> Err Type?
-
+-- TODO: Implement the following functions
+-- check :: Env -> Expr -> Err Type?
 -- check :: Env -> [Stmt] -> Err Bool?
-
 -- check :: Program -> Err Bool?
 
+-- TODO: Implement the function
 typeCheck :: Program -> Err Program
 typeCheck s = Bad "Not implemented!"
