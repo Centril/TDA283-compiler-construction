@@ -10,8 +10,8 @@ import Javalette.Par
 import Javalette.Skel
 import Javalette.Print
 import Javalette.Abs
-import Javalette.ErrM
 
+import Frontend.ParseLex
 import Frontend.TypeCheck
 import Utils.Terminal
 
@@ -20,24 +20,24 @@ handleArgs [] = getContents
 handleArgs (f:_) = readFile f
 
 parserPhase :: String -> IO ()
-parserPhase s = case pProgram (myLexer s) of
-  Bad err  -> do
-    errLn "SYNTAX ERROR"
-    putStrLn err
-    exitFailure
-  Ok tree -> do
-    putStrLn ""
-    print tree
-    putStrLn ""
-    typeCheckPhase tree
+parserPhase s = case parseProgram s of
+    Left err  -> do
+        errLn "SYNTAX ERROR"
+        putStrLn err
+        exitFailure
+    Right tree -> do
+        putStrLn ""
+        print tree
+        putStrLn ""
+        typeCheckPhase tree
 
 typeCheckPhase :: Program -> IO ()
 typeCheckPhase p = case typeCheck p of
-  Bad err -> do
-    errLn "TYPE ERROR"
-    putStrLn err
-    exitFailure
-  Ok _ -> errLn "OK"
+    Left err -> do
+        errLn "TYPE ERROR"
+        putStrLn err
+        exitFailure
+    Right _ -> errLn "OK"
 
 main :: IO ()
 main = getArgs >>= handleArgs >>= parserPhase

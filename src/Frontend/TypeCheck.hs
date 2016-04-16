@@ -1,4 +1,24 @@
-module Frontend.TypeCheck where
+{- Javalette Compiler
+   Copyright, 2016, Björn Tropf, Mazdak Farrokhzad
+ -}
+
+{-|
+Module      : Frontend.TypeCheck
+Description : Type checker for Javalette compiler.
+Copyright   : (c) Björn Tropf, 2016
+                  Mazdak Farrokhzad, 2016
+Stability   : experimental
+Portability : ALL
+
+Type checker for Javalette compiler.
+-}
+module Frontend.TypeCheck (
+    -- * Types
+    Env, Sig, Context, Err, Log,
+
+    -- * Operations
+    typeCheck
+) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -9,12 +29,8 @@ import Javalette.Par
 import Javalette.Skel
 import Javalette.Print
 import Javalette.Abs
-import Javalette.ErrM
 
--- TODO: Replace Err with Either
-type Env =     (Sig, [Context])         -- functions and context stack
-type Sig =     Map Ident ([Type], Type) -- function type signature
-type Context = Map Ident Type           -- variables with their types
+import Frontend.Types
 
 emptyEnv :: Env
 emptyEnv = (Map.empty, [])
@@ -23,8 +39,8 @@ newBlock :: Env -> Env
 newBlock (s, c)  = (s, Map.empty:c)
 
 remBlock :: Env -> Err Env
-remBlock (s, []) = Bad "There is no block left."
-remBlock (s, c)  = Ok (s, tail c)
+remBlock (s, []) = Left "There is no block left."
+remBlock (s, c)  = Right (s, tail c)
 
 lookupVar :: Env -> Ident -> Maybe Type
 lookupVar (_, []) _ = Nothing
@@ -38,13 +54,13 @@ lookupFun (s, _) i = Map.lookup i s
 
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
-    Nothing -> Ok (s, Map.insert i y t:r)
-    Just _  -> Bad ("The variable is already defined: " ++ show i)
+    Nothing -> Right (s, Map.insert i y t:r)
+    Just _  -> Left ("The variable is already defined: " ++ show i)
 
 extendFun :: Env -> Ident -> ([Type],Type) -> Err Env
 extendFun (s, c) i y = case Map.lookup i s of
-    Nothing -> Ok (Map.insert i y s, c)
-    Just _  -> Bad ("The function is already defined: " ++ show i)
+    Nothing -> Right (Map.insert i y s, c)
+    Just _  -> Left ("The function is already defined: " ++ show i)
 
 -- TODO: Add all possible expressions
 -- TODO: inferBin for String
@@ -62,16 +78,15 @@ inferBin t e x1 x2 = do
     y <- inferExp e x1
     if y `elem` t
         then checkExp e y x2
-        else Bad ("Wrong type of expression: " ++ show y)
+        else Left ("Wrong type of expression: " ++ show y)
 
 -- TODO: Refactor the function: Remove do
 checkExp :: Env -> Type -> Expr -> Err Type
 checkExp e y1 x = do
     y2 <- inferExp e x
-    if y2 == y1 then Ok y2
-        else Bad ("Expected type " ++ show y1 ++
-                  " for " ++ show e ++
-                  " but found: " ++ show y2)
+    if y2 == y1 then Right y2
+        else Left $ unwords ["Expected type", show y1, "for", show e,
+                             "but found:", show y2]
 
 -- TODO: Refactor the function: Remove do
 -- TODO: Do we need a type here?
@@ -93,8 +108,8 @@ checkStms = foldM checkStm
 
 -- TODO: Implement: Consider Abs.hs for the data types
 checkProg :: Env -> Program -> Err Env
-checkProg e p = Ok e
+checkProg e p = Right e
 
 -- TODO: Implement the function
 typeCheck :: Program -> Err Program
-typeCheck s = Bad "Not implemented!"
+typeCheck s = Left "Not implemented!"
