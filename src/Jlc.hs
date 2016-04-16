@@ -19,10 +19,6 @@ handleArgs :: [String] -> IO String
 handleArgs [] = getContents
 handleArgs (f:_) = readFile f
 
-handleArgs :: [String] -> IO String
-handleArgs [] = getContents
-handleArgs (f:_) = readFile f
-
 parserPhase :: String -> IO ()
 parserPhase s = case pProgram (myLexer s) of
   Bad err  -> do
