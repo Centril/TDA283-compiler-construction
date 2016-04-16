@@ -24,6 +24,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Control.Monad
+import Control.Arrow
 
 import Javalette.Lex
 import Javalette.Par
@@ -38,20 +39,55 @@ import Frontend.Query
 import Frontend.Example
 import Utils.Debug
 
+type FnSigId = (Ident, FnSig)
+
 typeCheck :: Program -> Err Env
-typeCheck = checkProg emptyEnv
+typeCheck prog = do
+    env  <- allFunctions prog
+    checkProg env prog
 
-collectFuns :: Env -> Program -> Err Env
-collectFuns env = foldM extendFun' env . progFuns
+mainExists env = do
+    (args, rtype) <- lookupFun' env $ Ident "main"
+    case rtype == Int && null args of
+        True  -> return env
+        False -> Left "The function main has wrong signature."
 
-extendFun' :: Env -> TopDef -> Err Env
-extendFun' env (FnDef ret id args _) =
-    extendFun env id (map argType args, ret)
+allFunctions :: Program -> Err Env
+allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
 
-extendFun :: Env -> Ident -> FnSig -> Err Env
-extendFun (s, c) i y = case Map.lookup i s of
-    Nothing -> Right (Map.insert i y s, c)
-    Just _  -> Left ("The function is already defined: " ++ show i)
+predefFuns :: [FnSigId]
+predefFuns = map (first Ident)
+             [("printInt",    ([Int],      Void)),
+              ("printDouble", ([Doub],     Void)),
+              ("printString", ([ConstStr], Void)),
+              ("readInt",     ([],         Int)),
+              ("readDouble",  ([],         Doub))]
+
+progFunSigs :: Program -> [FnSigId]
+progFunSigs = map toFnSigId . progFuns
+
+collectFuns :: Env -> [FnSigId] -> Err Env
+collectFuns = foldM extendFun
+
+toFnSigId :: TopDef -> FnSigId
+toFnSigId (FnDef ret id args _) = (id, (map argType args, ret))
+
+extendFun :: Env -> FnSigId -> Err Env
+extendFun (sigs, ctx) (ident, sig) =
+    case Map.lookup ident sigs of
+    Nothing -> Right (Map.insert ident sig sigs, ctx)
+    Just _  -> Left ("The function is already defined: " ++ show ident)
+
+
+
+
+
+checkProg :: Env -> Program -> Err Env
+checkProg e (Program t) = checkFunc e (head t)
+
+
+
+
 
 emptyEnv :: Env
 emptyEnv = (Map.empty, [Map.empty])
@@ -70,8 +106,13 @@ lookupVar (_, c)  i = lookupV c where
         Nothing -> lookupV r
         Just y  -> return y
 
-lookupFun :: Env -> Ident -> Maybe ([Type],Type)
+lookupFun :: Env -> Ident -> Maybe FnSig
 lookupFun (s, _) i = Map.lookup i s
+
+lookupFun' :: Env -> Ident -> Err FnSig
+lookupFun' env ident = case lookupFun env ident of
+        Just sig -> return sig
+        Nothing  -> Left $ "The function is not defined: " ++ show ident
 
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
@@ -194,6 +235,3 @@ checkBlock env typ (Block block) =
 
 checkFunc :: Env -> TopDef -> Err Env
 checkFunc e (FnDef y i a b) = checkBlock e y b
-
-checkProg :: Env -> Program -> Err Env
-checkProg e (Program t) = checkFunc e (head t)
