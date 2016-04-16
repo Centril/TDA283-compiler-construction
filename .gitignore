@@ -1,3 +1,4 @@
+# Haskell:
 dist
 cabal-dev
 *.o
@@ -15,7 +16,14 @@ cabal.sandbox.config
 *.hp
 .stack-work/
 \#*\#
+
+# OS files:
 .DS_Store
+
+# Windows:
+*.exe
+
+# Special, project related:
 grade/Grade
 src/Javalette/
 submission/
