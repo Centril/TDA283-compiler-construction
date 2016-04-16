@@ -12,7 +12,7 @@ Portability : ALL
 
 Debugging of stuff.
 -}
-module Debug where
+module Utils.Debug where
 
 import System.IO.Unsafe
 

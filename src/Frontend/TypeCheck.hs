@@ -36,6 +36,7 @@ import Frontend.Query
 
 -- temporary:
 import Frontend.Example
+import Utils.Debug
 
 typeCheck :: Program -> Err Env
 typeCheck = checkProg emptyEnv
@@ -189,7 +190,7 @@ checkStms e y = foldM (`checkStm` y) e
 
 checkBlock :: Env -> Type -> Block -> Err Env
 checkBlock env typ (Block block) =
-    remBlock <$> checkStms (newBlock env) typ block
+    remBlock <$> debug <$> checkStms (newBlock env) typ block
 
 checkFunc :: Env -> TopDef -> Err Env
 checkFunc e (FnDef y i a b) = checkBlock e y b
