@@ -103,14 +103,14 @@ inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
 inferBinary e t x1 x2 = do
     y <- inferExp e x1
     case y `elem` t of
-        True -> checkExp e y x2
+        True  -> checkExp e y x2
         False -> Left $ "Wrong type of expression: " ++ show y
 
 inferUnary :: Env -> [Type] -> Expr -> Err Type
 inferUnary e t x1 = do
     y <- inferExp e x1
     case y `elem` t of
-        True -> return y
+        True  -> return y
         False -> Left $ "Wrong type of expression: " ++ show y
 
 -- TODO: Refactor the function: Remove do
