@@ -3,6 +3,7 @@ def isWin() { Os.isFamily(Os.FAMILY_WINDOWS) }
 
 def cabalTask(proj, target) {
     proj.tasks.create(name: 'cabal' + target, type: Exec) {
+        description "Executes cabal build for project"
         commandLine 'cabal', target
     }
 }
@@ -13,10 +14,20 @@ subprojects { p ->
 }
 
 project(':src') { p ->
-    task bnfcClean(type: Delete) { delete 'Javalette' }
-    task alex(type: Exec)  { commandLine "happy", "-gca", "Par.y" }
-    task happy(type: Exec) { commandLine "alex", "-g", "Lex.x" }
+    task bnfcClean(type: Delete) {
+        description "Cleans up BNFC build."
+        delete 'Javalette'
+    }
+    task alex(type: Exec)  {
+        description "Runs alex on BNFC build."
+        commandLine "happy", "-gca", "Par.y"
+    }
+    task happy(type: Exec) {
+        description "Runs happy on BNFC build."
+        commandLine "alex", "-g", "Lex.x"
+    }
     task bnfc(type: Exec, dependsOn: bnfcClean ) {
+        description "Runs BNFC on contrib/Javalette.cf"
         commandLine "bnfc", "-d", "contrib/Javalette.cf"
         finalizedBy alex, happy
     }
@@ -27,29 +38,35 @@ project(':src') { p ->
     }
 
     task build(type: Copy) {
+        description "Builds compiler sources into jlc program."
         dependsOn cabalbuild, bnfc
         from('./dist/build/jlc')
         into('../submission/')
         include('jlc' + (isWin() ? '.exe' : ''))
     }
 
-    task clean(type: Delete, dependsOn: cabalclean) {
+    task clean(type: Delete) {
+        dependsOn cabalclean, bnfcClean
+        description "Cleans up compiled jlc program."
         delete '../submission/jlc', '../submission/jlc.exe'
     }
 }
 
 project(':grade') { p ->
     task build(type: Copy, dependsOn: cabalbuild) {
+        description "Builds grader program."
         from('./dist/build/Grade')
         into('./')
         include('Grade' + (isWin() ? '.exe' : ''))
     }
 
     task clean(type: Delete, dependsOn: cabalclean) {
-        delete 'Grade', 'Grade.exe'
+        description "Cleans up built grader program."
+        delete 'Grade', 'Grade.exe', "../submission/graderTestSuite"
     }
 
     task run(type: Exec, dependsOn: build) {
+        description "Runs grader program for jlc."
         if ( isWin() )
             commandLine file("Grade.exe"), "-s", "jlc.exe", ".", "../submission"
         else
@@ -60,12 +77,16 @@ project(':grade') { p ->
 }
 
 task clean(type: Delete) {
-    dependsOn ":grade:cabalclean", ":src:cabalclean"
-    delete 'Grade', 'Grade.exe'
+    description "Cleans up everything."
+    dependsOn ":grade:clean", ":src:clean"
+    delete "submission"
 }
 
 task check() {
+    description "Runs all tests and checks that everything works."
     dependsOn ':src:build', ':grade:run'
 }
 
-task build(dependsOn: check) {}
+task build(dependsOn: check) {
+    description "Builds everything."
+}
