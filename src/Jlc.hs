@@ -37,7 +37,11 @@ typeCheckPhase p = case typeCheck p of
         errLn "TYPE ERROR"
         putStrLn err
         exitFailure
-    Right _ -> errLn "OK"
+    Right env -> do
+        putStrLn ""
+        print env
+        putStrLn ""
+        putStrLn "OK"
 
 main :: IO ()
 main = getArgs >>= handleArgs >>= parserPhase

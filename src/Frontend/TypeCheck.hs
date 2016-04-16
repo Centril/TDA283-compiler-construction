@@ -33,10 +33,10 @@ import Javalette.Print
 import Javalette.Abs
 
 import Frontend.Types
+import Frontend.Example
 
--- TODO: Implement the function
-typeCheck :: Program -> Err Program
-typeCheck prog = Left "Not implemented!"
+typeCheck :: Program -> Err Env
+typeCheck = checkProg emptyEnv
 
 extendFun :: Env -> Ident -> FnSig -> Err Env
 extendFun (s, c) i y = case Map.lookup i s of
@@ -44,7 +44,7 @@ extendFun (s, c) i y = case Map.lookup i s of
     Just _  -> Left ("The function is already defined: " ++ show i)
 
 emptyEnv :: Env
-emptyEnv = (Map.empty, [])
+emptyEnv = (Map.empty, [Map.empty])
 
 newBlock :: Env -> Env
 newBlock (s, c)  = (s, Map.empty:c)
@@ -76,11 +76,15 @@ inferExp e x = case x of
     ELitDoub d -> return Doub
     ELitTrue   -> return Bool
     ELitFalse  -> return Bool
-    EAdd x1 addop x2 -> inferBin [Int, Doub] e x1 x2
+    EVar i     -> case lookupVar e i of
+        Just y  -> Right y
+        Nothing -> Left ("The variable is not yet defined: " ++ show i)
+    EAdd x1 addop x2 -> inferBin e [Int, Doub] x1 x2
+    _ -> Left $ unwords ["Expression", show x, "not implemented!"]
 
 -- TODO: Refactor the function: Remove do
-inferBin :: [Type] -> Env -> Expr -> Expr -> Err Type
-inferBin t e x1 x2 = do
+inferBin :: Env -> [Type] -> Expr -> Expr -> Err Type
+inferBin e t x1 x2 = do
     y <- inferExp e x1
     if y `elem` t
         then checkExp e y x2
@@ -95,23 +99,34 @@ checkExp e y1 x = do
                              "but found:", show y2]
 
 -- TODO: Refactor the function: Remove do
--- TODO: Do we need a type here?
-checkStm :: Env -> Stmt -> Err Env
-checkStm e s = case s of
-    SExp x -> do
-        inferExp e x
-        return e
-    Decl z s -> return e
-        -- TODO: Check if this should be updateVar
-        -- TODO: find the id somehow
-        -- extendVar e i z
+checkStm :: Env -> Type -> Stmt -> Err Env
+checkStm e y s = case s of
+    SExp x -> const e <$> inferExp e x
+    Decl z b ->
+        foldM (\x y -> extendVar x y z) e (itemIdent <$> b)
     While x s -> do
         checkExp e Bool x
-        checkStm e s
+        checkStm e y s
+    Ret x -> do
+        z <- inferExp e x
+        if z == y then Right e
+            else Left $ unwords ["Expected type", show y,
+                                     "for return value", show e,
+                                     "but found:", show z]
+    _ -> Left $ unwords ["Statement", show y, "not implemented!"]
 
-checkStms :: Env -> [Stmt] -> Err Env
-checkStms = foldM checkStm
+itemIdent :: Item -> Ident
+itemIdent (Init i l) = i
+itemIdent (NoInit i) = i
 
--- TODO: Implement: Consider Abs.hs for the data types
+checkStms :: Env -> Type -> [Stmt] -> Err Env
+checkStms e y = foldM (`checkStm` y) e
+
+checkBlock :: Env -> Type -> Block -> Err Env
+checkBlock e y (Block b) = checkStms e y b
+
+checkFunc :: Env -> TopDef -> Err Env
+checkFunc e (FnDef y i a b) = checkBlock e y b
+
 checkProg :: Env -> Program -> Err Env
-checkProg e p = Right e
+checkProg e (Program t) = checkFunc e (head t)
