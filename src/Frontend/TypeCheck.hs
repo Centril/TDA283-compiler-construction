@@ -12,7 +12,6 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-
 module Frontend.TypeCheck (
     -- * Types
     Env, Sig, Context, Err, Log,
@@ -33,10 +32,20 @@ import Javalette.Print
 import Javalette.Abs
 
 import Frontend.Types
+import Frontend.Query
+
+-- temporary:
 import Frontend.Example
 
 typeCheck :: Program -> Err Env
 typeCheck = checkProg emptyEnv
+
+collectFuns :: Env -> Program -> Err Env
+collectFuns env = foldM extendFun' env . progFuns
+
+extendFun' :: Env -> TopDef -> Err Env
+extendFun' env (FnDef ret id args _) =
+    extendFun env id (map argType args, ret)
 
 extendFun :: Env -> Ident -> FnSig -> Err Env
 extendFun (s, c) i y = case Map.lookup i s of
