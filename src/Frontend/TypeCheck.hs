@@ -122,7 +122,7 @@ checkStm e y s = case s of
             else Left $ unwords ["Expected type", show y,
                                      "for return value", show e,
                                      "but found:", show z]
-    _ -> Left $ unwords ["Statement", show y, "not implemented!"]
+    _ -> Left $ unwords ["Statement", show s, "not implemented!"]
 
 itemIdent :: Item -> Ident
 itemIdent (Init i l) = i
