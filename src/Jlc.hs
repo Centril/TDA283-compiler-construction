@@ -44,8 +44,4 @@ typeCheckPhase p = case typeCheck p of
   Ok _ -> errLn "OK"
 
 main :: IO ()
-<<<<<<< HEAD
 main = getArgs >>= handleArgs >>= parserPhase
-=======
-main = getArgs >>= handleArgs >>= parserPhase
->>>>>>> Jlc: making use of Utils.Terminal.
