@@ -14,7 +14,7 @@ Types for Frontend of Javalette compiler.
 -}
 module Frontend.Types (
     -- * Types
-    Env, Sig, Context, Err, Log
+    Env, FnSig, Sig, Context, Err, Log
 ) where
 
 import Data.Map (Map)
@@ -28,10 +28,22 @@ import Javalette.Skel
 import Javalette.Print
 import Javalette.Abs
 
+-- | 'Log': Logging type for errors in 'Err'.
 type Log = String
+
+-- | 'Err': Error type for potentially failing computations,
+-- decorated with error log messages.
 type Err = Either Log
 
--- TODO: Replace Err with Either
-type Env =     (Sig, [Context])         -- functions and context stack
-type Sig =     Map Ident ([Type], Type) -- function type signature
-type Context = Map Ident Type           -- variables with their types
+-- | 'Env': Computational environment during compiler frontend passes.
+type Env =     (Sig, [Context])
+
+-- | 'FnSig': Signature of a function,
+-- argument list (types) followed by return type.
+type FnSig = ([Type], Type)
+
+-- | 'Sig': Map of function identifiers -> signatures.
+type Sig =     Map Ident FnSig
+
+-- | Context: Context stack, map from variables -> types.
+type Context = Map Ident Type
