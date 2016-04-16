@@ -26,10 +26,6 @@ import qualified Data.Map as Map
 import Control.Monad
 import Control.Arrow
 
-import Javalette.Lex
-import Javalette.Par
-import Javalette.Skel
-import Javalette.Print
 import Javalette.Abs
 
 import Frontend.Types
