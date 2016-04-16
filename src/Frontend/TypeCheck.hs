@@ -75,36 +75,51 @@ lookupFun (s, _) i = Map.lookup i s
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
     Nothing -> Right (s, Map.insert i y t:r)
-    Just _  -> Left ("The variable is already defined: " ++ show i)
+    Just _  -> Left $ "The variable is already defined: " ++ show i
 
--- TODO: Add all possible expressions
 -- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
-inferExp e x = case x of
-    ELitInt i  -> return Int
-    ELitDoub d -> return Doub
-    ELitTrue   -> return Bool
-    ELitFalse  -> return Bool
-    EVar i     -> case lookupVar e i of
-        Just y  -> Right y
-        Nothing -> Left ("The variable is not yet defined: " ++ show i)
-    EAdd x1 addop x2 -> inferBin e [Int, Doub] x1 x2
-    _ -> Left $ unwords ["Expression", show x, "not implemented!"]
+inferExp env xp = case xp of
+    EVar ident        -> case lookupVar env ident of
+        Just typ      -> return typ
+        Nothing       -> Left $ "The variable is not defined: " ++ show ident
+    ELitInt int       -> return Int
+    ELitDoub doub     -> return Doub
+    ELitTrue          -> return Bool
+    ELitFalse         -> return Bool
+    EApp ident xps    -> Left "Not implemented"
+    -- EString               -> return String
+    Neg xpr           -> inferUnary env [Int, Doub] xpr
+    Not xpr           -> inferUnary env [Bool] xpr
+    EMul left _ right -> inferBinary env [Int, Doub] left right
+    EAdd left _ right -> inferBinary env [Int, Doub] left right
+    ERel left _ right -> inferBinary env [Int, Doub] left right
+    EAnd left right   -> inferBinary env [Bool] left right
+    EOr left right    -> inferBinary env [Bool] left right
+    _ -> undefined
 
 -- TODO: Refactor the function: Remove do
-inferBin :: Env -> [Type] -> Expr -> Expr -> Err Type
-inferBin e t x1 x2 = do
+inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
+inferBinary e t x1 x2 = do
     y <- inferExp e x1
-    if y `elem` t
-        then checkExp e y x2
-        else Left ("Wrong type of expression: " ++ show y)
+    case y `elem` t of
+        True -> checkExp e y x2
+        False -> Left $ "Wrong type of expression: " ++ show y
+
+inferUnary :: Env -> [Type] -> Expr -> Err Type
+inferUnary e t x1 = do
+    y <- inferExp e x1
+    case y `elem` t of
+        True -> return y
+        False -> Left $ "Wrong type of expression: " ++ show y
 
 -- TODO: Refactor the function: Remove do
 checkExp :: Env -> Type -> Expr -> Err Type
 checkExp e y1 x = do
     y2 <- inferExp e x
-    if y2 == y1 then Right y2
-        else Left $ unwords ["Expected type", show y1, "for", show e,
+    case y2 == y1 of
+        True  -> return y2
+        False -> Left $ unwords ["Expected type", show y1, "for", show e,
                              "but found:", show y2]
 
 -- TODO: Refactor the function: Remove do
