@@ -43,3 +43,14 @@ simpleProgram = Program [
             Ret (EVar (Ident "c"))
         ]
     )]
+
+largeBlock :: Program
+largeBlock = Program [FnDef Doub (Ident "test") [] (Block
+    [
+        Decl Int [Init (Ident "l") (ELitInt 1)],
+        While ELitTrue (BStmt (Block
+        [
+            Decl Int [Init (Ident "a") (ELitInt 1)],
+            Decl Int [Init (Ident "b") (ELitInt 2)],
+            Decl Int [Init (Ident "c") (ELitInt 3)]
+    ]))])]
