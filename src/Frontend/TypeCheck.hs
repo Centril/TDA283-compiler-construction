@@ -47,8 +47,8 @@ extendFun (s, c) i y = case Map.lookup i s of
 
 -- TODO: Add all possible expressions
 -- TODO: inferBin for String
-inferExpr :: Env -> Expr -> Err Type
-inferExpr e x = case x of
+inferExp :: Env -> Expr -> Err Type
+inferExp e x = case x of
     ELitInt i  -> return Int
     ELitDoub d -> return Doub
     ELitTrue   -> return Bool
@@ -58,15 +58,15 @@ inferExpr e x = case x of
 -- TODO: Refactor the function: Remove do
 inferBin :: [Type] -> Env -> Expr -> Expr -> Err Type
 inferBin t e x1 x2 = do
-    y <- inferExpr e x1
+    y <- inferExp e x1
     if y `elem` t
-        then checkExpr e y x2
+        then checkExp e y x2
         else Bad ("Wrong type of expression: " ++ show y)
 
 -- TODO: Refactor the function: Remove do
-checkExpr :: Env -> Type -> Expr -> Err Type
-checkExpr e y1 x = do
-    y2 <- inferExpr e x
+checkExp :: Env -> Type -> Expr -> Err Type
+checkExp e y1 x = do
+    y2 <- inferExp e x
     if y2 == y1 then Ok y2
         else Bad ("Expected type " ++ show y1 ++
                   " for " ++ show e ++
@@ -76,14 +76,14 @@ checkExpr e y1 x = do
 checkStm :: Env -> Type -> Stmt -> Err Env
 checkStm e y s = case s of
     SExp x -> do
-        inferExpr e x
+        inferExp e x
         return e
     Decl z s -> return e
         -- TODO: Check if this should be updateVar
         -- TODO: find the id somehow
         -- extendVar e i z
     While x s -> do
-        checkExpr e Bool x
+        checkExp e Bool x
         checkStm e y s
 
 -- TODO: Implement the following functions
