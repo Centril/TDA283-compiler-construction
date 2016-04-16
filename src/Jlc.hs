@@ -14,6 +14,10 @@ import Javalette.ErrM
 
 import Frontend.TypeCheck
 
+handleArgs :: [String] -> IO String
+handleArgs [] = getContents
+handleArgs (f:_) = readFile f
+
 parserPhase :: String -> IO ()
 parserPhase s = case pProgram (myLexer s) of
   Bad err  -> do
@@ -35,4 +39,4 @@ typeCheckPhase p = case typeCheck p of
   Ok _ -> putStrLn "OK"
 
 main :: IO ()
-main = getContents >>= parserPhase
+main = getArgs >>= handleArgs >>= parserPhase
