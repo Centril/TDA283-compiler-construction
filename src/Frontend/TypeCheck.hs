@@ -224,31 +224,16 @@ checkStm env typ stmt = case stmt of
     Empty               -> return env
     BStmt block         -> checkBlock env typ block
     Decl dtyp items     -> foldM (checkDecl dtyp) env items
-    Ass ident expr      -> do
-        checkExp' env ident expr
-        return env
-    Incr ident          -> do
-        checkIdent env [Int, Doub] ident
-        return env
-    Decr ident          -> do
-        checkIdent env [Int, Doub] ident
-        return env
-    Ret expr            -> do
-        checkExp env typ expr
-        return env
-    VRet                -> do
-        checkVoid env typ
-        return env
-    Cond expr st        -> do
-        checkExp env Bool expr
-        checkStm env typ st
-    CondElse expr s1 s2 -> do
-        checkExp env Bool expr
-        checkStm env typ s1
-        checkStm env typ s2
-    While expr st       -> do
-        checkExp env Bool expr
-        checkStm env typ st
+    Ass ident expr      -> checkExp' env ident expr >> return env
+    Incr ident          -> checkIdent env [Int, Doub] ident >> return env
+    Decr ident          -> checkIdent env [Int, Doub] ident >> return env
+    Ret expr            -> checkExp env typ expr >> return env
+    VRet                -> checkVoid env typ >> return env
+    Cond expr st        -> checkExp env Bool expr >> checkStm env typ st
+    CondElse expr s1 s2 -> do checkExp env Bool expr
+                              checkStm env typ s1
+                              checkStm env typ s2
+    While expr st       -> checkExp env Bool expr >> checkStm env typ st
     SExp expr           -> const env <$> inferExp env expr
 
 checkStms :: Env -> Type -> [Stmt] -> Err Env
