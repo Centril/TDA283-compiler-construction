@@ -77,12 +77,15 @@ extendVar (s, t:r) i y = case Map.lookup i t of
     Nothing -> Right (s, Map.insert i y t:r)
     Just _  -> Left $ "The variable is already defined: " ++ show i
 
+lookupVar' :: Env -> Ident -> Err Type
+lookupVar' env ident = case lookupVar env ident of
+        Just typ -> return typ
+        Nothing  -> Left $ "The variable is not defined: " ++ show ident
+
 -- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
 inferExp env expr = case expr of
-    EVar ident        -> case lookupVar env ident of
-        Just typ      -> return typ
-        Nothing       -> Left $ "The variable is not defined: " ++ show ident
+    EVar ident        -> lookupVar' env ident
     ELitInt int       -> return Int
     ELitDoub doub     -> return Doub
     ELitTrue          -> return Bool
@@ -121,6 +124,13 @@ checkExp e y1 x = do
         False -> Left $ unwords ["Expected type", show y1, "for", show e,
                              "but found:", show y2]
 
+checkIdent :: Env -> [Type] -> Ident -> Err Type
+checkIdent env types ident = do
+    typ <- lookupVar' env ident
+    case typ `elem` types of
+        True  -> return typ
+        False -> Left $ "Wrong type for ident: " ++ show ident
+
 -- TODO: Refactor the function: Remove do
 checkStm :: Env -> Type -> Stmt -> Err Env
 checkStm env typ stmt = case stmt of
@@ -129,8 +139,12 @@ checkStm env typ stmt = case stmt of
     Decl typ item       ->
         foldM (\en iden -> extendVar en iden typ) env (itemIdent <$> item)
     Ass ident expr      -> Left "Not implemented"
-    Incr ident          -> Left "Not implemented"
-    Decr ident          -> Left "Not implemented"
+    Incr ident          -> do
+        checkIdent env [Int, Doub] ident
+        return env
+    Decr ident          -> do
+        checkIdent env [Int, Doub] ident
+        return env
     Ret expr            -> do
         checkExp env typ expr
         return env
