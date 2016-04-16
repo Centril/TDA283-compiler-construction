@@ -65,7 +65,7 @@ testAll compiler bs exts [testSuitePath00, groupPath0] = do
         testFiles <- getTestFilesForPath (testSuitePath </> p)
         putStrLn $ p ++ "..."
         rs <- testFunction exePath good testFiles
-        report p rs 
+        report p rs
         return (p, rs)
     putStrLn $ "Passed suites: " ++ (concat $ intersperse ", " $ [p | (p,rs) <- results, and rs])
     let tally = concat (map snd results)
@@ -76,8 +76,13 @@ testAll compiler bs exts [testSuitePath00, groupPath0] = do
   putStrLn $ "Summary:\n" ++ unlines (map summaryLine summary)
   putStrLn $ "Credits total: " ++ show (sum [x | (_,x,_) <- summary])
 
-padl n s = replicate (n - length s) ' ' ++ s
+  testsPassedCheck summary
 
+testsPassed      tests = all (> 0) $ map (\(x, y, z) -> y) tests
+testsPassedCheck tests = unless (testsPassed tests)
+                                (putStrLn "Tests failed" >> exitWith (ExitFailure 1))
+
+padl n s = replicate (n - length s) ' ' ++ s
 
 summaryLine (name, points, tests) = 
   padl 2 (show points) ++ " " ++ name ++ " " ++ "(" ++ show (length (filter id tests)) ++ "/" ++ show (length tests) ++ ")"
