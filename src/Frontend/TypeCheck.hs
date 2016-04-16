@@ -2,6 +2,7 @@ module Frontend.TypeCheck where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Control.Monad
 
 import Javalette.Lex
 import Javalette.Par
@@ -73,8 +74,9 @@ checkExp e y1 x = do
                   " but found: " ++ show y2)
 
 -- TODO: Refactor the function: Remove do
-checkStm :: Env -> Type -> Stmt -> Err Env
-checkStm e y s = case s of
+-- TODO: Do we need a type here?
+checkStm :: Env -> Stmt -> Err Env
+checkStm e s = case s of
     SExp x -> do
         inferExp e x
         return e
@@ -84,12 +86,14 @@ checkStm e y s = case s of
         -- extendVar e i z
     While x s -> do
         checkExp e Bool x
-        checkStm e y s
+        checkStm e s
 
--- TODO: Implement the following functions
--- check :: Env -> Expr -> Err Type?
--- check :: Env -> [Stmt] -> Err Bool?
--- check :: Program -> Err Bool?
+checkStms :: Env -> [Stmt] -> Err Env
+checkStms = foldM checkStm
+
+-- TODO: Implement: Consider Abs.hs for the data types
+checkProg :: Env -> Program -> Err Env
+checkProg e p = Ok e
 
 -- TODO: Implement the function
 typeCheck :: Program -> Err Program
