@@ -55,7 +55,6 @@ type Sig =     Map Ident FnSig
 -- | Context: Context stack, map from variables -> types.
 type Context = Map Ident Type
 
-
 deriving instance Data Ident
 deriving instance Typeable Ident
 
