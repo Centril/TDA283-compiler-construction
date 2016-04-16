@@ -79,7 +79,7 @@ extendVar (s, t:r) i y = case Map.lookup i t of
 
 -- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
-inferExp env xp = case xp of
+inferExp env expr = case expr of
     EVar ident        -> case lookupVar env ident of
         Just typ      -> return typ
         Nothing       -> Left $ "The variable is not defined: " ++ show ident
@@ -88,7 +88,7 @@ inferExp env xp = case xp of
     ELitTrue          -> return Bool
     ELitFalse         -> return Bool
     EApp ident xps    -> Left "Not implemented"
-    -- EString               -> return String
+    EString str       -> return ConstStr
     Neg xpr           -> inferUnary env [Int, Doub] xpr
     Not xpr           -> inferUnary env [Bool] xpr
     EMul left _ right -> inferBinary env [Int, Doub] left right
@@ -96,7 +96,6 @@ inferExp env xp = case xp of
     ERel left _ right -> inferBinary env [Int, Doub] left right
     EAnd left right   -> inferBinary env [Bool] left right
     EOr left right    -> inferBinary env [Bool] left right
-    _ -> undefined
 
 -- TODO: Refactor the function: Remove do
 inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
@@ -124,20 +123,29 @@ checkExp e y1 x = do
 
 -- TODO: Refactor the function: Remove do
 checkStm :: Env -> Type -> Stmt -> Err Env
-checkStm e y s = case s of
-    SExp x -> const e <$> inferExp e x
-    Decl z b ->
-        foldM (\x y -> extendVar x y z) e (itemIdent <$> b)
-    While x s -> do
-        checkExp e Bool x
-        checkStm e y s
-    Ret x -> do
-        z <- inferExp e x
-        if z == y then Right e
-            else Left $ unwords ["Expected type", show y,
-                                     "for return value", show e,
-                                     "but found:", show z]
-    _ -> Left $ unwords ["Statement", show s, "not implemented!"]
+checkStm env typ stmt = case stmt of
+    Empty               -> Left "Not implemented"
+    BStmt block         -> Left "Not implemented"
+    Decl typ item       ->
+        foldM (\en iden -> extendVar en iden typ) env (itemIdent <$> item)
+    Ass ident expr      -> Left "Not implemented"
+    Incr ident          -> Left "Not implemented"
+    Decr ident          -> Left "Not implemented"
+    Ret expr            -> do
+        checkExp env typ expr
+        return env
+    VRet                -> Left "Not implemented"
+    Cond expr st        -> do
+        checkExp env Bool expr
+        checkStm env typ st
+    CondElse expr s1 s2 -> do
+        checkExp env Bool expr
+        checkStm env typ s1
+        checkStm env typ s2
+    While expr st       -> do
+        checkExp env Bool expr
+        checkStm env typ st
+    SExp expr           -> const env <$> inferExp env expr
 
 itemIdent :: Item -> Ident
 itemIdent (Init i l) = i
