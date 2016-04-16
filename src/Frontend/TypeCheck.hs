@@ -45,14 +45,6 @@ extendFun (s, c) i y = case Map.lookup i s of
     Nothing -> Ok (Map.insert i y s, c)
     Just _  -> Bad ("The function is already defined: " ++ show i)
 
--- TODO: Refactor the function
-inferBin :: [Type] -> Env -> Expr -> Expr -> Err Type
-inferBin t e x1 x2 = do
-    y <- inferExpr e x1
-    if y `elem` t
-        then checkExpr e x2 y
-        else Bad ("Wrong type of expression: " ++ show y)
-
 -- TODO: Add all possible expressions
 -- TODO: inferBin for String
 inferExpr :: Env -> Expr -> Err Type
@@ -63,9 +55,36 @@ inferExpr e x = case x of
     ELitFalse  -> return Bool
     EAdd x1 addop x2 -> inferBin [Int, Doub] e x1 x2
 
--- TODO: Implement the function
-checkExpr :: Env -> Expr -> Type -> Err Type
-checkExpr e x y = Ok Bool
+-- TODO: Refactor the function: Remove do
+inferBin :: [Type] -> Env -> Expr -> Expr -> Err Type
+inferBin t e x1 x2 = do
+    y <- inferExpr e x1
+    if y `elem` t
+        then checkExpr e y x2
+        else Bad ("Wrong type of expression: " ++ show y)
+
+-- TODO: Refactor the function: Remove do
+checkExpr :: Env -> Type -> Expr -> Err Type
+checkExpr e y1 x = do
+    y2 <- inferExpr e x
+    if y2 == y1 then Ok y2
+        else Bad ("Expected type " ++ show y1 ++
+                  " for " ++ show e ++
+                  " but found: " ++ show y2)
+
+-- TODO: Refactor the function: Remove do
+checkStm :: Env -> Type -> Stmt -> Err Env
+checkStm e y s = case s of
+    SExp x -> do
+        inferExpr e x
+        return e
+    Decl z s -> return e
+        -- TODO: Check if this should be updateVar
+        -- TODO: find the id somehow
+        -- extendVar e i z
+    While x s -> do
+        checkExpr e Bool x
+        checkStm e y s
 
 -- TODO: Implement the following functions
 -- check :: Env -> Expr -> Err Type?
