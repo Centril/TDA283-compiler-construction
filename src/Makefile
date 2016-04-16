@@ -1,15 +1,25 @@
-all:
-	rm -f ../submission/jlc
-	rm -f dist/build/jlc/jlc
+.PHONY: clean bnfcClean distClean submissionClean
+
+all: distClean submissionClean
 	cabal build
-	mv dist/build/jlc/jlc ../submission/jlc
+	cp dist/build/jlc/jlc ../submission/jlc
 
 test:
 	@cabal build > /dev/null 2>&1
 	@dist/build/jlc/jlc < contrib/test.jl
 
-bnfc:
-	rm -rf Javalette
+bnfc: contrib/Javalette.cf bnfcClean
 	bnfc -d contrib/Javalette.cf
 	cd Javalette && happy -gca Par.y
 	cd Javalette && alex -g Lex.x
+
+bnfcClean:
+	rm -rf Javalette
+
+distClean:
+	rm -f dist/build/jlc/jlc
+
+submissionClean:
+	rm -f ../submission/jlc
+
+clean: bnfcClean
