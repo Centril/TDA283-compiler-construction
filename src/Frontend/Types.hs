@@ -12,6 +12,10 @@ Portability : ALL
 
 Types for Frontend of Javalette compiler.
 -}
+
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Frontend.Types (
     -- * Types
     Env, FnSig, Sig, Context, Err, Log
@@ -21,6 +25,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Control.Monad
+
+import Data.Data
+import Data.Generics.Uniplate.Data
 
 import Javalette.Lex
 import Javalette.Par
@@ -47,3 +54,13 @@ type Sig =     Map Ident FnSig
 
 -- | Context: Context stack, map from variables -> types.
 type Context = Map Ident Type
+
+
+deriving instance Data Ident
+deriving instance Typeable Ident
+
+deriving instance Data Type
+deriving instance Typeable Type
+
+deriving instance Data Arg
+deriving instance Typeable Arg

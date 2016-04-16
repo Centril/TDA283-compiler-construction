@@ -12,6 +12,7 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
+
 module Frontend.TypeCheck (
     -- * Types
     Env, Sig, Context, Err, Log,
@@ -22,6 +23,7 @@ module Frontend.TypeCheck (
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+
 import Control.Monad
 
 import Javalette.Lex
@@ -31,6 +33,15 @@ import Javalette.Print
 import Javalette.Abs
 
 import Frontend.Types
+
+-- TODO: Implement the function
+typeCheck :: Program -> Err Program
+typeCheck prog = Left "Not implemented!"
+
+extendFun :: Env -> Ident -> FnSig -> Err Env
+extendFun (s, c) i y = case Map.lookup i s of
+    Nothing -> Right (Map.insert i y s, c)
+    Just _  -> Left ("The function is already defined: " ++ show i)
 
 emptyEnv :: Env
 emptyEnv = (Map.empty, [])
@@ -56,11 +67,6 @@ extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
     Nothing -> Right (s, Map.insert i y t:r)
     Just _  -> Left ("The variable is already defined: " ++ show i)
-
-extendFun :: Env -> Ident -> ([Type],Type) -> Err Env
-extendFun (s, c) i y = case Map.lookup i s of
-    Nothing -> Right (Map.insert i y s, c)
-    Just _  -> Left ("The function is already defined: " ++ show i)
 
 -- TODO: Add all possible expressions
 -- TODO: inferBin for String
@@ -109,7 +115,3 @@ checkStms = foldM checkStm
 -- TODO: Implement: Consider Abs.hs for the data types
 checkProg :: Env -> Program -> Err Env
 checkProg e p = Right e
-
--- TODO: Implement the function
-typeCheck :: Program -> Err Program
-typeCheck s = Left "Not implemented!"
