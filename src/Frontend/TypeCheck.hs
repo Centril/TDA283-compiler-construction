@@ -44,7 +44,8 @@ type FnSigId = (Ident, FnSig)
 typeCheck :: Program -> Err Env
 typeCheck prog = do
     env  <- allFunctions prog
-    checkProg env prog
+    env2 <- checkProg env prog
+    return env2
 
 mainExists env = do
     (args, rtype) <- lookupFun' env $ Ident "main"
@@ -79,7 +80,7 @@ extendFun (sigs, ctx) (ident, sig) =
     Just _  -> Left ("The function is already defined: " ++ show ident)
 
 checkProg :: Env -> Program -> Err Env
-checkProg e (Program t) = checkFunc e (head t)
+checkProg env = foldM checkFunc env . progFuns
 
 emptyEnv :: Env
 emptyEnv = (Map.empty, [Map.empty])
@@ -109,7 +110,7 @@ lookupFun' env ident = case lookupFun env ident of
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
     Nothing -> Right (s, Map.insert i y t:r)
-    Just _  -> Left $ "The variable is already defined: " ++ show i
+    Just _  -> Left $ "The variable/parameter is already defined: " ++ show i
 
 lookupVar' :: Env -> Ident -> Err Type
 lookupVar' env ident = case lookupVar env ident of
@@ -212,7 +213,7 @@ checkStm env typ stmt = case stmt of
     Empty               -> return env
     BStmt block         -> checkBlock env typ block
     Decl typ item       ->
-        foldM (\en iden -> extendVar en iden typ) env (itemIdent <$> item)
+        foldM (\env ident -> extendVar env ident typ) env (itemIdent <$> item)
     Ass ident expr      -> do
         checkExp' env ident expr
         return env
@@ -251,5 +252,12 @@ checkBlock :: Env -> Type -> Block -> Err Env
 checkBlock env typ (Block block) =
     remBlock <$> debug <$> checkStms (newBlock env) typ block
 
+checkBlock' :: Env -> Type -> Block -> Err Env
+checkBlock' env typ (Block block) =
+        remBlock <$> debug <$> checkStms env typ block
+
 checkFunc :: Env -> TopDef -> Err Env
-checkFunc e (FnDef y i a b) = checkBlock e y b
+checkFunc env (FnDef rtype ident args block) = do
+    env2 <- foldM (\env (Arg typ aident) ->
+                    extendVar env aident typ) (newBlock env) args
+    checkBlock' env2 rtype block
