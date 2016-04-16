@@ -93,11 +93,25 @@ remBlock (s, []) = (s, [])
 remBlock (s, c)  = (s, tail c)
 
 lookupVar :: Env -> Ident -> Maybe Type
-lookupVar (_, []) _ = Nothing
-lookupVar (_, c)  i = lookupV c where
-    lookupV (t:r) = case Map.lookup i t of
-        Nothing -> lookupV r
-        Just y  -> return y
+lookupVar (_, [])       _     = Nothing
+lookupVar (_, contexts) ident = lookupVarH contexts ident
+
+-- TODO: Implement with find
+lookupVarH :: [Context] -> Ident -> Maybe Type
+lookupVarH []     _     = Nothing
+lookupVarH (c:cs) ident = case Map.lookup ident c of
+                    Nothing  -> lookupVarH cs ident
+                    Just typ -> return typ
+
+lookupVar' :: Env -> Ident -> Err Type
+lookupVar' env ident = case lookupVar env ident of
+        Just typ -> return typ
+        Nothing  -> Left $ "The variable is not defined: " ++ show ident
+
+extendVar :: Env -> Ident -> Type -> Err Env
+extendVar (s, t:r) i y = case Map.lookup i t of
+    Nothing -> Right (s, Map.insert i y t:r)
+    Just _  -> Left $ "The variable/parameter is already defined: " ++ show i
 
 lookupFun :: Env -> Ident -> Maybe FnSig
 lookupFun (s, _) i = Map.lookup i s
@@ -106,16 +120,6 @@ lookupFun' :: Env -> Ident -> Err FnSig
 lookupFun' env ident = case lookupFun env ident of
         Just sig -> return sig
         Nothing  -> Left $ "The function is not defined: " ++ show ident
-
-extendVar :: Env -> Ident -> Type -> Err Env
-extendVar (s, t:r) i y = case Map.lookup i t of
-    Nothing -> Right (s, Map.insert i y t:r)
-    Just _  -> Left $ "The variable/parameter is already defined: " ++ show i
-
-lookupVar' :: Env -> Ident -> Err Type
-lookupVar' env ident = case lookupVar env ident of
-        Just typ -> return typ
-        Nothing  -> Left $ "The variable is not defined: " ++ show ident
 
 -- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
@@ -129,14 +133,17 @@ inferExp env expr = case expr of
     EString str       -> return ConstStr
     Neg xpr           -> inferUnary env [Int, Doub] xpr
     Not xpr           -> inferUnary env [Bool] xpr
-    EMul left _ right -> inferBinary env [Int, Doub] left right
+    EMul left o right -> inferBinary env (mulOperator o) left right
     EAdd left _ right -> inferBinary env [Int, Doub] left right
-    ERel left o right -> inferRel env ([Int, Doub] ++ boolOrEmpty o) left right
+    ERel left o right -> inferRel env (relOperator o) left right
     EAnd left right   -> inferBinary env [Bool] left right
     EOr left right    -> inferBinary env [Bool] left right
 
-boolOrEmpty oper | oper `elem` [NE, EQU] = [Bool]
-                 | otherwise             = []
+relOperator oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
+                 | otherwise             = [Int, Doub]
+
+mulOperator oper | oper == Mod = [Int]
+                 | otherwise   = [Int, Doub]
 
 -- TODO: Refactor the function: Remove do
 inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
@@ -207,13 +214,19 @@ checkVoid env typ = do
         True  -> return typ
         False -> Left $ "Wrong type for void: " ++ show typ
 
+checkDecl :: Type -> Env -> Item -> Err Env
+checkDecl typ env item = do
+    ident <- case item of
+             Init ident expr -> checkExp env typ expr >> return ident
+             NoInit ident    -> return ident
+    extendVar env ident typ
+
 -- TODO: Refactor the function: Remove do
 checkStm :: Env -> Type -> Stmt -> Err Env
 checkStm env typ stmt = case stmt of
     Empty               -> return env
     BStmt block         -> checkBlock env typ block
-    Decl typ item       ->
-        foldM (\env ident -> extendVar env ident typ) env (itemIdent <$> item)
+    Decl dtyp items     -> foldM (checkDecl dtyp) env items
     Ass ident expr      -> do
         checkExp' env ident expr
         return env
@@ -240,10 +253,6 @@ checkStm env typ stmt = case stmt of
         checkExp env Bool expr
         checkStm env typ st
     SExp expr           -> const env <$> inferExp env expr
-
-itemIdent :: Item -> Ident
-itemIdent (Init i l) = i
-itemIdent (NoInit i) = i
 
 checkStms :: Env -> Type -> [Stmt] -> Err Env
 checkStms e y = foldM (`checkStm` y) e
