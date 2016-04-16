@@ -41,7 +41,7 @@ typeCheckPhase p = case typeCheck p of
         putStrLn ""
         print env
         putStrLn ""
-        putStrLn "OK"
+        errLn "OK"
 
 main :: IO ()
 main = getArgs >>= handleArgs >>= parserPhase

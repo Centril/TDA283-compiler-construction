@@ -78,16 +78,8 @@ extendFun (sigs, ctx) (ident, sig) =
     Nothing -> Right (Map.insert ident sig sigs, ctx)
     Just _  -> Left ("The function is already defined: " ++ show ident)
 
-
-
-
-
 checkProg :: Env -> Program -> Err Env
 checkProg e (Program t) = checkFunc e (head t)
-
-
-
-
 
 emptyEnv :: Env
 emptyEnv = (Map.empty, [Map.empty])
@@ -132,38 +124,64 @@ inferExp env expr = case expr of
     ELitDoub doub     -> return Doub
     ELitTrue          -> return Bool
     ELitFalse         -> return Bool
-    EApp ident xps    -> Left "Not implemented"
+    EApp ident xps    -> inferFun env ident xps
     EString str       -> return ConstStr
     Neg xpr           -> inferUnary env [Int, Doub] xpr
     Not xpr           -> inferUnary env [Bool] xpr
     EMul left _ right -> inferBinary env [Int, Doub] left right
     EAdd left _ right -> inferBinary env [Int, Doub] left right
-    ERel left _ right -> inferBinary env [Int, Doub] left right
+    ERel left o right -> inferRel env ([Int, Doub] ++ boolOrEmpty o) left right
     EAnd left right   -> inferBinary env [Bool] left right
     EOr left right    -> inferBinary env [Bool] left right
 
+boolOrEmpty oper | oper `elem` [NE, EQU] = [Bool]
+                 | otherwise             = []
+
 -- TODO: Refactor the function: Remove do
 inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
-inferBinary e t x1 x2 = do
-    y <- inferExp e x1
-    case y `elem` t of
-        True  -> checkExp e y x2
-        False -> Left $ "Wrong type of expression: " ++ show y
+inferBinary env types exp1 exp2 = do
+    typl <- inferExp env exp1
+    typr <- inferExp env exp2
+    case typl `elem` types of
+        True  -> checkExp env typl exp2
+        False -> Left $ unwords ["Wrong type of binary expression:",
+                                "left:", show exp1, ", type:", show typl,
+                                "right:", show exp2, ", type:", show typr]
+
+inferRel :: Env -> [Type] -> Expr -> Expr -> Err Type
+inferRel env types exp1 exp2 = do
+    typl <- inferExp env exp1
+    typr <- inferExp env exp2
+    case typl == typr && typl `elem` types of
+        True  -> return Bool
+        False -> Left $ unwords ["Wrong type of relation expression:",
+                                "left:", show exp1, ", type:", show typl,
+                                "right:", show exp2, ", type:", show typr]
 
 inferUnary :: Env -> [Type] -> Expr -> Err Type
 inferUnary e t x1 = do
     y <- inferExp e x1
     case y `elem` t of
         True  -> return y
-        False -> Left $ "Wrong type of expression: " ++ show y
+        False -> Left $ "Wrong type of unary expression: " ++ show y
+
+inferFun :: Env -> Ident -> [Expr] -> Err Type
+inferFun env ident exprs = do
+    (argtypes, rtype) <- lookupFun' env ident
+    exprtypes         <- mapM (inferExp env) exprs
+    case argtypes == exprtypes of
+        True  -> return rtype
+        False -> Left $ unwords ["Function application of", show ident,
+                                 "expected types:", show argtypes, ",",
+                                 "actual types:", show exprtypes]
 
 -- TODO: Refactor the function: Remove do
 checkExp :: Env -> Type -> Expr -> Err Type
-checkExp env ty1 x = do
-    ty2 <- inferExp env x
+checkExp env ty1 expr = do
+    ty2 <- inferExp env expr
     case ty2 == ty1 of
         True  -> return ty2
-        False -> Left $ unwords ["Expected type", show ty1, "for", show env,
+        False -> Left $ unwords ["Expected type", show ty1, "for", show expr,
                                  "but found:", show ty2]
 
 checkExp' :: Env -> Ident -> Expr -> Err Type
