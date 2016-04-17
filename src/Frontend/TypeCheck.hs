@@ -180,7 +180,38 @@ inferFun env ident exprs = do
                                  "expected types:", show argtypes, ",",
                                  "actual types:", show exprtypes]
 
--- TODO: Refactor the function: Remove do
+checkFunc :: Env -> TopDef -> Err Env
+checkFunc env (FnDef rtype ident args block) = do
+    env2 <- foldM (\env (Arg typ aident) ->
+                   extendVar env aident typ) (newBlock env) args
+    checkBlock' env2 rtype block
+
+checkBlock :: Env -> Type -> Block -> Err Env
+checkBlock env typ (Block block) =
+    remBlock <$> debug <$> checkStms (newBlock env) typ block
+
+checkBlock' :: Env -> Type -> Block -> Err Env
+checkBlock' env typ (Block block) =
+    remBlock <$> debug <$> checkStms env typ block
+
+checkStms :: Env -> Type -> [Stmt] -> Err Env
+checkStms e y = foldM (`checkStm` y) e
+
+checkStm :: Env -> Type -> Stmt -> Err Env
+checkStm env typ stmt = case stmt of
+    Empty               -> return env
+    BStmt block         -> checkBlock env typ block
+    Decl dtyp items     -> foldM (checkDecl dtyp) env items
+    Ass ident expr      -> checkExp' env ident expr >> return env
+    Incr ident          -> checkIdent env [Int, Doub] ident >> return env
+    Decr ident          -> checkIdent env [Int, Doub] ident >> return env
+    Ret expr            -> checkExp env typ expr >> return env
+    VRet                -> checkVoid env typ >> return env
+    Cond expr st        -> checkExp env Bool expr >> checkStm env typ st
+    CondElse expr s1 s2 -> checkExp env Bool expr >> checkStms env typ [s1, s2]
+    While expr st       -> checkExp env Bool expr >> checkStm env typ st
+    SExp expr           -> const env <$> inferExp env expr
+
 checkExp :: Env -> Type -> Expr -> Err Type
 checkExp env ty1 expr = do
     ty2 <- inferExp env expr
@@ -217,36 +248,3 @@ checkDecl typ env item = do
              Init ident expr -> checkExp env typ expr >> return ident
              NoInit ident    -> return ident
     extendVar env ident typ
-
--- TODO: Refactor the function: Remove do
-checkStm :: Env -> Type -> Stmt -> Err Env
-checkStm env typ stmt = case stmt of
-    Empty               -> return env
-    BStmt block         -> checkBlock env typ block
-    Decl dtyp items     -> foldM (checkDecl dtyp) env items
-    Ass ident expr      -> checkExp' env ident expr >> return env
-    Incr ident          -> checkIdent env [Int, Doub] ident >> return env
-    Decr ident          -> checkIdent env [Int, Doub] ident >> return env
-    Ret expr            -> checkExp env typ expr >> return env
-    VRet                -> checkVoid env typ >> return env
-    Cond expr st        -> checkExp env Bool expr >> checkStm env typ st
-    CondElse expr s1 s2 -> checkExp env Bool expr >> checkStms env typ [s1, s2]
-    While expr st       -> checkExp env Bool expr >> checkStm env typ st
-    SExp expr           -> const env <$> inferExp env expr
-
-checkStms :: Env -> Type -> [Stmt] -> Err Env
-checkStms e y = foldM (`checkStm` y) e
-
-checkBlock :: Env -> Type -> Block -> Err Env
-checkBlock env typ (Block block) =
-    remBlock <$> debug <$> checkStms (newBlock env) typ block
-
-checkBlock' :: Env -> Type -> Block -> Err Env
-checkBlock' env typ (Block block) =
-        remBlock <$> debug <$> checkStms env typ block
-
-checkFunc :: Env -> TopDef -> Err Env
-checkFunc env (FnDef rtype ident args block) = do
-    env2 <- foldM (\env (Arg typ aident) ->
-                    extendVar env aident typ) (newBlock env) args
-    checkBlock' env2 rtype block
