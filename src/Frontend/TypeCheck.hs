@@ -30,6 +30,7 @@ import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Query
+import Frontend.ReturnCheck
 
 -- temporary:
 import Frontend.Example
