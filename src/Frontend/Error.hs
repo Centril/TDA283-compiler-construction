@@ -16,6 +16,10 @@ module Frontend.Error where
 
 import Javalette.Abs
 
+noFunRet :: Ident -> String
+noFunRet fun =
+    unwords ["The function", show fun, "might not return"]
+
 wrgFunSig :: Ident -> String
 wrgFunSig fun =
     unwords ["The function", show fun, "has the wrong signature"]
