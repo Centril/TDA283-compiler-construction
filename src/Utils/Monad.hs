@@ -12,7 +12,6 @@ Portability : ALL
 
 General monadic, applicative, functor utility functions.
 -}
-
 module Utils.Monad (
     -- * Operations
     (<!>), (<:>)
