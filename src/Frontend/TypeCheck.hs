@@ -111,7 +111,6 @@ lookupFun (sigs, _) ident = case Map.lookup ident sigs of
         Just sig -> return sig
         Nothing  -> Left $ funcNotDef ident
 
--- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
 inferExp env expr = case expr of
     EVar ident        -> lookupVar env ident
