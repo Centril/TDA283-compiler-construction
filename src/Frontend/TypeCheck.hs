@@ -48,7 +48,7 @@ typeCheck prog = do
 
 mainExists :: Env -> Err Env
 mainExists env = do
-    (args, rtype) <- lookupFun' env $ Ident "main"
+    (args, rtype) <- lookupFun env $ Ident "main"
     case rtype == Int && null args of
         True  -> return env
         False -> Left $ wrgFunSig $ Ident "main"
@@ -92,9 +92,10 @@ remBlock :: Env -> Env
 remBlock (sigs, []) = (sigs, [])
 remBlock (sigs, ctxs)  = (sigs, tail ctxs)
 
-lookupVar :: Env -> Ident -> Maybe Type
-lookupVar (_, [])       _     = Nothing
-lookupVar (_, contexts) ident = lookupVarH contexts ident
+lookupVar :: Env -> Ident -> Err Type
+lookupVar (_, contexts) ident = case lookupVarH contexts ident of
+    Just typ -> return typ
+    Nothing  -> Left $ varNotDef ident
 
 -- TODO: Implement with find
 lookupVarH :: [Context] -> Ident -> Maybe Type
@@ -103,28 +104,20 @@ lookupVarH (c:cs) ident = case Map.lookup ident c of
     Nothing  -> lookupVarH cs ident
     Just typ -> return typ
 
-lookupVar' :: Env -> Ident -> Err Type
-lookupVar' env ident = case lookupVar env ident of
-    Just typ -> return typ
-    Nothing  -> Left $ varNotDef ident
-
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (sigs, c:cs) ident typ = case Map.lookup ident c of
     Nothing -> Right (sigs, Map.insert ident typ c:cs)
     Just _  -> Left $ varAlrDef ident
 
-lookupFun :: Env -> Ident -> Maybe FnSig
-lookupFun (sigs, _) ident = Map.lookup ident sigs
-
-lookupFun' :: Env -> Ident -> Err FnSig
-lookupFun' env ident = case lookupFun env ident of
+lookupFun :: Env -> Ident -> Err FnSig
+lookupFun (sigs, _) ident = case Map.lookup ident sigs of
         Just sig -> return sig
         Nothing  -> Left $ funcNotDef ident
 
 -- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
 inferExp env expr = case expr of
-    EVar ident        -> lookupVar' env ident
+    EVar ident        -> lookupVar env ident
     ELitInt int       -> return Int
     ELitDoub doub     -> return Doub
     ELitTrue          -> return Bool
@@ -162,7 +155,7 @@ inferUnary env types expr = do
 
 inferFun :: Env -> Ident -> [Expr] -> Err Type
 inferFun env ident exprs = do
-    (argtypes, rtype) <- lookupFun' env ident
+    (argtypes, rtype) <- lookupFun env ident
     exprtypes         <- mapM (inferExp env) exprs
     case argtypes == exprtypes of
         True  -> return rtype
@@ -205,12 +198,12 @@ checkExp env ty1 expr = do
 
 checkIdeExp :: Env -> Ident -> Expr -> Err Type
 checkIdeExp env ident expr = do
-    typ <- lookupVar' env ident
+    typ <- lookupVar env ident
     checkExp env typ expr
 
 checkIdent :: Env -> [Type] -> Ident -> Err Type
 checkIdent env types ident = do
-    typ <- lookupVar' env ident
+    typ <- lookupVar env ident
     case typ `elem` types of
         True  -> return typ
         False -> Left $ wrgIdeTyp ident types typ
