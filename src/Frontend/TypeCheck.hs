@@ -44,7 +44,8 @@ typeCheck :: Program -> Err Env
 typeCheck prog = do
     env  <- allFunctions prog
     env2 <- checkProg env prog
-    return env2
+    env3 <- returnCheck env2 prog
+    return env3
 
 mainId = Ident "main"
 

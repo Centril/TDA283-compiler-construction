@@ -41,6 +41,7 @@ import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Query
+import Frontend.Error
 
 -- temporary:
 import Frontend.Example
@@ -56,8 +57,35 @@ data Literal = LBool { lbool :: Bool } | LInt { lint :: Integer } |
 
 makePrisms ''Literal
 
-returnCheck :: Program -> Err Env
-returnCheck prog = u
+returnCheck :: Env -> Program -> Err Env
+returnCheck env = foldM returnCheckFun env . progFuns
+
+returnCheckFun :: Env -> TopDef -> Err Env
+returnCheckFun env (FnDef rtype ident _ (Block block))
+    | rtype == Void = Right env
+    | otherwise     = case any checkHasReturn block of
+                      True  -> Right env
+                      False -> Left $ noFunRet ident
+
+checkHasReturn :: Stmt -> Bool
+checkHasReturn stmt = case stmt of
+    Ret _               -> True
+    VRet                -> True
+    BStmt (Block subs)  -> any checkHasReturn subs
+    Cond expr st        -> case evalCondExpr expr of
+        Just True       -> checkHasReturn st
+        _               -> False
+    CondElse expr s1 s2 -> case evalCondExpr expr of
+        Just True       -> checkHasReturn s1
+        Just False      -> checkHasReturn s2
+        Nothing         -> all checkHasReturn [s1, s2]
+    While expr st       -> case evalCondExpr expr of
+        Just True       -> checkHasReturn st
+        _               -> False
+    _                   -> False
+
+evalCondExpr :: Expr -> Maybe Bool
+evalCondExpr expr = evalConstExpr expr >>= (^? _LBool)
 
 evalConstExpr :: Expr -> Maybe Literal
 evalConstExpr expr = case expr of
