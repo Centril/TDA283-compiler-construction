@@ -216,10 +216,9 @@ checkIdent env types ident = do
         False -> Left $ wrgIdeTyp ident types typ
 
 checkVoid :: Env -> Type -> Err Type
-checkVoid env typ = do
-    case typ == Void  of
-        True  -> return typ
-        False -> Left $ wrgVoidTyp typ
+checkVoid env typ
+    | typ == Void = return typ
+    | otherwise   = Left $ wrgVoidTyp typ
 
 checkDecl :: Type -> Env -> Item -> Err Env
 checkDecl typ env item = do
