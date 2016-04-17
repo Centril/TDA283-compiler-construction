@@ -48,3 +48,22 @@ largeBlock = Program [FnDef Doub (Ident "test") [] (Block
             Decl Int [Init (Ident "b") (ELitInt 2)],
             Decl Int [Init (Ident "c") (ELitInt 3)]
     ]))])]
+
+returnCheckTest =
+        [(ELitInt 1),
+        (EAdd (EVar (Ident "a")) Minus (ELitInt 1)),
+        ELitTrue,
+        ELitFalse,
+        (ERel (ELitInt 1) GTH (ELitInt 1)),
+        (ERel (ELitDoub 1.5) EQU (ELitDoub 1.5)),
+        (ERel (EVar (Ident "a")) LTH (EVar (Ident "b"))),
+        (EAnd ELitTrue ELitTrue),
+        (EOr ELitTrue ELitFalse),
+        (Not ELitTrue),
+        (ERel (Neg (ELitInt 1)) LTH (ELitInt 5)),
+        (ERel (EMul (ELitInt 5) Times (ELitInt 5)) EQU (ELitInt 25)),
+        (ERel (EAdd (ELitInt 5) Plus (ELitInt 1)) LTH (ELitInt 7)),
+        (ERel (EMul (ELitInt 5) Mod (ELitInt 5)) EQU (ELitInt 0)),
+        (ERel (EMul (ELitInt 15) Div (ELitInt 5)) EQU (ELitInt 3)),
+        (ERel (EMul (ELitInt 15) Div (ELitInt 0)) EQU (ELitInt 3))]
+
