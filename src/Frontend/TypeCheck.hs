@@ -27,6 +27,8 @@ import qualified Data.Map as Map
 import Control.Monad
 import Control.Arrow
 
+import Utils.Foldable
+
 import Javalette.Abs
 
 import Frontend.Types
@@ -94,14 +96,8 @@ remBlock (sigs, []) = (sigs, [])
 remBlock (sigs, ctxs)  = (sigs, tail ctxs)
 
 lookupVar :: Env -> Ident -> Err Type
-lookupVar (_, contexts) ident = case lookupVarH contexts ident of
-    Just typ -> return typ
-    Nothing  -> Left $ varNotDef ident
-
-lookupVarH :: [Context] -> Ident -> Maybe Type
-lookupVarH ctxs ident = case find (Map.member ident) ctxs of
-    Just c  -> Map.lookup ident c
-    Nothing -> Nothing
+lookupVar (_, contexts) ident = maybe (Left $ varNotDef ident) return $
+                                      (mfind . Map.lookup) ident contexts
 
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (sigs, c:cs) ident typ = case Map.lookup ident c of
