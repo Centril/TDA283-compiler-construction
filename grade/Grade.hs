@@ -78,8 +78,9 @@ testAll compiler bs exts [testSuitePath00, groupPath0] = do
 
   testsPassedCheck summary
 
-testsPassed      tests = all (> 0) $ map (\(x, y, z) -> y) tests
-testsPassedCheck tests = unless (testsPassed tests)
+checkPassed (name, points, tests) = (and tests)
+-- testsPassed      tests = all (> 0) $ map (\(x, y, z) -> y) tests
+testsPassedCheck tests = unless (head (map checkPassed tests))
                                 (putStrLn "Tests failed" >> exitWith (ExitFailure 1))
 
 padl n s = replicate (n - length s) ' ' ++ s
