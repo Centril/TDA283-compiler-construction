@@ -18,50 +18,50 @@ import Javalette.Abs
 
 wrgFunSig :: Ident -> String
 wrgFunSig fun =
-    unwords ["The function", show fun, "has the wrong signature."]
+    unwords ["The function", show fun, "has the wrong signature"]
 
 funcAlrDef :: Ident -> String
 funcAlrDef fun =
-    unwords ["The function", show fun, "is already defined."]
+    unwords ["The function", show fun, "is already defined"]
 
 funcNotDef :: Ident -> String
 funcNotDef fun =
-    unwords ["The function", show fun, "is not defined."]
+    unwords ["The function", show fun, "is not defined"]
 
 varAlrDef :: Ident -> String
 varAlrDef var =
-    unwords ["The variable/parameter", show var, "is already defined."]
+    unwords ["The variable/parameter", show var, "is already defined"]
 
 varNotDef :: Ident -> String
 varNotDef var =
-    unwords ["The variable/parameter", show var, "is not defined."]
+    unwords ["The variable/parameter", show var, "is not defined"]
 
 wrgBinExp :: Expr -> Expr -> Type -> Type -> String
 wrgBinExp exp1 exp2 typ1 typ2 =
      unwords ["The binary expression", "(", show exp1, ",", show typ1, ")",
-              "(", show exp2, ",", show typ2, ")", "has different types."]
+              "(", show exp2, ",", show typ2, ")", "has different types"]
 
 wrgUnaExp :: Expr -> [Type] -> Type -> String
 wrgUnaExp ident types typ =
     unwords ["The unary expression", show ident, "expected one of the types",
-             show types, "but got the type", show typ, "."]
+             show types, "but got the type", show typ]
 
 wrgArgTyp :: Ident -> [Type] -> [Type] -> String
 wrgArgTyp ident ty1s ty2s =
     unwords ["The function", show ident, "expected the types", show ty1s,
-             "but got the types", show ty2s, "."]
+             "but got the types", show ty2s]
 
 wrgExpTyp :: Expr -> Type -> Type -> String
 wrgExpTyp expr typ1 typ2 =
     unwords ["The expression", show expr, "expected the type", show typ1,
-             "but got the type", show typ2, "."]
+             "but got the type", show typ2]
 
 wrgIdeTyp :: Ident -> [Type] -> Type -> String
 wrgIdeTyp ident types typ =
     unwords ["The expression", show ident, "expected one of the types",
-             show types, "but got the type", show typ, "."]
+             show types, "but got the type", show typ]
 
 wrgVoidTyp :: Type -> String
 wrgVoidTyp typ =
     unwords ["The current function expected return type", show Void,
-             "but got the type", show typ, "."]
+             "but got the type", show typ]
