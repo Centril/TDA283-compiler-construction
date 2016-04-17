@@ -80,7 +80,7 @@ extendFun (sigs, ctxs) (ident, sig) =
     Just _  -> Left $ funcAlrDef ident
 
 checkProg :: Env -> Program -> Err Env
-checkProg env = foldM checkFunc env . progFuns
+checkProg env = foldM checkFun env . progFuns
 
 emptyEnv :: Env
 emptyEnv = (Map.empty, [Map.empty])
@@ -178,8 +178,8 @@ inferFun env ident exprs = do
         True  -> return rtype
         False -> Left $ wrgArgTyp ident argtypes exprtypes
 
-checkFunc :: Env -> TopDef -> Err Env
-checkFunc env (FnDef rtype ident args block) = do
+checkFun :: Env -> TopDef -> Err Env
+checkFun env (FnDef rtype ident args block) = do
     env2 <- foldM (\env (Arg typ aident) ->
                    extendVar env aident typ) (newBlock env) args
     checkBlock env2 rtype block
