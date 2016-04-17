@@ -61,13 +61,8 @@ wrgExpTyp expr typ1 typ2 =
     unwords ["The expression", show expr, "expected the type", show typ1,
              "but got the type", show typ2]
 
-wrgIdeTyp :: Ident -> Type -> Type -> String
-wrgIdeTyp ident typ1 typ2 =
-    unwords ["The expression", show ident, "expected the type", show typ1,
-             "but got the type", show typ2]
-
-wrgIdeTyp' :: Ident -> [Type] -> Type -> String
-wrgIdeTyp' ident types typ =
+wrgIdeTyp :: Ident -> [Type] -> Type -> String
+wrgIdeTyp ident types typ =
     unwords ["The expression", show ident, "expected one of the types",
              show types, "but got the type", show typ]
 

@@ -196,7 +196,7 @@ checkStm env typ stmt = case stmt of
     Empty               -> return env
     BStmt block         -> checkBlock (newBlock env) typ block
     Decl dtyp items     -> foldM (checkDecl dtyp) env items
-    Ass ident expr      -> checkExp' env ident expr >> return env
+    Ass ident expr      -> checkIdeExp env ident expr >> return env
     Incr ident          -> checkIdent env [Int, Doub] ident >> return env
     Decr ident          -> checkIdent env [Int, Doub] ident >> return env
     Ret expr            -> checkExp env typ expr >> return env
@@ -213,20 +213,17 @@ checkExp env ty1 expr = do
         True  -> return ty2
         False -> Left $ wrgExpTyp expr ty1 ty2
 
-checkExp' :: Env -> Ident -> Expr -> Err Type
-checkExp' env ident expr = do
-    ty1 <- lookupVar' env ident
-    ty2 <- inferExp env expr
-    case ty1 == ty2 of
-        True  -> return ty1
-        False -> Left $ wrgIdeTyp ident ty1 ty2
+checkIdeExp :: Env -> Ident -> Expr -> Err Type
+checkIdeExp env ident expr = do
+    typ <- lookupVar' env ident
+    checkExp env typ expr
 
 checkIdent :: Env -> [Type] -> Ident -> Err Type
 checkIdent env types ident = do
     typ <- lookupVar' env ident
     case typ `elem` types of
         True  -> return typ
-        False -> Left $ wrgIdeTyp' ident types typ
+        False -> Left $ wrgIdeTyp ident types typ
 
 checkVoid :: Env -> Type -> Err Type
 checkVoid env typ = do
