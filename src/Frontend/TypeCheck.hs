@@ -34,8 +34,7 @@ import Javalette.Abs
 import Frontend.Types
 import Frontend.Query
 import Frontend.ReturnCheck
-
-import Utils.Error
+import Frontend.Error
 
 -- temporary:
 import Frontend.Example

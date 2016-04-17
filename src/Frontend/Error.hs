@@ -12,7 +12,7 @@ Portability : ALL
 
 Error messages.
 -}
-module Utils.Error where
+module Frontend.Error where
 
 import Javalette.Abs
 
