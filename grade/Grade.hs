@@ -17,10 +17,13 @@ import Control.Monad
 import System.Console.GetOpt
 
 cmd c = do
-  putStrLn c
+  --putStrLn c
   (out,err,code) <- runCommandStrWait c ""
-  putStrLn out
-  putStrLn err
+  if err /= "" then do
+    putStrLn out
+    putStrLn err
+  else
+    return ()
 
 
 makeAbsolute p = do
