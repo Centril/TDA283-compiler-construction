@@ -230,9 +230,7 @@ checkStm env typ stmt = case stmt of
     Ret expr            -> checkExp env typ expr >> return env
     VRet                -> checkVoid env typ >> return env
     Cond expr st        -> checkExp env Bool expr >> checkStm env typ st
-    CondElse expr s1 s2 -> do checkExp env Bool expr
-                              checkStm env typ s1
-                              checkStm env typ s2
+    CondElse expr s1 s2 -> checkExp env Bool expr >> checkStms env typ [s1, s2]
     While expr st       -> checkExp env Bool expr >> checkStm env typ st
     SExp expr           -> const env <$> inferExp env expr
 
