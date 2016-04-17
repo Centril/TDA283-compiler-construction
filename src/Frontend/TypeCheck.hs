@@ -182,14 +182,10 @@ checkFunc :: Env -> TopDef -> Err Env
 checkFunc env (FnDef rtype ident args block) = do
     env2 <- foldM (\env (Arg typ aident) ->
                    extendVar env aident typ) (newBlock env) args
-    checkBlock' env2 rtype block
+    checkBlock env2 rtype block
 
 checkBlock :: Env -> Type -> Block -> Err Env
 checkBlock env typ (Block block) =
-    remBlock <$> debug <$> checkStms (newBlock env) typ block
-
-checkBlock' :: Env -> Type -> Block -> Err Env
-checkBlock' env typ (Block block) =
     remBlock <$> debug <$> checkStms env typ block
 
 checkStms :: Env -> Type -> [Stmt] -> Err Env
@@ -198,7 +194,7 @@ checkStms env typ = foldM (`checkStm` typ) env
 checkStm :: Env -> Type -> Stmt -> Err Env
 checkStm env typ stmt = case stmt of
     Empty               -> return env
-    BStmt block         -> checkBlock env typ block
+    BStmt block         -> checkBlock (newBlock env) typ block
     Decl dtyp items     -> foldM (checkDecl dtyp) env items
     Ass ident expr      -> checkExp' env ident expr >> return env
     Incr ident          -> checkIdent env [Int, Doub] ident >> return env
