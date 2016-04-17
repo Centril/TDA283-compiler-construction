@@ -66,14 +66,13 @@ project(':grade') { p ->
         delete 'Grade', 'Grade.exe', "../submission/graderTestSuite"
     }
 
-    task run(type: Exec, dependsOn: build) {
+    task run(type: Exec) {
+        dependsOn build, ':src:build'
         description "Runs grader program for jlc."
         if ( isWin() )
             commandLine file("Grade.exe"), "-s", "jlc.exe", ".", "../submission"
         else
             commandLine "./Grade", ".", "../submission"
-
-        shouldRunAfter ":src:build"
     }
 }
 
