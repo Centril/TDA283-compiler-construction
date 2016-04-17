@@ -44,24 +44,24 @@ wrgBinExp exp1 exp2 typ1 typ2 =
 wrgUnaExp :: Expr -> [Type] -> Type -> String
 wrgUnaExp ident types typ =
     unwords ["The unary expression", show ident, "expected one of the types",
-             show types, "but got the type", show typ]
+             show types, "but got the type", show typ, "."]
 
 wrgArgTyp :: Ident -> [Type] -> [Type] -> String
 wrgArgTyp ident ty1s ty2s =
     unwords ["The function", show ident, "expected the types", show ty1s,
-             "but got the types", show ty2s]
+             "but got the types", show ty2s, "."]
 
 wrgExpTyp :: Expr -> Type -> Type -> String
 wrgExpTyp expr typ1 typ2 =
     unwords ["The expression", show expr, "expected the type", show typ1,
-             "but got the type", show typ2]
+             "but got the type", show typ2, "."]
 
 wrgIdeTyp :: Ident -> [Type] -> Type -> String
 wrgIdeTyp ident types typ =
     unwords ["The expression", show ident, "expected one of the types",
-             show types, "but got the type", show typ]
+             show types, "but got the type", show typ, "."]
 
 wrgVoidTyp :: Type -> String
 wrgVoidTyp typ =
     unwords ["The current function expected return type", show Void,
-             "but got the type", show typ]
+             "but got the type", show typ, "."]
