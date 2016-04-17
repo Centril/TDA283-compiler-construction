@@ -47,14 +47,6 @@ deriving instance Enum RelOp
 
 u = undefined
 
-(<!>) :: Applicative f => f (a -> b) -> a -> f b
-(<!>) f = (<*>) f . pure
-infixr 7 <!>
-
-(<:>) :: Applicative f => (a -> b) -> a -> f b
-(<:>) f = fmap f . pure
-infixr 8 <:>
-
 data Literal = LBool { lbool :: Bool } | LInt { lint :: Integer } |
                LDouble { ldouble :: Double } | LString { lstring :: String }
     deriving Show
@@ -124,7 +116,6 @@ plusFn Minus = (-)
 mulFn m d Times = Just (*)
 mulFn m d Div   = Just d
 mulFn m d Mod   = m
-
 
 evalBoolOp :: (Bool -> Bool -> Bool) -> Expr -> Expr -> Maybe Literal
 evalBoolOp op l r = liftM2 (LBool .| op) (detLitBool l) (detLitBool r)
