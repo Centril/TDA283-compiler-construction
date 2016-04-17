@@ -32,6 +32,8 @@ import Frontend.Types
 import Frontend.Query
 import Frontend.ReturnCheck
 
+import Utils.Error
+
 -- temporary:
 import Frontend.Example
 import Utils.Debug
@@ -44,11 +46,12 @@ typeCheck prog = do
     env2 <- checkProg env prog
     return env2
 
+mainExists :: Env -> Err Env
 mainExists env = do
     (args, rtype) <- lookupFun' env $ Ident "main"
     case rtype == Int && null args of
         True  -> return env
-        False -> Left "The function main has wrong signature."
+        False -> Left $ wrgFunSig $ Ident "main"
 
 allFunctions :: Program -> Err Env
 allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
@@ -74,7 +77,7 @@ extendFun :: Env -> FnSigId -> Err Env
 extendFun (sigs, ctx) (ident, sig) =
     case Map.lookup ident sigs of
     Nothing -> Right (Map.insert ident sig sigs, ctx)
-    Just _  -> Left ("The function is already defined: " ++ show ident)
+    Just _  -> Left $ funcAlrDef ident
 
 checkProg :: Env -> Program -> Err Env
 checkProg env = foldM checkFunc env . progFuns
@@ -103,12 +106,12 @@ lookupVarH (c:cs) ident = case Map.lookup ident c of
 lookupVar' :: Env -> Ident -> Err Type
 lookupVar' env ident = case lookupVar env ident of
         Just typ -> return typ
-        Nothing  -> Left $ "The variable is not defined: " ++ show ident
+        Nothing  -> Left $ varNotDef ident
 
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (s, t:r) i y = case Map.lookup i t of
     Nothing -> Right (s, Map.insert i y t:r)
-    Just _  -> Left $ "The variable/parameter is already defined: " ++ show i
+    Just _  -> Left $ varAlrDef i
 
 lookupFun :: Env -> Ident -> Maybe FnSig
 lookupFun (s, _) i = Map.lookup i s
@@ -116,7 +119,7 @@ lookupFun (s, _) i = Map.lookup i s
 lookupFun' :: Env -> Ident -> Err FnSig
 lookupFun' env ident = case lookupFun env ident of
         Just sig -> return sig
-        Nothing  -> Left $ "The function is not defined: " ++ show ident
+        Nothing  -> Left $ funcNotDef ident
 
 -- TODO: inferBin for String
 inferExp :: Env -> Expr -> Err Type
@@ -149,26 +152,23 @@ inferBinary env types exp1 exp2 = do
     typr <- inferExp env exp2
     case typl `elem` types of
         True  -> checkExp env typl exp2
-        False -> Left $ unwords ["Wrong type of binary expression:",
-                                "left:", show exp1, ", type:", show typl,
-                                "right:", show exp2, ", type:", show typr]
+        False -> Left $ wrgBinExp exp1 exp2 typl typr
 
+-- TODO: Merge with inferBinary
 inferRel :: Env -> [Type] -> Expr -> Expr -> Err Type
 inferRel env types exp1 exp2 = do
     typl <- inferExp env exp1
     typr <- inferExp env exp2
     case typl == typr && typl `elem` types of
         True  -> return Bool
-        False -> Left $ unwords ["Wrong type of relation expression:",
-                                "left:", show exp1, ", type:", show typl,
-                                "right:", show exp2, ", type:", show typr]
+        False -> Left $ wrgRelExp exp1 exp2 typl typr
 
 inferUnary :: Env -> [Type] -> Expr -> Err Type
 inferUnary e t x1 = do
     y <- inferExp e x1
     case y `elem` t of
         True  -> return y
-        False -> Left $ "Wrong type of unary expression: " ++ show y
+        False -> Left $ wrgUnaExp x1 y
 
 inferFun :: Env -> Ident -> [Expr] -> Err Type
 inferFun env ident exprs = do
@@ -176,9 +176,7 @@ inferFun env ident exprs = do
     exprtypes         <- mapM (inferExp env) exprs
     case argtypes == exprtypes of
         True  -> return rtype
-        False -> Left $ unwords ["Function application of", show ident,
-                                 "expected types:", show argtypes, ",",
-                                 "actual types:", show exprtypes]
+        False -> Left $ wrgArgTyp ident argtypes exprtypes
 
 checkFunc :: Env -> TopDef -> Err Env
 checkFunc env (FnDef rtype ident args block) = do
@@ -217,8 +215,7 @@ checkExp env ty1 expr = do
     ty2 <- inferExp env expr
     case ty2 == ty1 of
         True  -> return ty2
-        False -> Left $ unwords ["Expected type", show ty1, "for", show expr,
-                                 "but found:", show ty2]
+        False -> Left $ wrgExpTyp expr ty1 ty2
 
 checkExp' :: Env -> Ident -> Expr -> Err Type
 checkExp' env ident expr = do
@@ -226,21 +223,20 @@ checkExp' env ident expr = do
     ty2 <- inferExp env expr
     case ty1 == ty2 of
         True  -> return ty1
-        False -> Left $ unwords ["Expected type", show ty1, "for",
-                                 show ident, "but found:", show ty2]
+        False -> Left $ wrgIdeTyp ident ty1 ty2
 
 checkIdent :: Env -> [Type] -> Ident -> Err Type
 checkIdent env types ident = do
     typ <- lookupVar' env ident
     case typ `elem` types of
         True  -> return typ
-        False -> Left $ "Wrong type for ident: " ++ show ident
+        False -> Left $ wrgIdeTyp' ident types typ
 
 checkVoid :: Env -> Type -> Err Type
 checkVoid env typ = do
     case typ == Void  of
         True  -> return typ
-        False -> Left $ "Wrong type for void: " ++ show typ
+        False -> Left $ wrgVoidTyp typ
 
 checkDecl :: Type -> Env -> Item -> Err Env
 checkDecl typ env item = do
