@@ -20,6 +20,7 @@ module Frontend.TypeCheck (
     typeCheck
 ) where
 
+import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -97,12 +98,10 @@ lookupVar (_, contexts) ident = case lookupVarH contexts ident of
     Just typ -> return typ
     Nothing  -> Left $ varNotDef ident
 
--- TODO: Implement with find
 lookupVarH :: [Context] -> Ident -> Maybe Type
-lookupVarH []     _     = Nothing
-lookupVarH (c:cs) ident = case Map.lookup ident c of
-    Nothing  -> lookupVarH cs ident
-    Just typ -> return typ
+lookupVarH ctxs ident = case find (\y -> Map.member ident y) ctxs of
+    Just c  -> Map.lookup ident c
+    Nothing -> Nothing
 
 extendVar :: Env -> Ident -> Type -> Err Env
 extendVar (sigs, c:cs) ident typ = case Map.lookup ident c of
