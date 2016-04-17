@@ -45,12 +45,14 @@ typeCheck prog = do
     env2 <- checkProg env prog
     return env2
 
+mainId = Ident "main"
+
 mainExists :: Env -> Err Env
 mainExists env = do
-    (args, rtype) <- lookupFun env $ Ident "main"
+    (args, rtype) <- lookupFun env mainId
     case rtype == Int && null args of
         True  -> return env
-        False -> Left $ wrgFunSig $ Ident "main"
+        False -> Left $ wrgFunSig mainId
 
 allFunctions :: Program -> Err Env
 allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
