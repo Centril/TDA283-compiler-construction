@@ -21,4 +21,4 @@ import System.IO.Unsafe
 -- set your house on fire, create black holes,
 -- without it saying so in the type signature.
 debug :: Show a => a -> a
-debug x = unsafePerformIO $ print x >> return x
+debug x = unsafePerformIO $ (putStrLn $ unlines [show x]) >> return x
