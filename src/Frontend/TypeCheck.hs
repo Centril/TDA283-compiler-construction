@@ -39,8 +39,6 @@ import Utils.Error
 import Frontend.Example
 import Utils.Debug
 
-type FnSigId = (Ident, FnSig)
-
 typeCheck :: Program -> Err Env
 typeCheck prog = do
     env  <- allFunctions prog

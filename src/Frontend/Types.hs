@@ -18,7 +18,7 @@ Types for Frontend of Javalette compiler.
 
 module Frontend.Types (
     -- * Types
-    Env, FnSig, Sig, Context, Err, Log
+    Env, FnSig, FnSigId, Sig, Context, Err, Log
 ) where
 
 import Data.Map (Map)
@@ -48,6 +48,11 @@ type Env =     (Sig, [Context])
 -- | 'FnSig': Signature of a function,
 -- argument list (types) followed by return type.
 type FnSig = ([Type], Type)
+
+-- | 'Ident': Identifier of a function,
+-- | 'FnSig': Signature of a function,
+--  a simpler representation in regards to Sig
+type FnSigId = (Ident, FnSig)
 
 -- | 'Sig': Map of function identifiers -> signatures.
 type Sig =     Map Ident FnSig
