@@ -125,9 +125,11 @@ inferExp env expr = case expr of
     EAnd left right   -> inferBinary env [Bool] left right
     EOr left right    -> inferBinary env [Bool] left right
 
+relOp :: RelOp -> [Type]
 relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
            | otherwise             = [Int, Doub]
 
+mulOp :: MulOp -> [Type]
 mulOp oper | oper == Mod = [Int]
            | otherwise   = [Int, Doub]
 
