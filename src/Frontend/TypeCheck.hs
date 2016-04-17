@@ -74,9 +74,9 @@ toFnSigId :: TopDef -> FnSigId
 toFnSigId (FnDef ret id args _) = (id, (map argType args, ret))
 
 extendFun :: Env -> FnSigId -> Err Env
-extendFun (sigs, ctx) (ident, sig) =
+extendFun (sigs, ctxs) (ident, sig) =
     case Map.lookup ident sigs of
-    Nothing -> Right (Map.insert ident sig sigs, ctx)
+    Nothing -> Right (Map.insert ident sig sigs, ctxs)
     Just _  -> Left $ funcAlrDef ident
 
 checkProg :: Env -> Program -> Err Env
@@ -86,11 +86,11 @@ emptyEnv :: Env
 emptyEnv = (Map.empty, [Map.empty])
 
 newBlock :: Env -> Env
-newBlock (s, c)  = (s, Map.empty:c)
+newBlock (sigs, ctxs)  = (sigs, Map.empty:ctxs)
 
 remBlock :: Env -> Env
-remBlock (s, []) = (s, [])
-remBlock (s, c)  = (s, tail c)
+remBlock (sigs, []) = (sigs, [])
+remBlock (sigs, ctxs)  = (sigs, tail ctxs)
 
 lookupVar :: Env -> Ident -> Maybe Type
 lookupVar (_, [])       _     = Nothing
@@ -100,21 +100,21 @@ lookupVar (_, contexts) ident = lookupVarH contexts ident
 lookupVarH :: [Context] -> Ident -> Maybe Type
 lookupVarH []     _     = Nothing
 lookupVarH (c:cs) ident = case Map.lookup ident c of
-                    Nothing  -> lookupVarH cs ident
-                    Just typ -> return typ
+    Nothing  -> lookupVarH cs ident
+    Just typ -> return typ
 
 lookupVar' :: Env -> Ident -> Err Type
 lookupVar' env ident = case lookupVar env ident of
-        Just typ -> return typ
-        Nothing  -> Left $ varNotDef ident
+    Just typ -> return typ
+    Nothing  -> Left $ varNotDef ident
 
 extendVar :: Env -> Ident -> Type -> Err Env
-extendVar (s, t:r) i y = case Map.lookup i t of
-    Nothing -> Right (s, Map.insert i y t:r)
-    Just _  -> Left $ varAlrDef i
+extendVar (sigs, c:cs) ident typ = case Map.lookup ident c of
+    Nothing -> Right (sigs, Map.insert ident typ c:cs)
+    Just _  -> Left $ varAlrDef ident
 
 lookupFun :: Env -> Ident -> Maybe FnSig
-lookupFun (s, _) i = Map.lookup i s
+lookupFun (sigs, _) ident = Map.lookup ident sigs
 
 lookupFun' :: Env -> Ident -> Err FnSig
 lookupFun' env ident = case lookupFun env ident of
@@ -164,11 +164,11 @@ inferRel env types exp1 exp2 = do
         False -> Left $ wrgRelExp exp1 exp2 typl typr
 
 inferUnary :: Env -> [Type] -> Expr -> Err Type
-inferUnary e t x1 = do
-    y <- inferExp e x1
-    case y `elem` t of
-        True  -> return y
-        False -> Left $ wrgUnaExp x1 y
+inferUnary env types expr = do
+    typ <- inferExp env expr
+    case typ `elem` types of
+        True  -> return typ
+        False -> Left $ wrgUnaExp expr types typ
 
 inferFun :: Env -> Ident -> [Expr] -> Err Type
 inferFun env ident exprs = do
@@ -193,7 +193,7 @@ checkBlock' env typ (Block block) =
     remBlock <$> debug <$> checkStms env typ block
 
 checkStms :: Env -> Type -> [Stmt] -> Err Env
-checkStms e y = foldM (`checkStm` y) e
+checkStms env typ = foldM (`checkStm` typ) env
 
 checkStm :: Env -> Type -> Stmt -> Err Env
 checkStm env typ stmt = case stmt of

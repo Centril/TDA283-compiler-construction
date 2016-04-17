@@ -46,10 +46,10 @@ wrgRelExp exp1 exp2 typ1 typ2 =
     unwords ["The relation expression", "(", show exp1, ",", show typ1, ")",
              "(", show exp2, ",", show typ2, ")", "has different types."]
 
-wrgUnaExp :: Expr -> Type -> String
-wrgUnaExp expr typ =
-    unwords ["The unary expression", "(", show expr, ",", show typ, ")",
-             "has the wrong type."]
+wrgUnaExp :: Expr -> [Type] -> Type -> String
+wrgUnaExp ident types typ =
+    unwords ["The unary expression", show ident, "expected one of the types",
+             show types, "but got the type", show typ]
 
 wrgArgTyp :: Ident -> [Type] -> [Type] -> String
 wrgArgTyp ident ty1s ty2s =
