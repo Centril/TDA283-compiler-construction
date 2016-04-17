@@ -140,10 +140,10 @@ inferExp env expr = case expr of
     EOr left right    -> inferBinary env [Bool] left right
 
 relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
-                 | otherwise             = [Int, Doub]
+           | otherwise             = [Int, Doub]
 
 mulOp oper | oper == Mod = [Int]
-                 | otherwise   = [Int, Doub]
+           | otherwise   = [Int, Doub]
 
 inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
 inferBinary env types exp1 exp2 = do
