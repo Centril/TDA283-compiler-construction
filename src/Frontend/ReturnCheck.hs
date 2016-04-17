@@ -27,6 +27,8 @@ module Frontend.ReturnCheck (
 import Data.Map (Map)
 import qualified Data.Map as Map
 
+import Data.Monoid
+
 import Control.Monad
 import Control.Arrow
 
@@ -51,6 +53,7 @@ u = undefined
 data Literal = LBool { lbool :: Bool } | LInt { lint :: Integer } |
                LDouble { ldouble :: Double } | LString { lstring :: String }
     deriving Show
+
 makePrisms ''Literal
 
 returnCheck :: Program -> Err Env
@@ -70,8 +73,10 @@ evalConstExpr expr = case expr of
     Not  e     -> LBool . not <$> detLitBool e
     Neg  e     -> evalNeg e
     EMul l o r -> evalBinOp l r
-                    (\v er -> mulFn (Just mod) div o <!> v <*> er ^? _LInt)
-                    (\v er -> mulFn Nothing (/) o <!> v <*> er ^? _LDouble)
+                    (\v er -> mulFn (Just mod) div o <!> v <*>
+                              mulFetchRight o er _LInt)
+                    (\v er -> mulFn Nothing (/) o <!> v <*>
+                              mulFetchRight o er _LDouble)
     EAdd l o r -> evalBinOp l r
                     (\v er -> plusFn o <:> v <*> er ^? _LInt)
                     (\v er -> plusFn o <:> v <*> er ^? _LDouble)
@@ -85,6 +90,16 @@ evalConstExpr expr = case expr of
             LDouble v -> evalRelStd v o er _LDouble
             LString v -> evalRelStd v o er _LString
 
+evalBoolOp :: (Bool -> Bool -> Bool) -> Expr -> Expr -> Maybe Literal
+evalBoolOp op l r = liftM2 (LBool .| op) (detLitBool l) (detLitBool r)
+
+detLitBool :: Expr -> Maybe Bool
+detLitBool x = evalConstExpr x >>= (^? _LBool)
+
+mulFetchRight :: (Eq a, Num a) => MulOp -> Literal ->
+                 Getting (First a) Literal a -> Maybe a
+mulFetchRight o er p = mfilter (\r -> r /= 0 || o /= Div) $ er ^? p
+
 evalBinOp :: Expr -> Expr -> (Integer -> Literal -> Maybe Integer)
           -> (Double -> Literal -> Maybe Double) -> Maybe Literal
 evalBinOp l r manipI manipD = do
@@ -94,6 +109,7 @@ evalBinOp l r manipI manipD = do
                    LDouble v -> LDouble <$> manipD v er
                    _         -> Nothing
 
+evalNeg :: Expr -> Maybe Literal
 evalNeg e = evalConstExpr e >>= f
     where f (LInt v)    = neg LInt v
           f (LDouble v) = neg LDouble v
@@ -102,24 +118,24 @@ evalNeg e = evalConstExpr e >>= f
 neg :: (Monad m, Num v) => (v -> r) -> v -> m r
 neg ctor v = return $ ctor $ -v
 
+evalRelStd :: Ord a => a -> RelOp -> s -> Getting (First a) s a -> Maybe Bool
 evalRelStd v o er t = relFn o <:> v <*> er ^? t
 
+relFn :: Ord a => RelOp -> a -> a -> Bool
 relFn LTH = (<)
 relFn LE  = (<=)
-relFn GTH = (>=)
-relFn GE  = (>)
+relFn GTH = (>)
+relFn GE  = (>=)
 relFn EQU = (==)
 relFn NE  = (/=)
 
+plusFn :: Num a => AddOp -> a -> a -> a
 plusFn Plus  = (+)
 plusFn Minus = (-)
 
+mulFn :: Num a
+      => Maybe (a -> a -> a) -> (a -> a -> a)
+      -> MulOp -> Maybe (a -> a -> a)
 mulFn m d Times = Just (*)
 mulFn m d Div   = Just d
 mulFn m d Mod   = m
-
-evalBoolOp :: (Bool -> Bool -> Bool) -> Expr -> Expr -> Maybe Literal
-evalBoolOp op l r = liftM2 (LBool .| op) (detLitBool l) (detLitBool r)
-
-detLitBool :: Expr -> Maybe Bool
-detLitBool x = evalConstExpr x >>= (^? _LBool)
