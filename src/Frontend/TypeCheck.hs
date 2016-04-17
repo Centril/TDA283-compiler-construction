@@ -133,35 +133,25 @@ inferExp env expr = case expr of
     EString str       -> return ConstStr
     Neg xpr           -> inferUnary env [Int, Doub] xpr
     Not xpr           -> inferUnary env [Bool] xpr
-    EMul left o right -> inferBinary env (mulOperator o) left right
+    EMul left o right -> inferBinary env (mulOp o) left right
     EAdd left _ right -> inferBinary env [Int, Doub] left right
-    ERel left o right -> inferRel env (relOperator o) left right
+    ERel left o right -> inferBinary env (relOp o) left right >> return Bool
     EAnd left right   -> inferBinary env [Bool] left right
     EOr left right    -> inferBinary env [Bool] left right
 
-relOperator oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
+relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
                  | otherwise             = [Int, Doub]
 
-mulOperator oper | oper == Mod = [Int]
+mulOp oper | oper == Mod = [Int]
                  | otherwise   = [Int, Doub]
 
--- TODO: Refactor the function: Remove do
 inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
 inferBinary env types exp1 exp2 = do
     typl <- inferExp env exp1
     typr <- inferExp env exp2
-    case typl `elem` types of
-        True  -> checkExp env typl exp2
-        False -> Left $ wrgBinExp exp1 exp2 typl typr
-
--- TODO: Merge with inferBinary
-inferRel :: Env -> [Type] -> Expr -> Expr -> Err Type
-inferRel env types exp1 exp2 = do
-    typl <- inferExp env exp1
-    typr <- inferExp env exp2
     case typl == typr && typl `elem` types of
-        True  -> return Bool
-        False -> Left $ wrgRelExp exp1 exp2 typl typr
+        True  -> return typl
+        False -> Left $ wrgBinExp exp1 exp2 typl typr
 
 inferUnary :: Env -> [Type] -> Expr -> Err Type
 inferUnary env types expr = do
