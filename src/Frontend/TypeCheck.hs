@@ -99,7 +99,7 @@ lookupVar (_, contexts) ident = case lookupVarH contexts ident of
     Nothing  -> Left $ varNotDef ident
 
 lookupVarH :: [Context] -> Ident -> Maybe Type
-lookupVarH ctxs ident = case find (\y -> Map.member ident y) ctxs of
+lookupVarH ctxs ident = case find (Map.member ident) ctxs of
     Just c  -> Map.lookup ident c
     Nothing -> Nothing
 
