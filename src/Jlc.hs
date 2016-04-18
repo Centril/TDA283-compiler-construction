@@ -14,6 +14,7 @@ import Javalette.Abs
 import Frontend.ParseLex
 import Frontend.TypeCheck
 import Utils.Terminal
+import Utils.Debug
 
 handleArgs :: [String] -> IO String
 handleArgs [] = getContents
@@ -27,8 +28,7 @@ parserPhase s = case parseProgram s of
         exitFailure
     Right tree -> do
         putStrLn ""
-        print tree
-        putStrLn ""
+        putStrLn $ prettify $ show tree
         typeCheckPhase tree
 
 typeCheckPhase :: Program -> IO ()
@@ -39,8 +39,7 @@ typeCheckPhase p = case typeCheck p of
         exitFailure
     Right env -> do
         putStrLn ""
-        print env
-        putStrLn ""
+        putStrLn $ prettify $ show env
         errLn "OK"
 
 main :: IO ()
