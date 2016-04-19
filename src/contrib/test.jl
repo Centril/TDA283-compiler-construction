@@ -1,8 +1,6 @@
 int main() {
-    return 1;
-}
-
-/*
+    int a = 1;
+    int b = 2;
     boolean b1 = true;
     boolean b2 = false;
     boolean b3 = 1 > 1;
@@ -17,4 +15,6 @@ int main() {
     boolean b12 = 5 % 5 == 0;
     boolean b13 = 15 / 5 == 3;
     boolean b14 = 15 / 0 == 3;
-*/
+
+    return 1;
+}

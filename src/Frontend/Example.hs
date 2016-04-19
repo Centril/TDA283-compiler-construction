@@ -16,8 +16,6 @@ module Frontend.Example where
 
 import Javalette.Abs
 
-import Frontend.Types
-
 simpleBlock :: Block
 simpleBlock = Block
     [
@@ -49,6 +47,7 @@ largeBlock = Program [FnDef Doub (Ident "test") [] (Block
             Decl Int [Init (Ident "c") (ELitInt 3)]
     ]))])]
 
+returnCheckTest :: [Expr]
 returnCheckTest =
         [(ELitInt 1),
         (EAdd (EVar (Ident "a")) Minus (ELitInt 1)),

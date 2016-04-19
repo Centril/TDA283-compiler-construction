@@ -27,12 +27,8 @@ module Frontend.Types (
     runEval, warn, warn', info, info',
 ) where
 
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map
 
-import Control.Monad
-
-import Control.Applicative
 import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Except

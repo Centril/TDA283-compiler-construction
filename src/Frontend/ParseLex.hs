@@ -17,7 +17,6 @@ module Frontend.ParseLex (
     parseProgram
 ) where
 
-import Javalette.Lex
 import Javalette.Par
 import Javalette.Abs
 import qualified Javalette.ErrM as ErrM
