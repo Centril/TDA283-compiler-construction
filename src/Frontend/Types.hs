@@ -25,7 +25,7 @@ module Frontend.Types (
     FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
-    runEval, warn, warn', info, info', err,
+    runEval, warn, warn', info, info', err, err',
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
     functions, contexts, toFunId, toFunSig
@@ -69,9 +69,11 @@ type Contexts = [Context]
 -- | 'FunSig': Signature of a function,
 -- argument list (types) followed by return type.
 data FunSig = FunSig { targs :: [Type], tret :: Type }
+    deriving (Eq, Show, Read)
 
 -- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
 data FunId = FunId { fident :: Ident, fsig :: FunSig }
+    deriving (Eq, Show, Read)
 
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
@@ -88,9 +90,10 @@ toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
 
 -- | 'TCEnv': The operating environment of an 'Eval' computation.
 data TCEnv = TCEnv {
-    _functions :: FnSigMap, -- ^ Map of ident -> function signatures.
-    _contexts  :: Contexts  -- ^ Stack of contexts.
-}
+    _functions :: FnSigMap , -- ^ Map of ident -> function signatures.
+    _contexts  :: Contexts } -- ^ Stack of contexts.
+    deriving (Eq, Show, Read)
+
 makeLenses ''TCEnv
 
 -- | 'initialEnv': The initial empty environment.
@@ -183,6 +186,10 @@ type InfoLog = [LogItem]
 
 -- | 'LogItem': Type of a recoverable error.
 data LogItem = Warn { _warn :: String } | Info { _info :: String }
+    deriving (Eq, Show, Read)
+
+err' :: [String] -> Eval a
+err' = err .unwords
 
 err :: String -> Eval a
 err = throwError
