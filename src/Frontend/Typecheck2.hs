@@ -41,18 +41,26 @@ u = undefined
 typeCheck :: Program -> Eval Program
 typeCheck prog = u
 
+--------------------------------------------------------------------------------
+-- Checking for int main(void):
+--------------------------------------------------------------------------------
+
 mainId :: Ident
 mainId = Ident "main"
 
 mainCorrect :: Eval ()
-mainCorrect = lookupFun' mainNotFound mainId >>=
+mainCorrect = lookupFun' funNotDef mainId >>=
               flip unless wrongMainSig . (== FunSig [] Int)
 
+--------------------------------------------------------------------------------
+-- Collecting function signatures:
+--------------------------------------------------------------------------------
+
 allFunctions :: Program -> Eval ()
-allFunctions = u
+allFunctions = collectFuns . (predefFuns ++) . extractFunIds
 
 collectFuns :: [FunId] -> Eval ()
-collectFuns = u
+collectFuns = mapM_ $ extendFun' funAlreadyDef
 
 predefFuns :: [FunId]
 predefFuns = map toFunId
@@ -63,14 +71,14 @@ predefFuns = map toFunId
      ("readDouble",  ([],         Doub))]
 
 extractFunIds :: Program -> [FunId]
-extractFunIds = map toFnSigId' . progFuns
-
-
-progFunSigs :: Program -> [FunId]
-progFunSigs = map toFnSigId . progFuns
+extractFunIds = map toFnSigId . progFuns
 
 toFnSigId :: TopDef -> FunId
-toFnSigId = u
+toFnSigId (FnDef ret ident args _) = FunId ident $ FunSig (map argType args) ret
+
+--------------------------------------------------------------------------------
+-- Typechecking:
+--------------------------------------------------------------------------------
 
 checkProg :: Program -> Eval Program
 checkProg = u

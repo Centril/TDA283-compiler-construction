@@ -19,8 +19,11 @@ import Frontend.Query
 
 import Javalette.Abs
 
-mainNotFound :: Ident -> Eval a
-mainNotFound fun = err' ["The function:", identStr fun, " does not exist."]
+funNotDef :: Ident -> Eval a
+funNotDef fun = err' ["The function:", identStr fun, " is not defined."]
 
 wrongMainSig :: Eval a
 wrongMainSig = err "The function: main has the wrong signature"
+
+funAlreadyDef :: Ident -> Eval a
+funAlreadyDef fun = err' ["The function", identStr fun, "is already defined"]
