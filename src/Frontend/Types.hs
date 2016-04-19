@@ -157,7 +157,9 @@ runEval = runSEW
 -- SEW: SEWT using Identity monad.
 type SEW s e w a = SEWT s e w Identity a
 
--- SEWT: State + Except + Writer monad with inner
+-- | SEWT: Composition of State . Except . Writer monad transformers in that
+-- order where Writer is the innermost transformer.
+-- the form of the computation is: s -> (Either e (a, s), w)
 newtype SEWT s e w m a = SEWT {
     _runSEWT :: StateT s (ExceptT e (WriterT w m)) a }
     deriving (Functor, Applicative, Monad,
