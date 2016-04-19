@@ -24,13 +24,9 @@ module Frontend.ReturnCheck (
     returnCheck
 ) where
 
-import Data.Map (Map)
-import qualified Data.Map as Map
-
 import Data.Monoid
 
 import Control.Monad
-import Control.Arrow
 
 import Control.Lens
 
@@ -43,16 +39,9 @@ import Frontend.Types
 import Frontend.Query
 import Frontend.Error
 
--- temporary:
-import Frontend.Example
-import Utils.Debug
-
 deriving instance Enum RelOp
 
-u = undefined
-
-data Literal = LBool { lbool :: Bool } | LInt { lint :: Integer } |
-               LDouble { ldouble :: Double } | LString { lstring :: String }
+data Literal = LBool Bool | LInt Integer | LDouble Double | LString String
     deriving Show
 
 makePrisms ''Literal
@@ -119,7 +108,7 @@ evalConstExpr expr = case expr of
             LString v -> evalRelStd v o er _LString
 
 evalBoolOp :: (Bool -> Bool -> Bool) -> Expr -> Expr -> Maybe Literal
-evalBoolOp op l r = liftM2 (LBool .| op) (detLitBool l) (detLitBool r)
+evalBoolOp o le ri = liftM2 (LBool .| o) (detLitBool le) (detLitBool ri)
 
 detLitBool :: Expr -> Maybe Bool
 detLitBool x = evalConstExpr x >>= (^? _LBool)
@@ -164,6 +153,6 @@ plusFn Minus = (-)
 mulFn :: Num a
       => Maybe (a -> a -> a) -> (a -> a -> a)
       -> MulOp -> Maybe (a -> a -> a)
-mulFn m d Times = Just (*)
-mulFn m d Div   = Just d
-mulFn m d Mod   = m
+mulFn _ _ Times = Just (*)
+mulFn _ d Div   = Just d
+mulFn m _ Mod   = m

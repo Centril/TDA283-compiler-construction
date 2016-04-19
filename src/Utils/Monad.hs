@@ -17,8 +17,6 @@ module Utils.Monad (
     (<!>), (<:>)
 ) where
 
-import Control.Monad
-
 -- | '<!>': sequential application of a non-applicative value
 -- lifted into the same 'Applicative' of as the function applied.
 (<!>) :: Applicative f => f (a -> b) -> a -> f b

@@ -22,17 +22,9 @@ module Frontend.Types (
 ) where
 
 import Data.Map (Map)
-import qualified Data.Map as Map
-
-import Control.Monad
 
 import Data.Data
-import Data.Generics.Uniplate.Data
 
-import Javalette.Lex
-import Javalette.Par
-import Javalette.Skel
-import Javalette.Print
 import Javalette.Abs
 
 -- | 'Log': Logging type for errors in 'Err'.

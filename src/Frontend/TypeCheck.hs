@@ -20,8 +20,6 @@ module Frontend.TypeCheck (
     typeCheck
 ) where
 
-import Data.List
-import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Control.Monad
@@ -37,16 +35,20 @@ import Frontend.ReturnCheck
 import Frontend.Error
 
 -- temporary:
-import Frontend.Example
 import Utils.Debug
 
 typeCheck :: Program -> Err Env
 typeCheck prog = do
     env  <- allFunctions prog
-    env2 <- checkProg env prog
+    env1 <- mainExists env
+    env2 <- checkProg env1 prog
     env3 <- returnCheck env2 prog
     return env3
 
+allFunctions :: Program -> Err Env
+allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
+
+mainId :: Ident
 mainId = Ident "main"
 
 mainExists :: Env -> Err Env
@@ -55,9 +57,6 @@ mainExists env = do
     case rtype == Int && null args of
         True  -> return env
         False -> Left $ wrgFunSig mainId
-
-allFunctions :: Program -> Err Env
-allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
 
 predefFuns :: [FnSigId]
 predefFuns = map (first Ident)
@@ -74,7 +73,7 @@ collectFuns :: Env -> [FnSigId] -> Err Env
 collectFuns = foldM extendFun
 
 toFnSigId :: TopDef -> FnSigId
-toFnSigId (FnDef ret id args _) = (id, (map argType args, ret))
+toFnSigId (FnDef ret ident args _) = (ident, (map argType args, ret))
 
 extendFun :: Env -> FnSigId -> Err Env
 extendFun (sigs, ctxs) (ident, sig) =
@@ -100,6 +99,7 @@ lookupVar (_, contexts) ident = maybe (Left $ varNotDef ident) return $
                                       (mfind . Map.lookup) ident contexts
 
 extendVar :: Env -> Ident -> Type -> Err Env
+extendVar (_, []) _ _ = Left ""
 extendVar (sigs, c:cs) ident typ = case Map.lookup ident c of
     Nothing -> Right (sigs, Map.insert ident typ c:cs)
     Just _  -> Left $ varAlrDef ident
@@ -111,20 +111,20 @@ lookupFun (sigs, _) ident = case Map.lookup ident sigs of
 
 inferExp :: Env -> Expr -> Err Type
 inferExp env expr = case expr of
-    EVar ident        -> lookupVar env ident
-    ELitInt int       -> return Int
-    ELitDoub doub     -> return Doub
-    ELitTrue          -> return Bool
-    ELitFalse         -> return Bool
-    EApp ident xps    -> inferFun env ident xps
-    EString str       -> return ConstStr
-    Neg xpr           -> inferUnary env [Int, Doub] xpr
-    Not xpr           -> inferUnary env [Bool] xpr
-    EMul left o right -> inferBinary env (mulOp o) left right
-    EAdd left _ right -> inferBinary env [Int, Doub] left right
-    ERel left o right -> inferBinary env (relOp o) left right >> return Bool
-    EAnd left right   -> inferBinary env [Bool] left right
-    EOr left right    -> inferBinary env [Bool] left right
+    EVar ident   -> lookupVar env ident
+    ELitInt _    -> return Int
+    ELitDoub _   -> return Doub
+    ELitTrue     -> return Bool
+    ELitFalse    -> return Bool
+    EApp ide xps -> inferFun env ide xps
+    EString _    -> return ConstStr
+    Neg xpr      -> inferUnary env [Int, Doub] xpr
+    Not xpr      -> inferUnary env [Bool] xpr
+    EMul le o ri -> inferBinary env (mulOp o) le ri
+    EAdd le _ ri -> inferBinary env [Int, Doub] le ri
+    ERel le o ri -> inferBinary env (relOp o) le ri >> return Bool
+    EAnd le ri   -> inferBinary env [Bool] le ri
+    EOr le ri    -> inferBinary env [Bool] le ri
 
 relOp :: RelOp -> [Type]
 relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
@@ -158,9 +158,9 @@ inferFun env ident exprs = do
         False -> Left $ wrgArgTyp ident argtypes exprtypes
 
 checkFun :: Env -> TopDef -> Err Env
-checkFun env (FnDef rtype ident args block) = do
-    env2 <- foldM (\env (Arg typ aident) ->
-                   extendVar env aident typ) (newBlock env) args
+checkFun env (FnDef rtype _ args block) = do
+    env2 <- foldM (\en (Arg typ aident) ->
+                   extendVar en aident typ) (newBlock env) args
     checkBlock env2 rtype block
 
 checkBlock :: Env -> Type -> Block -> Err Env
@@ -179,7 +179,7 @@ checkStm env typ stmt = case stmt of
     Incr ident          -> checkIdent env [Int, Doub] ident >> return env
     Decr ident          -> checkIdent env [Int, Doub] ident >> return env
     Ret expr            -> checkExp env typ expr >> return env
-    VRet                -> checkVoid env typ >> return env
+    VRet                -> checkVoid typ >> return env
     Cond expr st        -> checkExp env Bool expr >> checkStm env typ st
     CondElse expr s1 s2 -> checkExp env Bool expr >> checkStms env typ [s1, s2]
     While expr st       -> checkExp env Bool expr >> checkStm env typ st
@@ -204,8 +204,8 @@ checkIdent env types ident = do
         True  -> return typ
         False -> Left $ wrgIdeTyp ident types typ
 
-checkVoid :: Env -> Type -> Err Type
-checkVoid env typ
+checkVoid :: Type -> Err Type
+checkVoid typ
     | typ == Void = return typ
     | otherwise   = Left $ wrgVoidTyp typ
 

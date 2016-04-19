@@ -20,7 +20,7 @@ module Frontend.Query (
 import Javalette.Abs
 
 argType :: Arg -> Type
-argType (Arg t i) = t
+argType (Arg t _) = t
 
 progFuns :: Program -> [TopDef]
 progFuns (Program fns) = fns

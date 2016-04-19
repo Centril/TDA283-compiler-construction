@@ -1,14 +1,8 @@
 module Main where
 
-import System.IO ( stdin, hGetContents )
-import System.Environment ( getArgs, getProgName )
-import System.Exit ( exitFailure, exitSuccess )
-import Control.Monad (when)
+import System.Environment ( getArgs )
+import System.Exit ( exitFailure )
 
-import Javalette.Lex
-import Javalette.Par
-import Javalette.Skel
-import Javalette.Print
 import Javalette.Abs
 
 import Frontend.ParseLex
