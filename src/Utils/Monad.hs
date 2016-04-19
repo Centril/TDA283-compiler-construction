@@ -14,7 +14,7 @@ General monadic, applicative, functor utility functions.
 -}
 module Utils.Monad (
     -- * Operations
-    (<!>), (<:>)
+    (<!>), (<:>), maybeErr
 ) where
 
 -- | '<!>': sequential application of a non-applicative value
@@ -28,3 +28,8 @@ infixr 7 <!>
 (<:>) :: Applicative f => (a -> b) -> a -> f b
 (<:>) f = fmap f . pure
 infixr 8 <:>
+
+-- | 'maybeErr': if the given 'Maybe' is 'Nothing' the monadic action
+-- whenNothing is run, otherwise the value in 'Just' is 'return':ed.
+maybeErr :: Monad m => m a -> Maybe a -> m a
+maybeErr whenNothing = maybe whenNothing return
