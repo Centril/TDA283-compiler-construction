@@ -79,8 +79,8 @@ type FnSigMap = Map Ident FunSig
 toFunSig :: ([Type], Type) -> FunSig
 toFunSig (args, ret) = FunSig args ret
 
-toFunId :: (String, FunSig) -> FunId
-toFunId (ident, sig) = FunId (Ident ident) sig
+toFunId :: (String, ([Type], Type)) -> FunId
+toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
 
 --------------------------------------------------------------------------------
 -- Operating Environment:

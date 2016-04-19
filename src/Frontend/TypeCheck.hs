@@ -45,33 +45,6 @@ typeCheck prog = do
     env3 <- returnCheck env2 prog
     return env3
 
-typeCheck' :: Program -> Eval Program
-typeCheck' prog = do
-    allFunctions' prog
-    return prog
-    --env  <- allFunctions prog
-    --env1 <- mainExists env
-    --env2 <- checkProg env1 prog
-    --env3 <- returnCheck env2 prog
-    -- return env3
-
-allFunctions' :: Program -> Eval ()
-allFunctions' = undefined -- collectFuns' . (predefFuns' ++) . progFunSigs'
-
-collectFuns' :: [FunId] -> Eval ()
-collectFuns' = undefined --foldM (extendFun' $ err
-
-predefFuns' :: [FunId]
-predefFuns' = map toFunId
-             [("printInt",    ([Int],      Void)),
-              ("printDouble", ([Doub],     Void)),
-              ("printString", ([ConstStr], Void)),
-              ("readInt",     ([],         Int)),
-              ("readDouble",  ([],         Doub))]
-
-progFunSigs' :: Program -> [FunId]
-progFunSigs' = map toFnSigId' . progFuns
-
 allFunctions :: Program -> Err Env
 allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
 
@@ -85,7 +58,7 @@ mainExists env = do
         True  -> return env
         False -> Left $ wrgFunSig mainId
 
-predefFuns :: [FunId]
+predefFuns :: [FnSigId]
 predefFuns = map (first Ident)
              [("printInt",    ([Int],      Void)),
               ("printDouble", ([Doub],     Void)),
