@@ -22,13 +22,13 @@ module Frontend.Types (
     TCEnv (..), Eval, EvalResult,
     ErrMsg, InfoLog, LogItem(..),
     Context, Contexts,
-    FunSig(..), FnId(..), FnSigMap,
+    FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
     runEval, warn, warn', info, info', err,
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
-    functions, contexts,
+    functions, contexts, toFunId, toFunSig
 ) where
 
 import Safe
@@ -71,10 +71,16 @@ type Contexts = [Context]
 data FunSig = FunSig { targs :: [Type], tret :: Type }
 
 -- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
-data FnId = FunId { fident :: Ident, fsig :: FunSig }
+data FunId = FunId { fident :: Ident, fsig :: FunSig }
 
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
+
+toFunSig :: ([Type], Type) -> FunSig
+toFunSig (args, ret) = FunSig args ret
+
+toFunId :: (String, FunSig) -> FunId
+toFunId (ident, sig) = FunId (Ident ident) sig
 
 --------------------------------------------------------------------------------
 -- Operating Environment:
@@ -100,7 +106,7 @@ popBlock :: Eval ()
 popBlock = contexts %= (fromMaybe [] . tailMay)
 
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
--- the identifier is 'return':ed, otherwise onErr is given the (var = 'Ident').
+-- the identifier is '  return':ed, otherwise onErr is given the (var = 'Ident').
 lookupVar' :: (Ident -> Eval Type) -> Ident -> Eval Type
 lookupVar' onErr var = uses contexts (_lookupVar var) >>= maybeErr (onErr var)
 
@@ -123,7 +129,7 @@ extendVar' onErr ident typ = do
 
 -- | 'extendVar': Extends the accumulated function signatures with the given
 -- signature as 'FnId'. If function exists, onError is used.
-extendFun' :: (Ident -> Eval ()) -> FnId -> Eval ()
+extendFun' :: (Ident -> Eval ()) -> FunId -> Eval ()
 extendFun' onErr (FunId ident sig) = do
     funs <- use functions
     maybe (functions .= Map.insert ident sig funs)

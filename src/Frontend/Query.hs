@@ -14,8 +14,10 @@ Querying functions on AST in Javalette compiler frontend
 -}
 module Frontend.Query (
     -- * Operations
-    argType, progFuns
+    argType, progFuns, toFnSigId'
 ) where
+
+import Frontend.Types
 
 import Javalette.Abs
 
@@ -24,3 +26,6 @@ argType (Arg t _) = t
 
 progFuns :: Program -> [TopDef]
 progFuns (Program fns) = fns
+
+toFnSigId' :: TopDef -> FunId
+toFnSigId' = undefined -- (FnDef ret ident args _) (ident, (map argType args, ret))
