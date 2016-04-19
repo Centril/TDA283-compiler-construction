@@ -32,7 +32,7 @@ import Javalette.Abs
 import Frontend.Types
 import Frontend.Query
 import Frontend.ReturnCheck
-import Frontend.Error
+import Frontend.Error2
 
 -- temporary:
 import Utils.Debug
@@ -41,8 +41,12 @@ u = undefined
 typeCheck :: Program -> Eval Program
 typeCheck prog = u
 
-mainExists :: Eval ()
-mainExists = u
+mainId :: Ident
+mainId = Ident "main"
+
+mainCorrect :: Eval ()
+mainCorrect = lookupFun' mainNotFound mainId >>=
+              flip unless wrongMainSig . (== FunSig [] Int)
 
 allFunctions :: Program -> Eval ()
 allFunctions = u
@@ -61,8 +65,6 @@ predefFuns = map toFunId
 extractFunIds :: Program -> [FunId]
 extractFunIds = map toFnSigId' . progFuns
 
-mainId :: Ident
-mainId = Ident "main"
 
 progFunSigs :: Program -> [FunId]
 progFunSigs = map toFnSigId . progFuns
