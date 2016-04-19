@@ -12,13 +12,19 @@ Portability : ALL
 
 Types for Frontend of Javalette compiler.
 -}
-
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving,FlexibleContexts #-}
 
 module Frontend.Types (
     -- * Types
-    Env, FnSig, FnSigId, Sig, Context, Err, Log
+    Env, FnSig, FnSigId, Sig, Err, Log,
+
+    TCEnv, Eval, EvalResult,
+    ErrMsg, InfoLog, LogItem,
+    Context, Contexts,
+    FunSig, FnId, FnSigMap,
+
+    -- * Operations
+    runEval, warn, warn', info, info',
 ) where
 
 import Data.Map (Map)
@@ -26,45 +32,107 @@ import qualified Data.Map as Map
 
 import Control.Monad
 
-import Data.Data
-import Data.Generics.Uniplate.Data
+import Control.Applicative
+import Control.Monad.Identity
+import Control.Monad.State
+import Control.Monad.Except
+import Control.Monad.Writer
 
-import Javalette.Lex
-import Javalette.Par
-import Javalette.Skel
-import Javalette.Print
 import Javalette.Abs
 
--- | 'Log': Logging type for errors in 'Err'.
-type Log = String
-
--- | 'Err': Error type for potentially failing computations,
--- decorated with error log messages.
-type Err = Either Log
-
--- | 'Env': Computational environment during compiler frontend passes.
+--------------------------------------------------------------------------------
+-- OLD: @TODO REMOVE
+--------------------------------------------------------------------------------
+type Err =     Either ErrMsg
+type Log =     String
+type FnSig =   ([Type], Type)
+type FnSigId = (Ident, FnSig)
+type Sig =     Map Ident FnSig
 type Env =     (Sig, [Context])
 
--- | 'FnSig': Signature of a function,
--- argument list (types) followed by return type.
-type FnSig = ([Type], Type)
+--------------------------------------------------------------------------------
+-- Computational & Operating Environment:
+--------------------------------------------------------------------------------
 
--- | 'Ident': Identifier of a function,
--- | 'FnSig': Signature of a function,
---  a simpler representation in regards to Sig
-type FnSigId = (Ident, FnSig)
+-- | 'TCEnv': The operating environment of an 'Eval' computation.
+data TCEnv = TCEnv {
+    functions :: FnSigMap, -- ^ Map of ident -> function signatures.
+    contexts  :: Contexts  -- ^ Stack of contexts.
+}
 
--- | 'Sig': Map of function identifiers -> signatures.
-type Sig =     Map Ident FnSig
+-- | 'Eval': A computation given typechecker state environment 'TCEnv',
+-- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.
+-- Monadic stack: StateT -> ExceptT -> WriterT -> Identity
+-- See 'EvalResult' for details.
+type Eval a = SEW TCEnv ErrMsg InfoLog a
 
--- | Context: Context stack, map from variables -> types.
+-- | 'EvalResult': result of an 'Eval' computation.
+type EvalResult a = (Either ErrMsg (a, TCEnv), InfoLog)
+
+-- | 'runEval': Evaluates the entire 'Eval' computation given a 'TCEnv' to
+-- work inside as starting environment.
+runEval :: Eval a -> TCEnv -> EvalResult a
+runEval = runSEW
+
+-- SEW: SEWT using Identity monad.
+type SEW s e w a = SEWT s e w Identity a
+
+-- SEWT: State + Except + Writer monad with inner
+newtype SEWT s e w m a = SEWT {
+    _runSEWT :: StateT s (ExceptT e (WriterT w m)) a }
+    deriving (Functor, Applicative, Monad,
+              MonadState s, MonadError e, MonadWriter w)
+
+runSEW :: SEWT s e w Identity a -> s -> (Either e (a, s), w)
+runSEW ev e = runIdentity $ runSEWT ev e
+
+runSEWT :: SEWT s e w m a -> s -> m (Either e (a, s), w)
+runSEWT ev e = runWriterT $ runExceptT $ runStateT (_runSEWT ev) e
+
+--------------------------------------------------------------------------------
+-- Errors, Logging:
+--------------------------------------------------------------------------------
+
+-- | 'ErrMsg': Type of error messages in 'Err'.
+type ErrMsg = String
+
+-- | 'InfoLog': Type of the accumulated recoverable log messages.
+type InfoLog = [LogItem]
+
+-- | 'LogItem': Type of a recoverable error.
+data LogItem = Warn { _warn :: String } | Info { _info :: String }
+
+_log :: MonadWriter [t] m => t -> m ()
+_log w = tell [w]
+
+warn, info :: String -> Eval ()
+warn = _log . Warn
+info = _log . Info
+
+info', warn' :: [String] -> Eval ()
+warn' = warn . unwords
+info' = info . unwords
+
+--------------------------------------------------------------------------------
+-- Scopes / Contexts:
+--------------------------------------------------------------------------------
+
+-- | 'Context': A context for a scope, map from variables -> types.
 type Context = Map Ident Type
 
-deriving instance Data Ident
-deriving instance Typeable Ident
+-- | 'Contexts': List of 'Context'
+type Contexts = [Context]
 
-deriving instance Data Type
-deriving instance Typeable Type
+--------------------------------------------------------------------------------
+-- Function Signatures:
+--------------------------------------------------------------------------------
 
-deriving instance Data Arg
-deriving instance Typeable Arg
+-- | 'FunSig': Signature of a function,
+-- argument list (types) followed by return type.
+data FunSig = FunSig { targs :: [Type], tret :: Type }
+
+-- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
+data FnId = FnId { fident :: Ident, fsig :: FnSig }
+
+-- | 'FnSigMap': Map of function identifiers -> signatures.
+type FnSigMap = Map Ident FnSig
