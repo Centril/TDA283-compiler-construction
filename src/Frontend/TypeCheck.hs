@@ -39,10 +39,10 @@ import Utils.Monad
 typeCheck :: Program -> Eval Program
 typeCheck prog1 = do
     -- P1: collect functions:
-    info TypeChecker    "Collecting all functions"
+    info TypeChecker   "Collecting all functions"
     allFunctions prog1
     -- P2: check for existance + correctness of main definition:
-    info TypeChecker    "Checking existence of main"
+    info TypeChecker   "Checking existence of main"
     mainCorrect
     -- P3: type check the program
     info TypeChecker   "Type checking the program"
