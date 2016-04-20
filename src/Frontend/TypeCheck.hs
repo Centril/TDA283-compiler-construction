@@ -14,7 +14,7 @@ Type checker for Javalette compiler.
 -}
 {-# LANGUAGE TupleSections #-}
 
-module Frontend.Typecheck2 (
+module Frontend.TypeCheck (
     -- * Operations
     typeCheck
 ) where
@@ -26,7 +26,7 @@ import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Query
-import Frontend.Error2
+import Frontend.Error
 
 import Frontend.ReturnCheck
 

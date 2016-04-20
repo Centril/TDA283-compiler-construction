@@ -7,7 +7,7 @@ import Javalette.Abs
 
 import Frontend.ParseLex
 import Frontend.Types hiding (err)
-import Frontend.Typecheck2
+import Frontend.TypeCheck
 
 import Utils.Terminal
 import Utils.Debug

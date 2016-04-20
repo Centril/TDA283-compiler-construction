@@ -12,7 +12,7 @@ Portability : ALL
 
 Error messsages in Frontend of Javalette compiler.
 -}
-module Frontend.Error2 where
+module Frontend.Error where
 
 import Frontend.Types
 import Frontend.Query

@@ -38,7 +38,7 @@ import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Query
-import Frontend.Error2
+import Frontend.Error
 
 deriving instance Enum RelOp
 
