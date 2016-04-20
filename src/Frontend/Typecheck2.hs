@@ -39,9 +39,16 @@ import Utils.Debug
 
 typeCheck :: Program -> Eval Program
 typeCheck prog = do
+    -- P1: collect functions:
     allFunctions prog
+    -- P2: check for existance + correctness of main definition:
     mainCorrect
-    checkProg prog
+    -- P3: type check the program
+    prog <- checkProg prog
+    -- P4: return check the program.
+    -- prog' <- returnCheck prog
+    let prog' = prog
+    return prog'
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):
