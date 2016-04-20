@@ -29,15 +29,16 @@ project(':src') { p ->
     task bnfc(type: Exec ) {
         doFirst { bnfcClean.execute() }
         description "Runs BNFC on contrib/Javalette.cf"
-        commandLine "bnfc", "-d", "contrib/Javalette.cf"
+        commandLine "bnfc", "-d", "--functor", "contrib/Javalette.cf"
         finalizedBy alex, happy
     }
     [alex, happy].each { it.workingDir new File(p.projectDir, "Javalette") }
-    [bnfcClean, bnfc, alex, happy].each { 
+/*
+	[bnfcClean, bnfc, alex, happy].each { 
         it.inputs.file "contrib/Javalette.cf"
         it.outputs.file file("Javalette")
     }
-
+*/
     task build(type: Copy) {
         description "Builds compiler sources into jlc program."
         dependsOn cabalbuild, bnfc

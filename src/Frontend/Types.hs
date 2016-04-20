@@ -17,8 +17,6 @@ Types for Frontend of Javalette compiler.
 
 module Frontend.Types (
     -- * Types
-    Env, FnSig, FnSigId, Sig, Err, Log,
-
     TCEnv(..), Eval, EvalResult,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
     Context, Contexts, Var(..),
@@ -58,13 +56,13 @@ import Javalette.Abs
 --------------------------------------------------------------------------------
 
 -- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident Type
+type Context = Map Ident (Type ())
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
 
 -- | 'Var': a variable specified by its 'Ident' and 'Type'.
-data Var = Var { vident :: Ident, vtype :: Type }
+data Var = Var { vident :: Ident, vtype :: Type ()}
     deriving (Eq, Show, Read)
 
 --------------------------------------------------------------------------------
@@ -73,20 +71,20 @@ data Var = Var { vident :: Ident, vtype :: Type }
 
 -- | 'FunSig': Signature of a function,
 -- argument list (types) followed by return type.
-data FunSig = FunSig { targs :: [Type], tret :: Type }
+data FunSig = FunSig { targs :: [Type ()], tret :: Type ()}
     deriving (Eq, Show, Read)
 
 -- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
-data FunId = FunId { fident :: Ident, fsig :: FunSig }
+data FunId = FunId { fident :: Ident, fsig :: FunSig}
     deriving (Eq, Show, Read)
 
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
 
-toFunSig :: ([Type], Type) -> FunSig
+toFunSig :: ([Type ()], Type ()) -> FunSig
 toFunSig (args, ret) = FunSig args ret
 
-toFunId :: (String, ([Type], Type)) -> FunId
+toFunId :: (String, ([Type ()], Type ())) -> FunId
 toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
 
 --------------------------------------------------------------------------------
@@ -95,7 +93,7 @@ toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
 
 -- | 'TCEnv': The operating environment of an 'Eval' computation.
 data TCEnv = TCEnv {
-    _functions :: FnSigMap , -- ^ Map of ident -> function signatures.
+    _functions :: FnSigMap,  -- ^ Map of ident -> function signatures.
     _contexts  :: Contexts } -- ^ Stack of contexts.
     deriving (Eq, Show, Read)
 
@@ -115,10 +113,10 @@ popBlock = contexts %= (fromMaybe [] . tailMay)
 
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
 -- the identifier is '  return':ed, otherwise onErr is given the (var = 'Ident').
-lookupVar' :: (Ident -> Eval Type) -> Ident -> Eval Type
+lookupVar' :: (Ident -> Eval (Type ())) -> Ident -> Eval (Type ())
 lookupVar' onErr var = uses contexts (_lookupVar var) >>= maybeErr (onErr var)
 
-_lookupVar :: Ident -> Contexts -> Maybe Type
+_lookupVar :: Ident -> Contexts -> Maybe (Type ())
 _lookupVar = mfind . Map.lookup
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
@@ -230,13 +228,3 @@ _log l p m = tell [LogItem l p m]
 unword2nd, unlines2nd :: (t1 -> String -> t) -> t1 -> [String] -> t
 unword2nd  f a b = f a $ unwords b
 unlines2nd f a b = f a $ unlines b
-
---------------------------------------------------------------------------------
--- OLD: @TODO REMOVE
---------------------------------------------------------------------------------
-type Err =     Either String
-type Log =     String
-type FnSig =   ([Type], Type)
-type FnSigId = (Ident, FnSig)
-type Sig =     Map Ident FnSig
-type Env =     (Sig, [Context])

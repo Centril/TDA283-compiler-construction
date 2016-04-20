@@ -14,6 +14,8 @@ Querying functions on AST in Javalette compiler frontend
 -}
 module Frontend.Query where
 
+import Control.Monad
+
 import Frontend.Types
 
 import Javalette.Abs
@@ -21,18 +23,18 @@ import Javalette.Abs
 identStr :: Ident -> String
 identStr (Ident i) = i
 
-argToVar :: Arg -> Var
-argToVar (Arg typ ident) = Var ident typ
+argToVar :: Arg a -> Var
+argToVar (Arg _ typ ident) = Var ident $ void typ
 
-argType :: Arg -> Type
-argType (Arg t _) = t
+argType :: Arg a -> Type a
+argType (Arg _ t _) = t
 
-itemIdent :: Item -> Ident
-itemIdent (Init i _) = i
-itemIdent (NoInit i) = i
+itemIdent :: Item a -> Ident
+itemIdent (Init _ i _) = i
+itemIdent (NoInit _ i) = i
 
-itemToVar :: Type -> Item -> Var
-itemToVar typ = flip Var typ . itemIdent
+itemToVar :: Type a -> Item a -> Var
+itemToVar typ = flip Var (void typ) . itemIdent
 
-progFuns :: Program -> [TopDef]
-progFuns (Program fns) = fns
+progFuns :: Program a -> [TopDef a]
+progFuns (Program _ fns) = fns

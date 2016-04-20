@@ -43,40 +43,41 @@ funAlreadyDef = xAlreadyDef "function"
 argAlreadyDef = xAlreadyDef "parameter"
 varAlreadyDef = xAlreadyDef "variable"
 
-wrongRetTyp :: Type -> Type -> Eval a
+wrongRetTyp :: Show b => Type b -> Type b -> Eval a
 wrongRetTyp texpected tactual =
     terr' ["The current function expected return type:", show texpected,
                                            ", actual:", show tactual]
 
-wrongExpTyp :: Expr -> Type -> Type -> Eval a
+wrongExpTyp :: Show b =>  Expr b -> Type b -> Type b -> Eval a
 wrongExpTyp expr texpected tactual =
     terr' ["The expression", show expr,
           "expected the type:", show texpected, ",",
                 "actual type:", show tactual]
 
-wrongIdentTyp :: Ident -> [Type] -> Type -> Eval a
+wrongIdentTyp :: Show b => Ident -> [Type b] -> Type b -> Eval a
 wrongIdentTyp ident types tactual =
     terr' ["The expression", identStr ident,
           "expected one of the types:", show types, ",",
                         "actual type:", show tactual]
 
-wrongUnaryExp :: Expr -> [Type] -> Type -> Eval a
+wrongUnaryExp :: Show b => Expr b -> [Type b] -> Type b -> Eval a
 wrongUnaryExp expr types tactual =
     terr' ["The unary expression", show expr,
              "expected one of the types:", show types, ",",
                            "actual type:", show tactual]
 
-wrongBinExp :: Expr -> Expr -> Type -> Type -> Eval a
+wrongBinExp :: Show b => Expr b -> Expr b -> Type b -> Type b -> Eval a
 wrongBinExp exprl exprr typl typr =
      terr' ["The binary expression has different types for operands:",
            "(", show exprl, ",", show typl, ")",
            "(", show exprr, ",", show typr, ")"]
 
-wrongArgsTyp :: Ident -> [Type] -> [Type] -> Eval a
+wrongArgsTyp :: Show b =>  Ident -> [Type b] -> [Type b] -> Eval a
 wrongArgsTyp ident texpected tactual =
     terr' ["The function ", identStr ident,
           "expected the types:", show texpected, ",",
           "but was applied with actual types:", show tactual]
 
 insufficientFunRet :: Ident -> Eval a
-insufficientFunRet fun = terr' ["The function", identStr fun, "might not return"]
+insufficientFunRet fun =
+    terr' ["The function", identStr fun, "might not return"]
