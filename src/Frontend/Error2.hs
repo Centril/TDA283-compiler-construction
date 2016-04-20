@@ -19,14 +19,20 @@ import Frontend.Query
 
 import Javalette.Abs
 
+terr :: String -> Eval a
+terr = err TypeChecker
+
+terr' :: [String] -> Eval a
+terr' = err' TypeChecker
+
 xAlreadyDef :: String -> Ident -> Eval a
-xAlreadyDef what x = err' ["The", what, identStr x, "is already defined"]
+xAlreadyDef what x = terr' ["The", what, identStr x, "is already defined"]
 
 xNotDef :: String -> Ident -> Eval a
-xNotDef what x = err' ["The", what, identStr x, " is not defined."]
+xNotDef what x = terr' ["The", what, identStr x, " is not defined."]
 
 wrongMainSig :: Eval a
-wrongMainSig = err "The function: main has the wrong signature"
+wrongMainSig = terr "The function: main has the wrong signature"
 
 funNotDef, varNotDef :: Ident -> Eval a
 funNotDef = xNotDef "function"
@@ -39,38 +45,38 @@ varAlreadyDef = xAlreadyDef "variable"
 
 wrongRetTyp :: Type -> Type -> Eval a
 wrongRetTyp texpected tactual =
-    err' ["The current function expected return type:", show texpected,
+    terr' ["The current function expected return type:", show texpected,
                                            ", actual:", show tactual]
 
 wrongExpTyp :: Expr -> Type -> Type -> Eval a
 wrongExpTyp expr texpected tactual =
-    err' ["The expression", show expr,
+    terr' ["The expression", show expr,
           "expected the type:", show texpected, ",",
                 "actual type:", show tactual]
 
 wrongIdentTyp :: Ident -> [Type] -> Type -> Eval a
 wrongIdentTyp ident types tactual =
-    err' ["The expression", identStr ident,
+    terr' ["The expression", identStr ident,
           "expected one of the types:", show types, ",",
                         "actual type:", show tactual]
 
 wrongUnaryExp :: Expr -> [Type] -> Type -> Eval a
 wrongUnaryExp expr types tactual =
-    err' ["The unary expression", show expr,
+    terr' ["The unary expression", show expr,
              "expected one of the types:", show types, ",",
                            "actual type:", show tactual]
 
 wrongBinExp :: Expr -> Expr -> Type -> Type -> Eval a
 wrongBinExp exprl exprr typl typr =
-     err' ["The binary expression has different types for operands:",
+     terr' ["The binary expression has different types for operands:",
            "(", show exprl, ",", show typl, ")",
            "(", show exprr, ",", show typr, ")"]
 
 wrongArgsTyp :: Ident -> [Type] -> [Type] -> Eval a
 wrongArgsTyp ident texpected tactual =
-    err' ["The function ", identStr ident,
+    terr' ["The function ", identStr ident,
           "expected the types:", show texpected, ",",
           "but was applied with actual types:", show tactual]
 
 insufficientFunRet :: Ident -> Eval a
-insufficientFunRet fun = err' ["The function", identStr fun, "might not return"]
+insufficientFunRet fun = terr' ["The function", identStr fun, "might not return"]

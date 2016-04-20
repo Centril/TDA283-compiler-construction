@@ -20,12 +20,12 @@ module Frontend.Types (
     Env, FnSig, FnSigId, Sig, Err, Log,
 
     TCEnv(..), Eval, EvalResult,
-    ErrMsg, InfoLog, LogItem(..),
-    Context, Contexts, Var (..),
+    Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
+    Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
-    runEval, warn, warn', info, info', err, err',
+    runEval, warn, warn', warnln, info, info', infoln, err, err', errln,
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
     functions, contexts, toFunId, toFunSig
@@ -47,6 +47,7 @@ import Control.Monad.Writer
 
 import Control.Lens hiding (Context, contexts)
 
+import Utils.Pointless
 import Utils.Foldable
 import Utils.Monad
 
@@ -182,37 +183,58 @@ runSEWT ev e = runWriterT $ runExceptT $ runStateT (_runSEWT ev) e
 -- Errors, Logging:
 --------------------------------------------------------------------------------
 
+-- | 'Phase': Identifiers of various compilation phases.
+data Phase = Parser | TypeChecker | ReturnChecker
+    deriving (Eq, Show, Read, Ord, Enum)
+
 -- | 'ErrMsg': Type of error messages in 'Err'.
-type ErrMsg = String
+-- They are annotated with a 'Phase' which denotes during
+-- what compilation phase they occured.
+data ErrMsg = ErrMsg { errPhase :: Phase, errMsg :: String }
+    deriving (Eq, Show, Read)
 
 -- | 'InfoLog': Type of the accumulated recoverable log messages.
 type InfoLog = [LogItem]
 
+-- | 'LogLevel': Denotes the level/severity of the logging. l_1 > l_2 in the
+-- context of 'Ord' means that the serverity is higher / more severe.
+data LogLevel = Info | Warn
+    deriving (Eq, Show, Read, Enum, Ord)
+
 -- | 'LogItem': Type of a recoverable error.
-data LogItem = Warn { _warn :: String } | Info { _info :: String }
+data LogItem = LogItem {
+    logLvl :: LogLevel, logPhase :: Phase, logMsg :: String }
     deriving (Eq, Show, Read)
 
-err' :: [String] -> Eval a
-err' = err .unwords
 
-err :: String -> Eval a
-err = throwError
+errln, err' :: Phase -> [String] -> Eval a
+errln = unlines2nd err
+err'  = unword2nd err
 
-_log :: MonadWriter [t] m => t -> m ()
-_log w = tell [w]
+err :: Phase -> String -> Eval a
+err = throwError .| ErrMsg
 
-warn, info :: String -> Eval ()
-warn = _log . Warn
-info = _log . Info
+warn, info :: Phase -> String -> Eval ()
+warn = _log Warn
+info = _log Info
 
-info', warn' :: [String] -> Eval ()
-warn' = warn . unwords
-info' = info . unwords
+info', warn', infoln, warnln :: Phase -> [String] -> Eval ()
+info'  = unword2nd  info
+warn'  = unword2nd  warn
+infoln = unlines2nd info
+warnln = unlines2nd warn
+
+_log :: LogLevel -> Phase -> String -> Eval ()
+_log l p m = tell [LogItem l p m]
+
+unword2nd, unlines2nd :: (t1 -> String -> t) -> t1 -> [String] -> t
+unword2nd  f a b = f a $ unwords b
+unlines2nd f a b = f a $ unlines b
 
 --------------------------------------------------------------------------------
 -- OLD: @TODO REMOVE
 --------------------------------------------------------------------------------
-type Err =     Either ErrMsg
+type Err =     Either String
 type Log =     String
 type FnSig =   ([Type], Type)
 type FnSigId = (Ident, FnSig)
