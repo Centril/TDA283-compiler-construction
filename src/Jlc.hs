@@ -23,11 +23,10 @@ compileUnit :: String -> IO ()
 compileUnit code =
     case  result of
     Left  except  -> do
-        errLn "SYNTAX ERROR"
         let phase = errPhase except
+        errLn $ phaseErr phase
         putStrLn $ unwords ["ERROR!", "[" ++ show phase ++ "]", errMsg except]
         output logs
-        errLn $ phaseErr phase
         exitFailure
     Right (val, env) -> do
         putStrLn "COMPILATION SUCCESS!"
