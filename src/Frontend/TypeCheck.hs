@@ -32,9 +32,6 @@ import Frontend.ReturnCheck
 
 import Utils.Monad
 
--- temporary:
-import Utils.Debug
-
 --------------------------------------------------------------------------------
 -- API:
 --------------------------------------------------------------------------------
@@ -195,7 +192,7 @@ inferBinary types exprl exprr = do
 
 inferUnary :: [Type] -> Expr -> Eval (Expr, Type)
 inferUnary types expr = do
-    r@(expr', etyp) <- inferExp expr
+    r@(_, etyp) <- inferExp expr
     if etyp `elem` types then return r
                          else wrongUnaryExp expr types etyp
 
