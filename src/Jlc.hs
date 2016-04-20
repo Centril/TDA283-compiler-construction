@@ -30,11 +30,18 @@ compileUnit code =
         exitFailure
     Right (val, env) -> do
         putStrLn "COMPILATION SUCCESS!"
-        putStrLn "Accumulated logs:"        >> output logs
+        putStrLn "Accumulated logs:"        >> printLogs logs
         putStrLn "Final computed value:"    >> output val
         putStrLn "Final environment value:" >> output env
         errLn "OK"
     where (result, logs) = runCompileComp code
+
+printLogs :: InfoLog -> IO ()
+printLogs logs = putStrLn $ unlines $ showLog <$> logs
+
+showLog :: LogItem -> String
+showLog (LogItem lvl phase msg) =
+    concat ["[", show lvl, "] [", show phase, "]: " ++ prettify msg]
 
 output :: Show a => a -> IO ()
 output = putStrLn . prettify . show
@@ -50,7 +57,9 @@ runCompileComp code = runEval (compileComp code) initialEnv
 compileComp :: String -> Eval Program
 compileComp code = do
     ast1 <- parseProgram code
-    infoln Parser      ["AST after parse:",      show ast1]
+    info Parser "AST after parse"
+    info Parser $ show ast1
     ast2 <- typeCheck ast1
-    infoln TypeChecker ["AST after type check:", show ast2]
+    info TypeChecker "AST after type check"
+    info TypeChecker $ show ast2
     return ast2
