@@ -14,8 +14,6 @@ Debugging of stuff.
 -}
 module Utils.Debug where
 
-import Debug.Trace
-
 import System.IO.Unsafe
 
 import Language.Haskell.Exts.Parser
