@@ -51,7 +51,7 @@ import Utils.Monad
 -- API:
 --------------------------------------------------------------------------------
 
-typeCheck :: Program -> Eval Program
+typeCheck :: Program () -> Eval (Program ())
 typeCheck prog1 = do
     -- P1: collect functions:
     info TypeChecker   "Collecting all functions"
@@ -80,7 +80,7 @@ mainCorrect = lookupFunE mainId >>= flip unless wrongMainSig . (== FunSig [] Int
 -- Collecting function signatures:
 --------------------------------------------------------------------------------
 
-allFunctions :: Program -> Eval ()
+allFunctions :: Program a -> Eval ()
 allFunctions = collectFuns . (predefFuns ++) . extractFunIds
 
 collectFuns :: [FunId] -> Eval ()
@@ -94,35 +94,35 @@ predefFuns = map toFunId
      ("readInt",     ([],         Int)),
      ("readDouble",  ([],         Doub))]
 
-extractFunIds :: Program -> [FunId]
+extractFunIds :: Program a -> [FunId]
 extractFunIds = map toFnSigId . progFuns
 
-toFnSigId :: TopDef -> FunId
-toFnSigId (FnDef ret ident args _) = FunId ident $ FunSig (map argType args) ret
+toFnSigId :: TopDef a -> FunId
+toFnSigId (FnDef a ret ident args _) = FunId ident $ FunSig (map argType args) ret
 
 --------------------------------------------------------------------------------
 -- Type checking:
 --------------------------------------------------------------------------------
 
-checkProg :: Program -> Eval Program
+checkProg :: Program a -> Eval (Program a)
 checkProg = fmap Program . mapM checkFun . progFuns
 
-checkFun :: TopDef -> Eval TopDef
+checkFun :: TopDef a -> Eval (TopDef a)
 checkFun (FnDef rtype ident args block) = do
     pushBlock
     collectArgVars args
     FnDef rtype ident args <$> checkBlock rtype block
 
-collectArgVars :: [Arg] -> Eval ()
+collectArgVars :: [Arg a] -> Eval ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
-checkBlock :: Type -> Block -> Eval Block
+checkBlock :: Type a -> Block a -> Eval (Block a)
 checkBlock frtyp (Block block) = Block <$> checkStms frtyp block <* popBlock
 
-checkStms :: Type -> [Stmt] -> Eval [Stmt]
+checkStms :: Type a -> [Stmt a] -> Eval [Stmt a]
 checkStms = mapM . checkStm
 
-checkStm :: Type -> Stmt -> Eval Stmt
+checkStm :: Type a -> Stmt a -> Eval (Stmt a)
 checkStm typ stmt = case stmt of
     Empty               -> return stmt
     BStmt block         -> pushBlock >> BStmt <$> checkBlock typ block
@@ -139,28 +139,28 @@ checkStm typ stmt = case stmt of
     where checkR = checkStm typ
           checkC ctor expr st = ctor <$> checkExp Bool expr <*> checkR st
 
-checkVoid :: Type -> Eval ()
+checkVoid :: Type a -> Eval ()
 checkVoid frtyp = unless (frtyp == Void) $ wrongRetTyp Void frtyp
 
-checkIdentExp :: Ident -> Expr -> Eval Expr
+checkIdentExp :: Ident -> Expr a -> Eval (Expr a)
 checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
 
-checkDecls :: Type -> [Item] -> Eval [Item]
+checkDecls :: Type a -> [Item a] -> Eval [Item a]
 checkDecls vtyp = mapM single
     where single item = checkDeclItem vtyp item <*
                         extendVar' varAlreadyDef (itemToVar vtyp item)
 
-checkDeclItem :: Type -> Item -> Eval Item
+checkDeclItem :: Type a -> Item a -> Eval (Item a)
 checkDeclItem vtyp (Init ident expr) = Init ident <$> checkExp vtyp expr
 checkDeclItem _    item@(NoInit _)   = return item
 
-checkExp :: Type -> Expr -> Eval Expr
+checkExp :: Type a -> Expr a -> Eval (Expr a)
 checkExp texpected expr = do
     (expr', tactual) <- inferExp expr
     if texpected == tactual then return expr'
                             else wrongExpTyp expr texpected tactual
 
-checkIdent :: [Type] -> Ident -> Eval Ident
+checkIdent :: [Type a] -> Ident -> Eval Ident
 checkIdent types ident = do
     vtyp <- lookupVarE ident
     if vtyp `elem` types then return ident
@@ -170,7 +170,7 @@ checkIdent types ident = do
 -- Type inference:
 --------------------------------------------------------------------------------
 
-inferExp :: Expr -> Eval (Expr, Type)
+inferExp :: Expr a -> Eval (Expr a, Type a)
 inferExp expr = case expr of
     EVar ident   -> (EVar ident,) <$> lookupVarE ident
     EString  v   -> return (EString  v, ConstStr)
@@ -187,31 +187,32 @@ inferExp expr = case expr of
     EAnd l r     -> inferBin EAnd        [Bool]      l r
     EOr  l r     -> inferBin EOr         [Bool]      l r
 
-inferBin :: (Expr -> Expr -> Expr) -> [Type] -> Expr -> Expr -> Eval (Expr, Type)
+inferBin :: (Expr a -> Expr a -> Expr a)
+         -> [Type a] -> Expr a -> Expr a -> Eval (Expr a, Type a)
 inferBin op accept le re = first (uncurry op) <$> inferBinary accept le re
 
-relOp :: RelOp -> [Type]
+relOp :: RelOp a -> [Type a]
 relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
            | otherwise             = [Int, Doub]
 
-mulOp :: MulOp -> [Type]
+mulOp :: MulOp a -> [Type a]
 mulOp oper | oper == Mod = [Int]
            | otherwise   = [Int, Doub]
 
-inferBinary :: [Type] -> Expr -> Expr -> Eval ((Expr, Expr), Type)
+inferBinary :: [Type a] -> Expr a -> Expr a -> Eval ((Expr a, Expr a), Type a)
 inferBinary types exprl exprr = do
     (exprl', typl) <- inferExp exprl
     (exprr', typr) <- inferExp exprr
     if typl == typr && typl `elem` types then return ((exprl', exprr'), typl)
                                          else wrongBinExp exprl exprr typl typr
 
-inferUnary :: [Type] -> Expr -> Eval (Expr, Type)
+inferUnary :: [Type a] -> Expr a -> Eval (Expr a, Type a)
 inferUnary types expr = do
     r@(_, etyp) <- inferExp expr
     if etyp `elem` types then return r
                          else wrongUnaryExp expr types etyp
 
-inferFun :: Ident -> [Expr] -> Eval ([Expr], Type)
+inferFun :: Ident -> [Expr a] -> Eval ([Expr a], Type a)
 inferFun ident exprs = do
     FunSig texpected rtype <- lookupFunE ident
     (exprs', tactual)      <- mapAndUnzipM inferExp exprs
@@ -225,5 +226,5 @@ inferFun ident exprs = do
 lookupFunE :: Ident -> Eval FunSig
 lookupFunE = lookupFun' funNotDef
 
-lookupVarE :: Ident -> Eval Type
+lookupVarE :: Ident -> Eval (Type ())
 lookupVarE = lookupVar' varNotDef
