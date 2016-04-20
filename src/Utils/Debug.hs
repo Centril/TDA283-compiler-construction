@@ -30,4 +30,4 @@ prettify str = case parseExp str of
 -- set your house on fire, create black holes,
 -- without it saying so in the type signature.
 debug :: Show a => a -> a
-debug x = unsafePerformIO $ (putStrLn $ prettify $ show x) >> return x
+debug x = unsafePerformIO $ putStrLn (prettify $ show x) >> return x

@@ -3,69 +3,80 @@
  -}
 
 {-|
-Module      : Debug
-Description : Error messsages.
+Module      : Error
+Description : Error messsages in Frontend of Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
 Stability   : unsafe
 Portability : ALL
 
-Error messages.
+Error messsages in Frontend of Javalette compiler.
 -}
 module Frontend.Error where
 
+import Frontend.Types
+import Frontend.Query
+
 import Javalette.Abs
 
-noFunRet :: Ident -> String
-noFunRet fun =
-    unwords ["The function", show fun, "might not return"]
+terr :: String -> Eval a
+terr = err TypeChecker
 
-wrgFunSig :: Ident -> String
-wrgFunSig fun =
-    unwords ["The function", show fun, "has the wrong signature"]
+terr' :: [String] -> Eval a
+terr' = err' TypeChecker
 
-funcAlrDef :: Ident -> String
-funcAlrDef fun =
-    unwords ["The function", show fun, "is already defined"]
+xAlreadyDef :: String -> Ident -> Eval a
+xAlreadyDef what x = terr' ["The", what, identStr x, "is already defined"]
 
-funcNotDef :: Ident -> String
-funcNotDef fun =
-    unwords ["The function", show fun, "is not defined"]
+xNotDef :: String -> Ident -> Eval a
+xNotDef what x = terr' ["The", what, identStr x, " is not defined."]
 
-varAlrDef :: Ident -> String
-varAlrDef var =
-    unwords ["The variable/parameter", show var, "is already defined"]
+wrongMainSig :: Eval a
+wrongMainSig = terr "The function: main has the wrong signature"
 
-varNotDef :: Ident -> String
-varNotDef var =
-    unwords ["The variable/parameter", show var, "is not defined"]
+funNotDef, varNotDef :: Ident -> Eval a
+funNotDef = xNotDef "function"
+varNotDef = xNotDef "variable or parameter"
 
-wrgBinExp :: Expr -> Expr -> Type -> Type -> String
-wrgBinExp exp1 exp2 typ1 typ2 =
-     unwords ["The binary expression", "(", show exp1, ",", show typ1, ")",
-              "(", show exp2, ",", show typ2, ")", "has different types"]
+funAlreadyDef, argAlreadyDef, varAlreadyDef :: Ident -> Eval a
+funAlreadyDef = xAlreadyDef "function"
+argAlreadyDef = xAlreadyDef "parameter"
+varAlreadyDef = xAlreadyDef "variable"
 
-wrgUnaExp :: Expr -> [Type] -> Type -> String
-wrgUnaExp ident types typ =
-    unwords ["The unary expression", show ident, "expected one of the types",
-             show types, "but got the type", show typ]
+wrongRetTyp :: Type -> Type -> Eval a
+wrongRetTyp texpected tactual =
+    terr' ["The current function expected return type:", show texpected,
+                                           ", actual:", show tactual]
 
-wrgArgTyp :: Ident -> [Type] -> [Type] -> String
-wrgArgTyp ident ty1s ty2s =
-    unwords ["The function", show ident, "expected the types", show ty1s,
-             "but got the types", show ty2s]
+wrongExpTyp :: Expr -> Type -> Type -> Eval a
+wrongExpTyp expr texpected tactual =
+    terr' ["The expression", show expr,
+          "expected the type:", show texpected, ",",
+                "actual type:", show tactual]
 
-wrgExpTyp :: Expr -> Type -> Type -> String
-wrgExpTyp expr typ1 typ2 =
-    unwords ["The expression", show expr, "expected the type", show typ1,
-             "but got the type", show typ2]
+wrongIdentTyp :: Ident -> [Type] -> Type -> Eval a
+wrongIdentTyp ident types tactual =
+    terr' ["The expression", identStr ident,
+          "expected one of the types:", show types, ",",
+                        "actual type:", show tactual]
 
-wrgIdeTyp :: Ident -> [Type] -> Type -> String
-wrgIdeTyp ident types typ =
-    unwords ["The expression", show ident, "expected one of the types",
-             show types, "but got the type", show typ]
+wrongUnaryExp :: Expr -> [Type] -> Type -> Eval a
+wrongUnaryExp expr types tactual =
+    terr' ["The unary expression", show expr,
+             "expected one of the types:", show types, ",",
+                           "actual type:", show tactual]
 
-wrgVoidTyp :: Type -> String
-wrgVoidTyp typ =
-    unwords ["The current function expected return type", show Void,
-             "but got the type", show typ]
+wrongBinExp :: Expr -> Expr -> Type -> Type -> Eval a
+wrongBinExp exprl exprr typl typr =
+     terr' ["The binary expression has different types for operands:",
+           "(", show exprl, ",", show typl, ")",
+           "(", show exprr, ",", show typr, ")"]
+
+wrongArgsTyp :: Ident -> [Type] -> [Type] -> Eval a
+wrongArgsTyp ident texpected tactual =
+    terr' ["The function ", identStr ident,
+          "expected the types:", show texpected, ",",
+          "but was applied with actual types:", show tactual]
+
+insufficientFunRet :: Ident -> Eval a
+insufficientFunRet fun = terr' ["The function", identStr fun, "might not return"]

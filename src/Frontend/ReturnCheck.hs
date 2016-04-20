@@ -26,6 +26,7 @@ module Frontend.ReturnCheck (
 
 import Data.Monoid
 
+import Control.Arrow
 import Control.Monad
 
 import Control.Lens
@@ -42,70 +43,107 @@ import Frontend.Error
 deriving instance Enum RelOp
 
 data Literal = LBool Bool | LInt Integer | LDouble Double | LString String
-    deriving Show
+    deriving (Eq, Show, Read, Ord)
 
 makePrisms ''Literal
 
-returnCheck :: Env -> Program -> Err Env
-returnCheck env = foldM returnCheckFun env . progFuns
+data WillExecute = Always | Never | Unknown
+    deriving (Eq, Show, Read, Ord, Enum)
 
-returnCheckFun :: Env -> TopDef -> Err Env
-returnCheckFun env (FnDef rtype ident _ (Block block))
-    | rtype == Void = Right env
-    | otherwise     = case any checkHasReturn block of
-                      True  -> Right env
-                      False -> Left $ noFunRet ident
+toWillExecute :: Maybe Bool -> WillExecute
+toWillExecute (Just True)  = Always
+toWillExecute (Just False) = Never
+toWillExecute Nothing      = Unknown
 
-checkHasReturn :: Stmt -> Bool
-checkHasReturn stmt = case stmt of
-    Ret _               -> True
-    VRet                -> True
-    BStmt (Block subs)  -> any checkHasReturn subs
-    Cond expr st        -> case evalCondExpr expr of
-        Just True       -> checkHasReturn st
-        _               -> False
-    CondElse expr s1 s2 -> case evalCondExpr expr of
-        Just True       -> checkHasReturn s1
-        Just False      -> checkHasReturn s2
-        Nothing         -> all checkHasReturn [s1, s2]
-    While expr st       -> case evalCondExpr expr of
-        Just True       -> checkHasReturn st
-        _               -> False
-    _                   -> False
+returnCheck :: Program -> Eval Program
+returnCheck = fmap Program . mapM checkFun . progFuns
 
-evalCondExpr :: Expr -> Maybe Bool
-evalCondExpr expr = evalConstExpr expr >>= (^? _LBool)
+checkFun :: TopDef -> Eval TopDef
+checkFun fun@(FnDef rtype ident args block)
+    | rtype == Void = return fun
+    | otherwise     = FnDef rtype ident args <<$> checkBlockTop ident block
+
+checkBlockTop :: Ident -> Block -> Eval (Block, Bool)
+checkBlockTop fid block = do
+    r@(_, hasRet) <- checkBlock fid block
+    if hasRet then return r else insufficientFunRet fid
+
+checkBlock :: Ident -> Block -> Eval (Block, Bool)
+checkBlock fid (Block stmts) =
+    (Block *** or) <$> mapAndUnzipM (checkHasRet fid) stmts
+
+checkHasRet :: Ident -> Stmt -> Eval (Stmt, Bool)
+checkHasRet fid stmt = case stmt of
+    Ret _               -> return (stmt, True)
+    VRet                -> return (stmt, True)
+    BStmt block         -> first BStmt <$> checkBlock fid block
+    While expr st       -> checkCond While fid expr st
+    Cond  expr st       -> checkCond Cond  fid expr st
+    CondElse expr si se -> checkCondElse fid expr si se
+    _                   -> return (stmt, False)
+
+checkCond :: (Expr -> Stmt -> Stmt) -> Ident
+          ->  Expr -> Stmt ->          Eval (Stmt, Bool)
+checkCond ctor fid expr stmt =
+    case condLit mlit of
+    Always -> checkRetWrap fid stmt $ ctor expr
+    _      -> return (ctor expr stmt, False)
+    where mlit = evalConstExpr expr
+
+checkCondElse :: Ident -> Expr -> Stmt -> Stmt -> Eval (Stmt, Bool)
+checkCondElse fid expr si se =
+    case condLit mlit of
+    Always  -> checkRetWrap fid si $ flip (CondElse expr) se
+    Never   -> checkRetWrap fid se $ CondElse expr si
+    Unknown -> do
+        (si', siRet) <- checkHasRet fid si
+        (se', seRet) <- checkHasRet fid se
+        return (CondElse expr si' se', siRet && seRet)
+    where mlit = evalConstExpr expr
+
+checkRetWrap :: Ident -> Stmt -> (Stmt -> Stmt) -> Eval (Stmt, Bool)
+checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
+
+condLit :: Maybe Literal -> WillExecute
+condLit mlit = toWillExecute $ mlit >>= (^? _LBool)
 
 evalConstExpr :: Expr -> Maybe Literal
 evalConstExpr expr = case expr of
+    EVar _     -> Nothing
+    EApp _ _   -> Nothing
     ELitTrue   -> pure $ LBool True
     ELitFalse  -> pure $ LBool False
     ELitInt  v -> pure $ LInt v
     ELitDoub v -> pure $ LDouble v
     EString  v -> pure $ LString v
-    EVar _     -> Nothing
-    EApp _ _   -> Nothing
-    EOr  l r   -> evalBoolOp (||) l r
-    EAnd l r   -> evalBoolOp (&&) l r
     Not  e     -> LBool . not <$> detLitBool e
     Neg  e     -> evalNeg e
-    EMul l o r -> evalBinOp l r
-                    (\v er -> mulFn (Just mod) div o <!> v <*>
-                              mulFetchRight o er _LInt)
-                    (\v er -> mulFn Nothing (/) o <!> v <*>
-                              mulFetchRight o er _LDouble)
-    EAdd l o r -> evalBinOp l r
-                    (\v er -> plusFn o <:> v <*> er ^? _LInt)
-                    (\v er -> plusFn o <:> v <*> er ^? _LDouble)
-    ERel l o r ->  do
-        el <- evalConstExpr l
-        er <- evalConstExpr r
-        fmap LBool $ case el of
-            LBool v   -> relFn <$> mfilter (`elem` [EQU .. NE]) (pure o)
-                         <*> pure v <*> er ^? _LBool
-            LInt v    -> evalRelStd v o er _LInt
-            LDouble v -> evalRelStd v o er _LDouble
-            LString v -> evalRelStd v o er _LString
+    EOr  l r   -> evalBoolOp (||) l r
+    EAnd l r   -> evalBoolOp (&&) l r
+    EMul l o r -> evalMul l o r
+    EAdd l o r -> evalAdd l o r
+    ERel l o r -> evalRel l o r
+
+evalMul :: Expr -> MulOp -> Expr -> Maybe Literal
+evalMul l o r = evalBinOp l r int doub
+    where int  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LInt
+          doub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LDouble
+
+evalAdd :: Expr -> AddOp -> Expr -> Maybe Literal
+evalAdd l o r = evalBinOp l r int doub
+    where int  v er = plusFn o <:> v <*> er ^? _LInt
+          doub v er = plusFn o <:> v <*> er ^? _LDouble
+
+evalRel :: Expr -> RelOp -> Expr -> Maybe Literal
+evalRel l o r = do
+    el <- evalConstExpr l
+    er <- evalConstExpr r
+    fmap LBool $ case el of
+        LBool   v -> relFn <$> mfilter (`elem` [EQU .. NE]) (pure o) <*>
+                     pure v <*> er ^? _LBool
+        LInt    v -> evalRelStd v o er _LInt
+        LDouble v -> evalRelStd v o er _LDouble
+        LString v -> evalRelStd v o er _LString
 
 evalBoolOp :: (Bool -> Bool -> Bool) -> Expr -> Expr -> Maybe Literal
 evalBoolOp o le ri = liftM2 (LBool .| o) (detLitBool le) (detLitBool ri)

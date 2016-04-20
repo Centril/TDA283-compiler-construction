@@ -3,7 +3,7 @@
  -}
 
 {-|
-Module      : Frontend.TypeCheck
+Module      : Frontend.Typecheck
 Description : Type checker for Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
@@ -12,119 +12,168 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-module Frontend.TypeCheck (
-    -- * Types
-    Env, Sig, Context, Err, Log,
+{-# LANGUAGE TupleSections #-}
 
+module Frontend.TypeCheck (
     -- * Operations
     typeCheck
 ) where
 
-import qualified Data.Map as Map
-
 import Control.Monad
 import Control.Arrow
-
-import Utils.Foldable
 
 import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Query
-import Frontend.ReturnCheck
 import Frontend.Error
 
--- temporary:
-import Utils.Debug
+import Frontend.ReturnCheck
 
-typeCheck :: Program -> Err Env
-typeCheck prog = do
-    env  <- allFunctions prog
-    env1 <- mainExists env
-    env2 <- checkProg env1 prog
-    env3 <- returnCheck env2 prog
-    return env3
+import Utils.Monad
 
-allFunctions :: Program -> Err Env
-allFunctions = collectFuns emptyEnv . (predefFuns ++) . progFunSigs
+--------------------------------------------------------------------------------
+-- API:
+--------------------------------------------------------------------------------
+
+typeCheck :: Program -> Eval Program
+typeCheck prog1 = do
+    -- P1: collect functions:
+    info TypeChecker   "Collecting all functions"
+    allFunctions prog1
+    -- P2: check for existance + correctness of main definition:
+    info TypeChecker   "Checking existence of main"
+    mainCorrect
+    -- P3: type check the program
+    info TypeChecker   "Type checking the program"
+    prog2 <- checkProg prog1
+    -- P4: return check the program.
+    info ReturnChecker "Return checking the program"
+    returnCheck prog2
+
+--------------------------------------------------------------------------------
+-- Checking for int main(void):
+--------------------------------------------------------------------------------
 
 mainId :: Ident
 mainId = Ident "main"
 
-mainExists :: Env -> Err Env
-mainExists env = do
-    (args, rtype) <- lookupFun env mainId
-    case rtype == Int && null args of
-        True  -> return env
-        False -> Left $ wrgFunSig mainId
+mainCorrect :: Eval ()
+mainCorrect = lookupFunE mainId >>= flip unless wrongMainSig . (== FunSig [] Int)
 
-predefFuns :: [FnSigId]
-predefFuns = map (first Ident)
-             [("printInt",    ([Int],      Void)),
-              ("printDouble", ([Doub],     Void)),
-              ("printString", ([ConstStr], Void)),
-              ("readInt",     ([],         Int)),
-              ("readDouble",  ([],         Doub))]
+--------------------------------------------------------------------------------
+-- Collecting function signatures:
+--------------------------------------------------------------------------------
 
-progFunSigs :: Program -> [FnSigId]
-progFunSigs = map toFnSigId . progFuns
+allFunctions :: Program -> Eval ()
+allFunctions = collectFuns . (predefFuns ++) . extractFunIds
 
-collectFuns :: Env -> [FnSigId] -> Err Env
-collectFuns = foldM extendFun
+collectFuns :: [FunId] -> Eval ()
+collectFuns = mapM_ $ extendFun' funAlreadyDef
 
-toFnSigId :: TopDef -> FnSigId
-toFnSigId (FnDef ret ident args _) = (ident, (map argType args, ret))
+predefFuns :: [FunId]
+predefFuns = map toFunId
+    [("printInt",    ([Int],      Void)),
+     ("printDouble", ([Doub],     Void)),
+     ("printString", ([ConstStr], Void)),
+     ("readInt",     ([],         Int)),
+     ("readDouble",  ([],         Doub))]
 
-extendFun :: Env -> FnSigId -> Err Env
-extendFun (sigs, ctxs) (ident, sig) =
-    case Map.lookup ident sigs of
-    Nothing -> Right (Map.insert ident sig sigs, ctxs)
-    Just _  -> Left $ funcAlrDef ident
+extractFunIds :: Program -> [FunId]
+extractFunIds = map toFnSigId . progFuns
 
-checkProg :: Env -> Program -> Err Env
-checkProg env = foldM checkFun env . progFuns
+toFnSigId :: TopDef -> FunId
+toFnSigId (FnDef ret ident args _) = FunId ident $ FunSig (map argType args) ret
 
-emptyEnv :: Env
-emptyEnv = (Map.empty, [Map.empty])
+--------------------------------------------------------------------------------
+-- Type checking:
+--------------------------------------------------------------------------------
 
-newBlock :: Env -> Env
-newBlock (sigs, ctxs)  = (sigs, Map.empty:ctxs)
+checkProg :: Program -> Eval Program
+checkProg = fmap Program . mapM checkFun . progFuns
 
-remBlock :: Env -> Env
-remBlock (sigs, []) = (sigs, [])
-remBlock (sigs, ctxs)  = (sigs, tail ctxs)
+checkFun :: TopDef -> Eval TopDef
+checkFun (FnDef rtype ident args block) = do
+    pushBlock
+    collectArgVars args
+    FnDef rtype ident args <$> checkBlock rtype block
 
-lookupVar :: Env -> Ident -> Err Type
-lookupVar (_, contexts) ident = maybe (Left $ varNotDef ident) return $
-                                      (mfind . Map.lookup) ident contexts
+collectArgVars :: [Arg] -> Eval ()
+collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
-extendVar :: Env -> Ident -> Type -> Err Env
-extendVar (_, []) _ _ = Left ""
-extendVar (sigs, c:cs) ident typ = case Map.lookup ident c of
-    Nothing -> Right (sigs, Map.insert ident typ c:cs)
-    Just _  -> Left $ varAlrDef ident
+checkBlock :: Type -> Block -> Eval Block
+checkBlock frtyp (Block block) = Block <$> checkStms frtyp block <* popBlock
 
-lookupFun :: Env -> Ident -> Err FnSig
-lookupFun (sigs, _) ident = case Map.lookup ident sigs of
-        Just sig -> return sig
-        Nothing  -> Left $ funcNotDef ident
+checkStms :: Type -> [Stmt] -> Eval [Stmt]
+checkStms = mapM . checkStm
 
-inferExp :: Env -> Expr -> Err Type
-inferExp env expr = case expr of
-    EVar ident   -> lookupVar env ident
-    ELitInt _    -> return Int
-    ELitDoub _   -> return Doub
-    ELitTrue     -> return Bool
-    ELitFalse    -> return Bool
-    EApp ide xps -> inferFun env ide xps
-    EString _    -> return ConstStr
-    Neg xpr      -> inferUnary env [Int, Doub] xpr
-    Not xpr      -> inferUnary env [Bool] xpr
-    EMul le o ri -> inferBinary env (mulOp o) le ri
-    EAdd le _ ri -> inferBinary env [Int, Doub] le ri
-    ERel le o ri -> inferBinary env (relOp o) le ri >> return Bool
-    EAnd le ri   -> inferBinary env [Bool] le ri
-    EOr le ri    -> inferBinary env [Bool] le ri
+checkStm :: Type -> Stmt -> Eval Stmt
+checkStm typ stmt = case stmt of
+    Empty               -> return stmt
+    BStmt block         -> pushBlock >> BStmt <$> checkBlock typ block
+    Decl vtyp items     -> Decl vtyp <$> checkDecls vtyp items
+    Ass ident expr      -> Ass ident <$> checkIdentExp ident expr
+    Incr ident          -> Incr <$> checkIdent [Int, Doub] ident
+    Decr ident          -> Decr <$> checkIdent [Int, Doub] ident
+    SExp expr           -> SExp <<$> inferExp expr
+    Ret expr            -> Ret <$> checkExp typ expr
+    VRet                -> checkVoid typ >> return VRet
+    While expr st       -> checkC While    expr st
+    Cond expr st        -> checkC Cond     expr st
+    CondElse expr si se -> checkC CondElse expr si <*> checkR se
+    where checkR = checkStm typ
+          checkC ctor expr st = ctor <$> checkExp Bool expr <*> checkR st
+
+checkVoid :: Type -> Eval ()
+checkVoid frtyp = unless (frtyp == Void) $ wrongRetTyp Void frtyp
+
+checkIdentExp :: Ident -> Expr -> Eval Expr
+checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
+
+checkDecls :: Type -> [Item] -> Eval [Item]
+checkDecls vtyp = mapM single
+    where single item = checkDeclItem vtyp item <*
+                        extendVar' varAlreadyDef (itemToVar vtyp item)
+
+checkDeclItem :: Type -> Item -> Eval Item
+checkDeclItem vtyp (Init ident expr) = Init ident <$> checkExp vtyp expr
+checkDeclItem _    item@(NoInit _)   = return item
+
+checkExp :: Type -> Expr -> Eval Expr
+checkExp texpected expr = do
+    (expr', tactual) <- inferExp expr
+    if texpected == tactual then return expr'
+                            else wrongExpTyp expr texpected tactual
+
+checkIdent :: [Type] -> Ident -> Eval Ident
+checkIdent types ident = do
+    vtyp <- lookupVarE ident
+    if vtyp `elem` types then return ident
+                         else wrongIdentTyp ident types vtyp
+
+--------------------------------------------------------------------------------
+-- Type inference:
+--------------------------------------------------------------------------------
+
+inferExp :: Expr -> Eval (Expr, Type)
+inferExp expr = case expr of
+    EVar ident   -> (EVar ident,) <$> lookupVarE ident
+    EString  v   -> return (EString  v, ConstStr)
+    ELitInt  v   -> return (ELitInt  v, Int     )
+    ELitDoub v   -> return (ELitDoub v, Doub    )
+    ELitTrue     -> return (ELitTrue  , Bool    )
+    ELitFalse    -> return (ELitFalse , Bool    )
+    EApp ident e -> first (EApp ident) <$> inferFun ident e
+    Neg e        -> inferUnary [Int, Doub] e
+    Not e        -> inferUnary [Bool] e
+    EMul l op r  -> inferBin (`EMul` op) (mulOp op)  l r
+    EAdd l op r  -> inferBin (`EAdd` op) [Int, Doub] l r
+    ERel l op r  -> second (const Bool) <$> inferBin (`ERel` op) (relOp op) l r
+    EAnd l r     -> inferBin EAnd        [Bool]      l r
+    EOr  l r     -> inferBin EOr         [Bool]      l r
+
+inferBin :: (Expr -> Expr -> Expr) -> [Type] -> Expr -> Expr -> Eval (Expr, Type)
+inferBin op accept le re = first (uncurry op) <$> inferBinary accept le re
 
 relOp :: RelOp -> [Type]
 relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
@@ -134,84 +183,32 @@ mulOp :: MulOp -> [Type]
 mulOp oper | oper == Mod = [Int]
            | otherwise   = [Int, Doub]
 
-inferBinary :: Env -> [Type] -> Expr -> Expr -> Err Type
-inferBinary env types exp1 exp2 = do
-    typl <- inferExp env exp1
-    typr <- inferExp env exp2
-    case typl == typr && typl `elem` types of
-        True  -> return typl
-        False -> Left $ wrgBinExp exp1 exp2 typl typr
+inferBinary :: [Type] -> Expr -> Expr -> Eval ((Expr, Expr), Type)
+inferBinary types exprl exprr = do
+    (exprl', typl) <- inferExp exprl
+    (exprr', typr) <- inferExp exprr
+    if typl == typr && typl `elem` types then return ((exprl', exprr'), typl)
+                                         else wrongBinExp exprl exprr typl typr
 
-inferUnary :: Env -> [Type] -> Expr -> Err Type
-inferUnary env types expr = do
-    typ <- inferExp env expr
-    case typ `elem` types of
-        True  -> return typ
-        False -> Left $ wrgUnaExp expr types typ
+inferUnary :: [Type] -> Expr -> Eval (Expr, Type)
+inferUnary types expr = do
+    r@(_, etyp) <- inferExp expr
+    if etyp `elem` types then return r
+                         else wrongUnaryExp expr types etyp
 
-inferFun :: Env -> Ident -> [Expr] -> Err Type
-inferFun env ident exprs = do
-    (argtypes, rtype) <- lookupFun env ident
-    exprtypes         <- mapM (inferExp env) exprs
-    case argtypes == exprtypes of
-        True  -> return rtype
-        False -> Left $ wrgArgTyp ident argtypes exprtypes
+inferFun :: Ident -> [Expr] -> Eval ([Expr], Type)
+inferFun ident exprs = do
+    FunSig texpected rtype <- lookupFunE ident
+    (exprs', tactual)      <- mapAndUnzipM inferExp exprs
+    if texpected == tactual then return (exprs', rtype)
+                            else wrongArgsTyp ident texpected tactual
 
-checkFun :: Env -> TopDef -> Err Env
-checkFun env (FnDef rtype _ args block) = do
-    env2 <- foldM (\en (Arg typ aident) ->
-                   extendVar en aident typ) (newBlock env) args
-    checkBlock env2 rtype block
+--------------------------------------------------------------------------------
+-- Lookups:
+--------------------------------------------------------------------------------
 
-checkBlock :: Env -> Type -> Block -> Err Env
-checkBlock env typ (Block block) =
-    remBlock <$> debug <$> checkStms env typ block
+lookupFunE :: Ident -> Eval FunSig
+lookupFunE = lookupFun' funNotDef
 
-checkStms :: Env -> Type -> [Stmt] -> Err Env
-checkStms env typ = foldM (`checkStm` typ) env
-
-checkStm :: Env -> Type -> Stmt -> Err Env
-checkStm env typ stmt = case stmt of
-    Empty               -> return env
-    BStmt block         -> checkBlock (newBlock env) typ block
-    Decl dtyp items     -> foldM (checkDecl dtyp) env items
-    Ass ident expr      -> checkIdeExp env ident expr >> return env
-    Incr ident          -> checkIdent env [Int, Doub] ident >> return env
-    Decr ident          -> checkIdent env [Int, Doub] ident >> return env
-    Ret expr            -> checkExp env typ expr >> return env
-    VRet                -> checkVoid typ >> return env
-    Cond expr st        -> checkExp env Bool expr >> checkStm env typ st
-    CondElse expr s1 s2 -> checkExp env Bool expr >> checkStms env typ [s1, s2]
-    While expr st       -> checkExp env Bool expr >> checkStm env typ st
-    SExp expr           -> const env <$> inferExp env expr
-
-checkExp :: Env -> Type -> Expr -> Err Type
-checkExp env ty1 expr = do
-    ty2 <- inferExp env expr
-    case ty2 == ty1 of
-        True  -> return ty2
-        False -> Left $ wrgExpTyp expr ty1 ty2
-
-checkIdeExp :: Env -> Ident -> Expr -> Err Type
-checkIdeExp env ident expr = do
-    typ <- lookupVar env ident
-    checkExp env typ expr
-
-checkIdent :: Env -> [Type] -> Ident -> Err Type
-checkIdent env types ident = do
-    typ <- lookupVar env ident
-    case typ `elem` types of
-        True  -> return typ
-        False -> Left $ wrgIdeTyp ident types typ
-
-checkVoid :: Type -> Err Type
-checkVoid typ
-    | typ == Void = return typ
-    | otherwise   = Left $ wrgVoidTyp typ
-
-checkDecl :: Type -> Env -> Item -> Err Env
-checkDecl typ env item = do
-    ident <- case item of
-             Init ident expr -> checkExp env typ expr >> return ident
-             NoInit ident    -> return ident
-    extendVar env ident typ
+lookupVarE :: Ident -> Eval Type
+lookupVarE = lookupVar' varNotDef

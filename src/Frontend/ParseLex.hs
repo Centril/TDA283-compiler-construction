@@ -19,15 +19,14 @@ module Frontend.ParseLex (
 
 import Javalette.Par
 import Javalette.Abs
-import qualified Javalette.ErrM as ErrM
+import Javalette.ErrM
 
 import Frontend.Types
 
--- | 'parseProgram': parses a Javalette program into AST.
-parseProgram :: String -> Err Program
-parseProgram = translateErr . pProgram . myLexer
-
--- | translateErr: Converts from ErrM to 'Err'
-translateErr :: ErrM.Err a -> Err a
-translateErr (ErrM.Ok  o) = Right o
-translateErr (ErrM.Bad b) = Left  b
+-- | 'parseProgram': statefully parses a Javalette program into AST.
+parseProgram :: String -> Eval Program
+parseProgram code = do
+    infoln Parser ["Attempting to parse with:", code]
+    case pProgram $ myLexer code of
+        Ok  ast -> info' Parser ["Successfully parsed!"] >> return ast
+        Bad msg -> info  Parser "Parse error!"           >> err Parser msg

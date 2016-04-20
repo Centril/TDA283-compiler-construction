@@ -12,15 +12,27 @@ Portability : ALL
 
 Querying functions on AST in Javalette compiler frontend
 -}
-module Frontend.Query (
-    -- * Operations
-    argType, progFuns
-) where
+module Frontend.Query where
+
+import Frontend.Types
 
 import Javalette.Abs
 
+identStr :: Ident -> String
+identStr (Ident i) = i
+
+argToVar :: Arg -> Var
+argToVar (Arg typ ident) = Var ident typ
+
 argType :: Arg -> Type
 argType (Arg t _) = t
+
+itemIdent :: Item -> Ident
+itemIdent (Init i _) = i
+itemIdent (NoInit i) = i
+
+itemToVar :: Type -> Item -> Var
+itemToVar typ = flip Var typ . itemIdent
 
 progFuns :: Program -> [TopDef]
 progFuns (Program fns) = fns
