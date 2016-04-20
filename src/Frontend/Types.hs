@@ -19,9 +19,9 @@ module Frontend.Types (
     -- * Types
     Env, FnSig, FnSigId, Sig, Err, Log,
 
-    TCEnv (..), Eval, EvalResult,
+    TCEnv(..), Eval, EvalResult,
     ErrMsg, InfoLog, LogItem(..),
-    Context, Contexts,
+    Context, Contexts, Var (..),
     FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
@@ -61,6 +61,10 @@ type Context = Map Ident Type
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
+
+-- | 'Var': a variable specified by its 'Ident' and 'Type'.
+data Var = Var { vident :: Ident, vtype :: Type }
+    deriving (Eq, Show, Read)
 
 --------------------------------------------------------------------------------
 -- Function Signatures:
@@ -123,8 +127,8 @@ lookupFun' onErr var = uses functions (Map.lookup var) >>= maybeErr (onErr var)
 
 -- | 'extendVar': Extends the current scope with the given variable with ident
 -- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
-extendVar' :: (Ident -> Eval ()) -> Ident -> Type -> Eval ()
-extendVar' onErr ident typ = do
+extendVar' :: (Ident -> Eval ()) -> Var -> Eval ()
+extendVar' onErr (Var ident typ) = do
     (c : ctxs) <- use contexts
     maybe (contexts .= Map.insert ident typ c:ctxs)
           (const $ onErr ident)

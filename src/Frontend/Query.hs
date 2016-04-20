@@ -21,8 +21,18 @@ import Javalette.Abs
 identStr :: Ident -> String
 identStr (Ident i) = i
 
+argToVar :: Arg -> Var
+argToVar (Arg typ ident) = Var ident typ
+
 argType :: Arg -> Type
 argType (Arg t _) = t
+
+itemIdent :: Item -> Ident
+itemIdent (Init i _) = i
+itemIdent (NoInit i) = i
+
+itemToVar :: Type -> Item -> Var
+itemToVar vtype = flip Var vtype . itemIdent
 
 progFuns :: Program -> [TopDef]
 progFuns (Program fns) = fns
