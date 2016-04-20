@@ -32,10 +32,7 @@ itemIdent (Init i _) = i
 itemIdent (NoInit i) = i
 
 itemToVar :: Type -> Item -> Var
-itemToVar vtype = flip Var vtype . itemIdent
+itemToVar typ = flip Var typ . itemIdent
 
 progFuns :: Program -> [TopDef]
 progFuns (Program fns) = fns
-
-toFnSigId' :: TopDef -> FunId
-toFnSigId' = undefined -- (FnDef ret ident args _) (ident, (map argType args, ret))

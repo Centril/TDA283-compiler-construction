@@ -40,15 +40,15 @@ import Utils.Debug
 --------------------------------------------------------------------------------
 
 typeCheck :: Program -> Eval Program
-typeCheck prog = do
+typeCheck prog1 = do
     -- P1: collect functions:
-    allFunctions prog
+    allFunctions prog1
     -- P2: check for existance + correctness of main definition:
     mainCorrect
     -- P3: type check the program
-    prog <- checkProg prog
+    prog2 <- checkProg prog1
     -- P4: return check the program.
-    returnCheck' prog
+    returnCheck' prog2
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):
@@ -135,8 +135,8 @@ checkDecls vtyp = mapM single
                         extendVar' varAlreadyDef (itemToVar vtyp item)
 
 checkDeclItem :: Type -> Item -> Eval Item
-checkDeclItem vtyp (Init ident expr)   = Init ident <$> checkExp vtyp expr
-checkDeclItem vtyp item@(NoInit ident) = return item
+checkDeclItem vtyp (Init ident expr) = Init ident <$> checkExp vtyp expr
+checkDeclItem _    item@(NoInit _)   = return item
 
 checkExp :: Type -> Expr -> Eval Expr
 checkExp texpected expr = do
@@ -163,18 +163,23 @@ inferExp expr = case expr of
     ELitTrue         -> return (ELitTrue  , Bool    )
     ELitFalse        -> return (ELitFalse , Bool    )
     EApp ident exprs -> first (EApp ident) <$> inferFun ident exprs
-    Neg expr         -> inferUnary [Int, Doub] expr
-    Not expr         -> inferUnary [Bool] expr
+    Neg expr'        -> inferUnary [Int, Doub] expr'
+    Not expr'        -> inferUnary [Bool] expr'
     EMul le oper re  -> emul oper <$> inferBinary (mulOp oper) le re
     EAdd le oper re  -> eadd oper <$> inferBinary [Int, Doub]  le re
     ERel le oper re  -> erel oper <$> inferBinary (relOp oper) le re
     EAnd le re       -> eand      <$> inferBinary [Bool] le re
     EOr  le re       -> eor       <$> inferBinary [Bool] le re
 
+emul :: MulOp -> (Expr, Expr, Type) -> (Expr, Type)
 emul = mergeBin . flip EMul
+eadd :: AddOp -> (Expr, Expr, Type) -> (Expr, Type)
 eadd = mergeBin . flip EAdd
+erel :: RelOp -> (Expr, Expr, Type) -> (Expr, Type)
 erel = mergeBin . flip ERel
+eand :: (Expr, Expr, Type) -> (Expr, Type)
 eand = mergeBin        EAnd
+eor  :: (Expr, Expr, Type) -> (Expr, Type)
 eor  = mergeBin        EOr
 
 relOp :: RelOp -> [Type]
@@ -211,5 +216,9 @@ inferFun ident exprs = do
 --------------------------------------------------------------------------------
 -- Lookups:
 --------------------------------------------------------------------------------
+
+lookupFunE :: Ident -> Eval FunSig
 lookupFunE = lookupFun' funNotDef
+
+lookupVarE :: Ident -> Eval Type
 lookupVarE = lookupVar' varNotDef

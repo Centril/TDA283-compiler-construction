@@ -69,7 +69,7 @@ checkFun fun@(FnDef rtype ident args block)
 
 checkBlockTop :: Ident -> Block -> Eval (Block, Bool)
 checkBlockTop fid block = do
-    r@(stmts, hasRet) <- checkBlock fid block
+    r@(_, hasRet) <- checkBlock fid block
     if hasRet then return r else insufficientFunRet fid
 
 checkBlock :: Ident -> Block -> Eval (Block, Bool)
@@ -78,32 +78,32 @@ checkBlock fid (Block stmts) =
 
 checkHasRet :: Ident -> Stmt -> Eval (Stmt, Bool)
 checkHasRet fid stmt = case stmt of
-    Ret exp            -> return (stmt, True)
-    VRet               -> return (stmt, True)
-    BStmt block        -> first BStmt <$> checkBlock fid block
-    While exp st       -> checkCond While fid exp st
-    Cond  exp st       -> checkCond Cond  fid exp st
-    CondElse exp si se -> checkCondElse fid exp si se
-    _                  -> return (stmt, False)
+    Ret _               -> return (stmt, True)
+    VRet                -> return (stmt, True)
+    BStmt block         -> first BStmt <$> checkBlock fid block
+    While expr st       -> checkCond While fid expr st
+    Cond  expr st       -> checkCond Cond  fid expr st
+    CondElse expr si se -> checkCondElse fid expr si se
+    _                   -> return (stmt, False)
 
 checkCond :: (Expr -> Stmt -> Stmt) -> Ident
           ->  Expr -> Stmt ->          Eval (Stmt, Bool)
-checkCond ctor fid exp stmt =
+checkCond ctor fid expr stmt =
     case condLit mlit of
-    Always -> checkRetWrap fid stmt $ ctor exp
-    _      -> return (ctor exp stmt, False)
-    where mlit = evalConstExpr exp
+    Always -> checkRetWrap fid stmt $ ctor expr
+    _      -> return (ctor expr stmt, False)
+    where mlit = evalConstExpr expr
 
 checkCondElse :: Ident -> Expr -> Stmt -> Stmt -> Eval (Stmt, Bool)
-checkCondElse fid exp si se =
+checkCondElse fid expr si se =
     case condLit mlit of
-    Always  -> checkRetWrap fid si $ flip (CondElse exp) se
-    Never   -> checkRetWrap fid se $ CondElse exp si
+    Always  -> checkRetWrap fid si $ flip (CondElse expr) se
+    Never   -> checkRetWrap fid se $ CondElse expr si
     Unknown -> do
         (si', siRet) <- checkHasRet fid si
         (se', seRet) <- checkHasRet fid se
-        return (CondElse exp si' se', siRet && seRet)
-    where mlit = evalConstExpr exp
+        return (CondElse expr si' se', siRet && seRet)
+    where mlit = evalConstExpr expr
 
 checkRetWrap :: Ident -> Stmt -> (Stmt -> Stmt) -> Eval (Stmt, Bool)
 checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
