@@ -65,12 +65,16 @@ returnCheck' = fmap Program . mapM checkFun . progFuns
 checkFun :: TopDef -> Eval TopDef
 checkFun fun@(FnDef rtype ident args block)
     | rtype == Void = return fun
-    | otherwise     = FnDef rtype ident args <<$> checkBlock ident block
+    | otherwise     = FnDef rtype ident args <<$> checkBlockTop ident block
+
+checkBlockTop :: Ident -> Block -> Eval (Block, Bool)
+checkBlockTop fid block = do
+    r@(stmts, hasRet) <- checkBlock fid block
+    if hasRet then return r else insufficientFunRet fid
 
 checkBlock :: Ident -> Block -> Eval (Block, Bool)
-checkBlock fid (Block block) = do
-    r@(stmts, hasRet) <- (Block *** or) <$> mapAndUnzipM (checkHasRet fid) block
-    if hasRet then return r else insufficientFunRet fid
+checkBlock fid (Block stmts) =
+    (Block *** or) <$> mapAndUnzipM (checkHasRet fid) stmts
 
 checkHasRet :: Ident -> Stmt -> Eval (Stmt, Bool)
 checkHasRet fid stmt = case stmt of
