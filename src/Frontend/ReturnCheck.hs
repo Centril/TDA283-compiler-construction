@@ -21,11 +21,12 @@ that need do return.
 
 module Frontend.ReturnCheck (
     -- * Operations
-    returnCheck
+    returnCheck, returnCheck'
 ) where
 
 import Data.Monoid
 
+import Control.Arrow
 import Control.Monad
 
 import Control.Lens
@@ -38,13 +39,75 @@ import Javalette.Abs
 import Frontend.Types
 import Frontend.Query
 import Frontend.Error
+import Frontend.Error2
 
 deriving instance Enum RelOp
 
 data Literal = LBool Bool | LInt Integer | LDouble Double | LString String
-    deriving Show
+    deriving (Eq, Show, Read, Ord)
 
 makePrisms ''Literal
+
+data WillExecute = Always | Never | Unknown
+    deriving (Eq, Show, Read, Ord, Enum)
+
+toWillExecute :: Maybe Bool -> WillExecute
+toWillExecute (Just True)  = Always
+toWillExecute (Just False) = Never
+toWillExecute Nothing      = Unknown
+
+
+--------------- new:
+
+returnCheck' :: Program -> Eval Program
+returnCheck' = fmap Program . mapM checkFun . progFuns
+
+checkFun :: TopDef -> Eval TopDef
+checkFun fun@(FnDef rtype ident args block)
+    | rtype == Void = return fun
+    | otherwise     = FnDef rtype ident args <<$> checkBlock ident block
+
+checkBlock :: Ident -> Block -> Eval (Block, Bool)
+checkBlock fid (Block block) = do
+    r@(stmts, hasRet) <- (Block *** or) <$> mapAndUnzipM (checkHasRet fid) block
+    if hasRet then return r else insufficientFunRet fid
+
+checkHasRet :: Ident -> Stmt -> Eval (Stmt, Bool)
+checkHasRet fid stmt = case stmt of
+    Ret exp            -> return (stmt, True)
+    VRet               -> return (stmt, True)
+    BStmt block        -> first BStmt <$> checkBlock fid block
+    While exp st       -> checkCond While fid exp st
+    Cond  exp st       -> checkCond Cond  fid exp st
+    CondElse exp si se -> checkCondElse fid exp si se
+    _                  -> return (stmt, False)
+
+checkCond :: (Expr -> Stmt -> Stmt) -> Ident
+          ->  Expr -> Stmt ->          Eval (Stmt, Bool)
+checkCond ctor fid exp stmt =
+    case condLit mlit of
+    Always -> checkRetWrap fid stmt $ ctor exp
+    _      -> return (ctor exp stmt, False)
+    where mlit = evalConstExpr exp
+
+checkCondElse :: Ident -> Expr -> Stmt -> Stmt -> Eval (Stmt, Bool)
+checkCondElse fid exp si se =
+    case condLit mlit of
+    Always  -> checkRetWrap fid si $ flip (CondElse exp) se
+    Never   -> checkRetWrap fid se $ CondElse exp si
+    Unknown -> do
+        (si', siRet) <- checkHasRet fid si
+        (se', seRet) <- checkHasRet fid se
+        return (CondElse exp si' se', siRet && seRet)
+    where mlit = evalConstExpr exp
+
+checkRetWrap :: Ident -> Stmt -> (Stmt -> Stmt) -> Eval (Stmt, Bool)
+checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
+
+condLit :: Maybe Literal -> WillExecute
+condLit mlit = toWillExecute $ mlit >>= (^? _LBool)
+
+------------ old:
 
 returnCheck :: Env -> Program -> Err Env
 returnCheck env = foldM returnCheckFun env . progFuns
@@ -78,34 +141,41 @@ evalCondExpr expr = evalConstExpr expr >>= (^? _LBool)
 
 evalConstExpr :: Expr -> Maybe Literal
 evalConstExpr expr = case expr of
+    EVar _     -> Nothing
+    EApp _ _   -> Nothing
     ELitTrue   -> pure $ LBool True
     ELitFalse  -> pure $ LBool False
     ELitInt  v -> pure $ LInt v
     ELitDoub v -> pure $ LDouble v
     EString  v -> pure $ LString v
-    EVar _     -> Nothing
-    EApp _ _   -> Nothing
-    EOr  l r   -> evalBoolOp (||) l r
-    EAnd l r   -> evalBoolOp (&&) l r
     Not  e     -> LBool . not <$> detLitBool e
     Neg  e     -> evalNeg e
-    EMul l o r -> evalBinOp l r
-                    (\v er -> mulFn (Just mod) div o <!> v <*>
-                              mulFetchRight o er _LInt)
-                    (\v er -> mulFn Nothing (/) o <!> v <*>
-                              mulFetchRight o er _LDouble)
-    EAdd l o r -> evalBinOp l r
-                    (\v er -> plusFn o <:> v <*> er ^? _LInt)
-                    (\v er -> plusFn o <:> v <*> er ^? _LDouble)
-    ERel l o r ->  do
-        el <- evalConstExpr l
-        er <- evalConstExpr r
-        fmap LBool $ case el of
-            LBool v   -> relFn <$> mfilter (`elem` [EQU .. NE]) (pure o)
-                         <*> pure v <*> er ^? _LBool
-            LInt v    -> evalRelStd v o er _LInt
-            LDouble v -> evalRelStd v o er _LDouble
-            LString v -> evalRelStd v o er _LString
+    EOr  l r   -> evalBoolOp (||) l r
+    EAnd l r   -> evalBoolOp (&&) l r
+    EMul l o r -> evalMul l o r
+    EAdd l o r -> evalAdd l o r
+    ERel l o r -> evalRel l o r
+
+evalMul :: Expr -> MulOp -> Expr -> Maybe Literal
+evalMul l o r = evalBinOp l r int doub
+    where int  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LInt
+          doub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LDouble
+
+evalAdd :: Expr -> AddOp -> Expr -> Maybe Literal
+evalAdd l o r = evalBinOp l r int doub
+    where int  v er = plusFn o <:> v <*> er ^? _LInt
+          doub v er = plusFn o <:> v <*> er ^? _LDouble
+
+evalRel :: Expr -> RelOp -> Expr -> Maybe Literal
+evalRel l o r = do
+    el <- evalConstExpr l
+    er <- evalConstExpr r
+    fmap LBool $ case el of
+        LBool   v -> relFn <$> mfilter (`elem` [EQU .. NE]) (pure o) <*>
+                     pure v <*> er ^? _LBool
+        LInt    v -> evalRelStd v o er _LInt
+        LDouble v -> evalRelStd v o er _LDouble
+        LString v -> evalRelStd v o er _LString
 
 evalBoolOp :: (Bool -> Bool -> Bool) -> Expr -> Expr -> Maybe Literal
 evalBoolOp o le ri = liftM2 (LBool .| o) (detLitBool le) (detLitBool ri)

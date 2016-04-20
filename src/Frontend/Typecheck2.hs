@@ -30,6 +30,8 @@ import Frontend.Error2
 
 import Frontend.ReturnCheck
 
+import Utils.Monad
+
 -- temporary:
 import Utils.Debug
 
@@ -46,9 +48,7 @@ typeCheck prog = do
     -- P3: type check the program
     prog <- checkProg prog
     -- P4: return check the program.
-    -- prog' <- returnCheck prog
-    let prog' = prog
-    return prog'
+    returnCheck' prog
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):
@@ -105,9 +105,6 @@ checkBlock frtyp (Block block) = Block <$> checkStms frtyp block <* popBlock
 
 checkStms :: Type -> [Stmt] -> Eval [Stmt]
 checkStms = mapM . checkStm
-
-(<<$>) :: Functor f => (a -> c) -> f (a, b) -> f c
-f <<$> y = f . fst <$> y
 
 checkStm :: Type -> Stmt -> Eval Stmt
 checkStm typ stmt = case stmt of
