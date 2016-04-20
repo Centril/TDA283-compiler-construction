@@ -156,31 +156,23 @@ checkIdent types ident = do
 
 inferExp :: Expr -> Eval (Expr, Type)
 inferExp expr = case expr of
-    EVar ident       -> (EVar ident,) <$> lookupVarE ident
-    EString  v       -> return (EString  v, ConstStr)
-    ELitInt  v       -> return (ELitInt  v, Int     )
-    ELitDoub v       -> return (ELitDoub v, Doub    )
-    ELitTrue         -> return (ELitTrue  , Bool    )
-    ELitFalse        -> return (ELitFalse , Bool    )
-    EApp ident exprs -> first (EApp ident) <$> inferFun ident exprs
-    Neg expr'        -> inferUnary [Int, Doub] expr'
-    Not expr'        -> inferUnary [Bool] expr'
-    EMul le oper re  -> emul oper <$> inferBinary (mulOp oper) le re
-    EAdd le oper re  -> eadd oper <$> inferBinary [Int, Doub]  le re
-    ERel le oper re  -> erel oper <$> inferBinary (relOp oper) le re
-    EAnd le re       -> eand      <$> inferBinary [Bool] le re
-    EOr  le re       -> eor       <$> inferBinary [Bool] le re
+    EVar ident   -> (EVar ident,) <$> lookupVarE ident
+    EString  v   -> return (EString  v, ConstStr)
+    ELitInt  v   -> return (ELitInt  v, Int     )
+    ELitDoub v   -> return (ELitDoub v, Doub    )
+    ELitTrue     -> return (ELitTrue  , Bool    )
+    ELitFalse    -> return (ELitFalse , Bool    )
+    EApp ident e -> first (EApp ident) <$> inferFun ident e
+    Neg e        -> inferUnary [Int, Doub] e
+    Not e        -> inferUnary [Bool] e
+    EMul l op r  -> inferBin (`EMul` op) (mulOp op)  l r
+    EAdd l op r  -> inferBin (`EAdd` op) [Int, Doub] l r
+    ERel l op r  -> second (const Bool) <$> inferBin (`ERel` op) (relOp op) l r
+    EAnd l r     -> inferBin EAnd        [Bool]      l r
+    EOr  l r     -> inferBin EOr         [Bool]      l r
 
-emul :: MulOp -> (Expr, Expr, Type) -> (Expr, Type)
-emul = mergeBin . flip EMul
-eadd :: AddOp -> (Expr, Expr, Type) -> (Expr, Type)
-eadd = mergeBin . flip EAdd
-erel :: RelOp -> (Expr, Expr, Type) -> (Expr, Type)
-erel = mergeBin . flip ERel
-eand :: (Expr, Expr, Type) -> (Expr, Type)
-eand = mergeBin        EAnd
-eor  :: (Expr, Expr, Type) -> (Expr, Type)
-eor  = mergeBin        EOr
+inferBin :: (Expr -> Expr -> Expr) -> [Type] -> Expr -> Expr -> Eval (Expr, Type)
+inferBin op accept le re = first (uncurry op) <$> inferBinary accept le re
 
 relOp :: RelOp -> [Type]
 relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
@@ -190,14 +182,11 @@ mulOp :: MulOp -> [Type]
 mulOp oper | oper == Mod = [Int]
            | otherwise   = [Int, Doub]
 
-mergeBin :: (le -> re -> e) -> (le, re, rt) -> (e, rt)
-mergeBin op (l, r, etyp) = (l `op` r, etyp)
-
-inferBinary :: [Type] -> Expr -> Expr -> Eval (Expr, Expr, Type)
+inferBinary :: [Type] -> Expr -> Expr -> Eval ((Expr, Expr), Type)
 inferBinary types exprl exprr = do
     (exprl', typl) <- inferExp exprl
     (exprr', typr) <- inferExp exprr
-    if typl == typr && typl `elem` types then return (exprl', exprr', typl)
+    if typl == typr && typl `elem` types then return ((exprl', exprr'), typl)
                                          else wrongBinExp exprl exprr typl typr
 
 inferUnary :: [Type] -> Expr -> Eval (Expr, Type)
