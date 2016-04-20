@@ -23,13 +23,10 @@ import Javalette.ErrM
 
 import Frontend.Types
 
-import Debug.Trace
-import Utils.Debug
-
 -- | 'parseProgram': statefully parses a Javalette program into AST.
 parseProgram :: String -> Eval Program
 parseProgram code = do
     infoln Parser ["Attempting to parse with:", code]
-    case debug $ pProgram $ myLexer code of
+    case pProgram $ myLexer code of
         Ok  ast -> info' Parser ["Successfully parsed!"] >> return ast
         Bad msg -> info  Parser "Parse error!"           >> err Parser msg
