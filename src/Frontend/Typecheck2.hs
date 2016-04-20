@@ -42,13 +42,17 @@ import Utils.Debug
 typeCheck :: Program -> Eval Program
 typeCheck prog1 = do
     -- P1: collect functions:
+    info TypeChecker    "Collecting all functions"
     allFunctions prog1
     -- P2: check for existance + correctness of main definition:
+    info TypeChecker    "Checking existence of main"
     mainCorrect
     -- P3: type check the program
+    info TypeChecker   "Type checking the program"
     prog2 <- checkProg prog1
     -- P4: return check the program.
-    returnCheck' prog2
+    info ReturnChecker "Return checking the program"
+    returnCheck prog2
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):
