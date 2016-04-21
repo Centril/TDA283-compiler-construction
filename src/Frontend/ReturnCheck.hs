@@ -89,7 +89,7 @@ checkCondElse :: ASTAnots -> Ident -> ExprA -> StmtA -> StmtA
               -> Eval (StmtA, Bool)
 checkCondElse a fid expr si se =
     case condLit mlit of
-    Always  -> checkRetWrap fid si $ flip ((CondElse a) expr) se
+    Always  -> checkRetWrap fid si $ flip (CondElse a expr) se
     Never   -> checkRetWrap fid se $ CondElse a expr si
     Unknown -> do
         (si', siRet) <- checkHasRet fid si
@@ -105,8 +105,8 @@ condLit mlit = toWillExecute $ mlit >>= (^? _LBool)
 
 evalConstExpr :: ExprA -> Maybe Literal
 evalConstExpr expr = case expr of
-    EVar _ _     -> Nothing
-    EApp _ _ _   -> Nothing
+    EVar {}      -> Nothing
+    EApp {}      -> Nothing
     ELitTrue _   -> pure $ LBool True
     ELitFalse _  -> pure $ LBool False
     ELitInt _  v -> pure $ LInt v
