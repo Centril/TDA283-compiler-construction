@@ -119,17 +119,17 @@ checkFunType (FnDef a rtype ident args block) = do
     collectArgVars args
     FnDef a rtype ident args <$> checkBlock rtype block
 
-collectArgVars :: [Arg ASTAnots] -> Eval ()
+collectArgVars :: [ArgA] -> Eval ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
-checkBlock :: Type ASTAnots -> Block ASTAnots -> Eval (Block ASTAnots)
+checkBlock :: TypeA -> BlockA -> Eval (BlockA)
 checkBlock frtyp (Block a block) =
     Block a <$> checkStms frtyp block <* popBlock
 
-checkStms :: Type ASTAnots -> [Stmt ASTAnots] -> Eval [Stmt ASTAnots]
+checkStms :: TypeA -> [StmtA] -> Eval [StmtA]
 checkStms = mapM . checkStm
 
-checkStm :: Type ASTAnots -> Stmt ASTAnots -> Eval (Stmt ASTAnots)
+checkStm :: TypeA -> StmtA -> Eval (StmtA)
 checkStm typ stmt = case stmt of
     Empty _               -> return stmt
     BStmt a block         -> pushBlock >> BStmt a <$> checkBlock typ block
@@ -147,30 +147,30 @@ checkStm typ stmt = case stmt of
           checkC ctor a expr st =
               ctor <$> checkExp (Bool a) expr <*> checkR st
 
-checkVoid :: Type ASTAnots -> Eval ()
+checkVoid :: TypeA -> Eval ()
 checkVoid frtyp = unless (void frtyp == Void ()) $
     wrongRetTyp (Void ()) $ void frtyp
 
-checkIdentExp :: Ident -> Expr ASTAnots -> Eval (Expr ASTAnots)
+checkIdentExp :: Ident -> ExprA -> Eval (ExprA)
 checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
 
-checkDecls :: Type ASTAnots -> [Item ASTAnots] -> Eval [Item ASTAnots]
+checkDecls :: TypeA -> [ItemA] -> Eval [ItemA]
 checkDecls vtyp = mapM single
     where single item = checkDeclItem vtyp item <*
                         extendVar' varAlreadyDef (itemToVar vtyp item)
 
-checkDeclItem :: Type ASTAnots -> Item ASTAnots -> Eval (Item ASTAnots)
+checkDeclItem :: TypeA -> ItemA -> Eval (ItemA)
 checkDeclItem vtyp (Init a ident expr) = Init a ident <$> checkExp vtyp expr
-checkDeclItem _    item@(NoInit a _)   = return item
+checkDeclItem _    item@(NoInit _ _)   = return item
 
-checkExp :: Type ASTAnots -> Expr ASTAnots -> Eval (Expr ASTAnots)
+checkExp :: TypeA -> ExprA -> Eval (ExprA)
 checkExp texpected expr = do
     (expr', tactual) <- inferExp expr
     if void texpected == void tactual
         then return expr'
         else wrongExpTyp (void expr) (void texpected) (void tactual)
 
-checkIdent :: [Type ASTAnots] -> Ident -> Eval Ident
+checkIdent :: [TypeA] -> Ident -> Eval Ident
 checkIdent types ident = do
     vtyp <- lookupVarE ident
     if (void vtyp) `elem` (void <$> types)
@@ -181,7 +181,7 @@ checkIdent types ident = do
 -- Type inference:
 --------------------------------------------------------------------------------
 
-inferExp :: Expr ASTAnots -> Eval (Expr ASTAnots, Type ASTAnots)
+inferExp :: ExprA -> Eval (ExprA, TypeA)
 inferExp expr = case expr of
     EVar a ident   -> (EVar a ident,) <$> lookupVarE ident
     EString a  v   -> return (EString a v, ConstStr a)
@@ -199,22 +199,22 @@ inferExp expr = case expr of
     EAnd a l r     -> inferBin (EAnd a)    [Bool a]    l r
     EOr  a l r     -> inferBin (EOr a)     [Bool a]    l r
 
-inferBin :: (Expr ASTAnots -> Expr ASTAnots -> Expr ASTAnots)
-         -> [Type ASTAnots]
-         -> Expr ASTAnots
-         -> Expr ASTAnots
-         -> Eval (Expr ASTAnots, Type ASTAnots)
+inferBin :: (ExprA -> ExprA -> ExprA)
+         -> [TypeA]
+         -> ExprA
+         -> ExprA
+         -> Eval (ExprA, TypeA)
 inferBin op accept le re = first (uncurry op) <$> inferBinary accept le re
 
-relOp :: RelOp ASTAnots -> [Type ASTAnots]
+relOp :: RelOpA -> [TypeA]
 relOp oper | oper `elem` applyEA [NE, EQU] = applyEA [Int, Doub, Bool]
            | otherwise                     = applyEA [Int, Doub]
 
-mulOp :: MulOp ASTAnots -> [Type ASTAnots]
+mulOp :: MulOpA -> [TypeA]
 mulOp oper | oper == Mod emptyAnot = applyEA [Int]
            | otherwise             = applyEA [Int, Doub]
 
-inferBinary :: [Type ASTAnots] -> Expr ASTAnots -> Expr ASTAnots -> Eval ((Expr ASTAnots, Expr ASTAnots), Type ASTAnots)
+inferBinary :: [TypeA] -> ExprA -> ExprA -> Eval ((ExprA, ExprA), TypeA)
 inferBinary types exprl exprr = do
     (exprl', typl) <- inferExp exprl
     (exprr', typr) <- inferExp exprr
@@ -222,14 +222,14 @@ inferBinary types exprl exprr = do
         then return ((exprl', exprr'), typl)
         else wrongBinExp exprl exprr typl typr
 
-inferUnary :: [Type ASTAnots] -> Expr ASTAnots -> Eval (Expr ASTAnots, Type ASTAnots)
+inferUnary :: [TypeA] -> ExprA -> Eval (ExprA, TypeA)
 inferUnary types expr = do
     r@(_, etyp) <- inferExp expr
     if etyp `elem` types
         then return r
         else wrongUnaryExp expr types etyp
 
-inferFun :: Ident -> [Expr ASTAnots] -> Eval ([Expr ASTAnots], Type ASTAnots)
+inferFun :: Ident -> [ExprA] -> Eval ([ExprA], TypeA)
 inferFun ident exprs = do
     FunSig texpected rtype <- lookupFunE ident
     (exprs', tactual)      <- mapAndUnzipM inferExp exprs
@@ -244,5 +244,5 @@ inferFun ident exprs = do
 lookupFunE :: Ident -> Eval FunSig
 lookupFunE = lookupFun' funNotDef
 
-lookupVarE :: Ident -> Eval (Type ASTAnots)
+lookupVarE :: Ident -> Eval (TypeA)
 lookupVarE = lookupVar' varNotDef
