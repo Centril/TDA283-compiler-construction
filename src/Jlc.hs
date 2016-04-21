@@ -68,10 +68,10 @@ phaseErr Parser        = "SYNTAX ERROR"
 phaseErr TypeChecker   = "TYPE ERROR"
 phaseErr ReturnChecker = "TYPE ERROR"
 
-runCompileComp :: String -> EvalResult Program
+runCompileComp :: String -> EvalResult (Program ASTAnots)
 runCompileComp code = runEval (compileComp code) initialEnv
 
-compileComp :: String -> Eval Program
+compileComp :: String -> Eval (Program ASTAnots)
 compileComp code = do
     ast1 <- parseProgram code
     info Parser "AST after parse"

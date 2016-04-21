@@ -47,12 +47,16 @@ import Frontend.ReturnCheck
 
 import Utils.Monad
 
+makeBin f a = flip (f a)
+applyEA = fmap ($ emptyAnot)
+
 --------------------------------------------------------------------------------
 -- API:
 --------------------------------------------------------------------------------
 
 typeCheck :: Program () -> Eval (Program ASTAnots)
-typeCheck prog1 = do
+typeCheck prog0 = do
+    let prog1 = fmap (const emptyAnot) prog0
     -- P1: collect functions:
     info TypeChecker   "Collecting all functions"
     allFunctions prog1
@@ -75,13 +79,13 @@ mainId = Ident "main"
 
 mainCorrect :: Eval ()
 mainCorrect = lookupFunE mainId >>=
-    flip unless wrongMainSig . (== FunSig [] (Int ()))
+    flip unless wrongMainSig . (== FunSig [] (Int emptyAnot))
 
 --------------------------------------------------------------------------------
 -- Collecting function signatures:
 --------------------------------------------------------------------------------
 
-allFunctions :: Program a -> Eval ()
+allFunctions :: Program ASTAnots -> Eval ()
 allFunctions = collectFuns . (predefFuns ++) . extractFunIds
 
 collectFuns :: [FunId] -> Eval ()
@@ -89,43 +93,43 @@ collectFuns = mapM_ $ extendFun' funAlreadyDef
 
 predefFuns :: [FunId]
 predefFuns = map toFunId
-    [("printInt",    ([Int ()],      Void ())),
-     ("printDouble", ([Doub ()],     Void ())),
-     ("printString", ([ConstStr ()], Void ())),
-     ("readInt",     ([],            Int  ())),
-     ("readDouble",  ([],            Doub ()))]
+    [("printInt",    ([Int     ], Void)),
+     ("printDouble", ([Doub    ], Void)),
+     ("printString", ([ConstStr], Void)),
+     ("readInt",     ([        ], Int )),
+     ("readDouble",  ([        ], Doub))]
 
-extractFunIds :: Program a -> [FunId]
+extractFunIds :: Program ASTAnots -> [FunId]
 extractFunIds = map toFnSigId . progFuns
 
-toFnSigId :: TopDef a -> FunId
-toFnSigId (FnDef a ret ident args _) =
-    FunId ident $ FunSig (map argType (void <$> args)) (void ret)
+toFnSigId :: TopDef ASTAnots -> FunId
+toFnSigId (FnDef _ ret ident args _) =
+    FunId ident $ FunSig (map argType args) ret
 
 --------------------------------------------------------------------------------
 -- Type checking:
 --------------------------------------------------------------------------------
 
-checkProg :: Program () -> Eval (Program a)
+checkProg :: Program ASTAnots -> Eval (Program ASTAnots)
 checkProg (Program a funs) = Program a <$> mapM checkFunType funs
 
-checkFunType :: TopDef a -> Eval (TopDef a)
+checkFunType :: TopDef ASTAnots -> Eval (TopDef ASTAnots)
 checkFunType (FnDef a rtype ident args block) = do
     pushBlock
     collectArgVars args
     FnDef a rtype ident args <$> checkBlock rtype block
 
-collectArgVars :: [Arg a] -> Eval ()
+collectArgVars :: [Arg ASTAnots] -> Eval ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
-checkBlock :: Type a -> Block a -> Eval (Block a)
+checkBlock :: Type ASTAnots -> Block ASTAnots -> Eval (Block ASTAnots)
 checkBlock frtyp (Block a block) =
     Block a <$> checkStms frtyp block <* popBlock
 
-checkStms :: Type a -> [Stmt a] -> Eval [Stmt a]
+checkStms :: Type ASTAnots -> [Stmt ASTAnots] -> Eval [Stmt ASTAnots]
 checkStms = mapM . checkStm
 
-checkStm :: Type a -> Stmt a -> Eval (Stmt a)
+checkStm :: Type ASTAnots -> Stmt ASTAnots -> Eval (Stmt ASTAnots)
 checkStm typ stmt = case stmt of
     Empty _               -> return stmt
     BStmt a block         -> pushBlock >> BStmt a <$> checkBlock typ block
@@ -143,30 +147,30 @@ checkStm typ stmt = case stmt of
           checkC ctor a expr st =
               ctor <$> checkExp (Bool a) expr <*> checkR st
 
-checkVoid :: Type a -> Eval ()
+checkVoid :: Type ASTAnots -> Eval ()
 checkVoid frtyp = unless (void frtyp == Void ()) $
     wrongRetTyp (Void ()) $ void frtyp
 
-checkIdentExp :: Ident -> Expr a -> Eval (Expr a)
+checkIdentExp :: Ident -> Expr ASTAnots -> Eval (Expr ASTAnots)
 checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
 
-checkDecls :: Type a -> [Item a] -> Eval [Item a]
+checkDecls :: Type ASTAnots -> [Item ASTAnots] -> Eval [Item ASTAnots]
 checkDecls vtyp = mapM single
     where single item = checkDeclItem vtyp item <*
                         extendVar' varAlreadyDef (itemToVar vtyp item)
 
-checkDeclItem :: Type a -> Item a -> Eval (Item a)
+checkDeclItem :: Type ASTAnots -> Item ASTAnots -> Eval (Item ASTAnots)
 checkDeclItem vtyp (Init a ident expr) = Init a ident <$> checkExp vtyp expr
 checkDeclItem _    item@(NoInit a _)   = return item
 
-checkExp :: Type a -> Expr a -> Eval (Expr a)
+checkExp :: Type ASTAnots -> Expr ASTAnots -> Eval (Expr ASTAnots)
 checkExp texpected expr = do
     (expr', tactual) <- inferExp expr
     if void texpected == void tactual
         then return expr'
         else wrongExpTyp (void expr) (void texpected) (void tactual)
 
-checkIdent :: [Type a] -> Ident -> Eval Ident
+checkIdent :: [Type ASTAnots] -> Ident -> Eval Ident
 checkIdent types ident = do
     vtyp <- lookupVarE ident
     if (void vtyp) `elem` (void <$> types)
@@ -177,7 +181,7 @@ checkIdent types ident = do
 -- Type inference:
 --------------------------------------------------------------------------------
 
-inferExp :: Expr a -> Eval (Expr a, Type a)
+inferExp :: Expr ASTAnots -> Eval (Expr ASTAnots, Type ASTAnots)
 inferExp expr = case expr of
     EVar a ident   -> (EVar a ident,) <$> lookupVarE ident
     EString a  v   -> return (EString a v, ConstStr a)
@@ -188,44 +192,48 @@ inferExp expr = case expr of
     EApp a ident e -> first (EApp a ident) <$> inferFun ident e
     Neg a e        -> inferUnary [Int a, Doub a] e
     Not a e        -> inferUnary [Bool a] e
-    EMul a l op r  -> inferBin (`EMul` op) (mulOp op)  l r
-    EAdd a l op r  -> inferBin (`EAdd` op) [Int a, Doub a] l r
-    ERel a l op r  -> second (const Bool a) <$> inferBin (`ERel` op) (relOp op) l r
+    EMul a l op r  -> inferBin (makeBin EMul a op) (mulOp op)  l r
+    EAdd a l op r  -> inferBin (makeBin EAdd a op) [Int a, Doub a] l r
+    ERel a l op r  -> second (const $ Bool a) <$>
+                      inferBin (makeBin ERel a op) (relOp op) l r
     EAnd a l r     -> inferBin (EAnd a)    [Bool a]    l r
     EOr  a l r     -> inferBin (EOr a)     [Bool a]    l r
 
-inferBin :: (Expr a -> Expr a -> Expr a)
-         -> [Type a] -> Expr a -> Expr a -> Eval (Expr a, Type a)
+inferBin :: (Expr ASTAnots -> Expr ASTAnots -> Expr ASTAnots)
+         -> [Type ASTAnots]
+         -> Expr ASTAnots
+         -> Expr ASTAnots
+         -> Eval (Expr ASTAnots, Type ASTAnots)
 inferBin op accept le re = first (uncurry op) <$> inferBinary accept le re
 
-relOp :: RelOp a -> [Type a]
-relOp oper | oper `elem` [NE, EQU] = [Int, Doub, Bool]
-           | otherwise             = [Int, Doub]
+relOp :: RelOp ASTAnots -> [Type ASTAnots]
+relOp oper | oper `elem` applyEA [NE, EQU] = applyEA [Int, Doub, Bool]
+           | otherwise                     = applyEA [Int, Doub]
 
-mulOp :: MulOp a -> [Type a]
-mulOp oper | oper == Mod = [Int]
-           | otherwise   = [Int, Doub]
+mulOp :: MulOp ASTAnots -> [Type ASTAnots]
+mulOp oper | oper == Mod emptyAnot = applyEA [Int]
+           | otherwise             = applyEA [Int, Doub]
 
-inferBinary :: [Type a] -> Expr a -> Expr a -> Eval ((Expr a, Expr a), Type a)
+inferBinary :: [Type ASTAnots] -> Expr ASTAnots -> Expr ASTAnots -> Eval ((Expr ASTAnots, Expr ASTAnots), Type ASTAnots)
 inferBinary types exprl exprr = do
     (exprl', typl) <- inferExp exprl
     (exprr', typr) <- inferExp exprr
-    if void typl == void typr && (void typl) `elem` (void <$> types)
+    if typl == typr && typl `elem` types
         then return ((exprl', exprr'), typl)
-        else wrongBinExp (void exprl) (void exprr) (void typl) (void typr)
+        else wrongBinExp exprl exprr typl typr
 
-inferUnary :: [Type a] -> Expr a -> Eval (Expr a, Type a)
+inferUnary :: [Type ASTAnots] -> Expr ASTAnots -> Eval (Expr ASTAnots, Type ASTAnots)
 inferUnary types expr = do
     r@(_, etyp) <- inferExp expr
-    if (void etyp) `elem` (void <$> types)
+    if etyp `elem` types
         then return r
-        else wrongUnaryExp (void expr) (void <$> types) (void etyp)
+        else wrongUnaryExp expr types etyp
 
-inferFun :: Ident -> [Expr a] -> Eval ([Expr a], Type a)
+inferFun :: Ident -> [Expr ASTAnots] -> Eval ([Expr ASTAnots], Type ASTAnots)
 inferFun ident exprs = do
     FunSig texpected rtype <- lookupFunE ident
     (exprs', tactual)      <- mapAndUnzipM inferExp exprs
-    if (void texpected) == (void tactual)
+    if texpected == tactual
         then return (exprs', rtype)
         else wrongArgsTyp ident texpected tactual
 
@@ -236,5 +244,5 @@ inferFun ident exprs = do
 lookupFunE :: Ident -> Eval FunSig
 lookupFunE = lookupFun' funNotDef
 
-lookupVarE :: Ident -> Eval (Type ())
+lookupVarE :: Ident -> Eval (Type ASTAnots)
 lookupVarE = lookupVar' varNotDef

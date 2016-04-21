@@ -39,7 +39,7 @@ import Javalette.ErrM
 import Frontend.Types
 
 -- | 'parseProgram': statefully parses a Javalette program into AST.
-parseProgram :: String -> Eval Program
+parseProgram :: String -> Eval (Program ())
 parseProgram code = do
     infoln Parser ["Attempting to parse with:", code]
     case pProgram $ myLexer code of

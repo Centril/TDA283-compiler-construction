@@ -44,7 +44,7 @@ module Frontend.Types (
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
     functions, contexts, toFunId, toFunSig,
-    toWillExecute, showKind,
+    toWillExecute, showKind, emptyAnot,
     _LBool, _LInt, _LDouble, _LString
 ) where
 
@@ -109,23 +109,27 @@ data ASTAnot = AType     { _anotType     :: Type ASTAnot } |
                AWillExec { _anotWillExec :: WillExecute  } |
                ACExprLit { _anotCExprLit :: Literal      } |
                AKind     { _anotKind     :: Kind         }
+    deriving (Eq, Show, Read)
 
 -- | 'ASTAnot': Annotations added to a 'Program' AST which can be safely
 -- 'void':ed away.
 type ASTAnots = [ASTAnot]
+
+emptyAnot :: ASTAnots
+emptyAnot = []
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:
 --------------------------------------------------------------------------------
 
 -- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident (Type ())
+type Context = Map Ident (Type ASTAnots)
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
 
 -- | 'Var': a variable specified by its 'Ident' and 'Type'.
-data Var = Var { vident :: Ident, vtype :: Type ()}
+data Var = Var { vident :: Ident, vtype :: Type ASTAnots}
     deriving (Eq, Show, Read)
 
 --------------------------------------------------------------------------------
@@ -134,7 +138,7 @@ data Var = Var { vident :: Ident, vtype :: Type ()}
 
 -- | 'FunSig': Signature of a function,
 -- argument list (types) followed by return type.
-data FunSig = FunSig { targs :: [Type ()], tret :: Type ()}
+data FunSig = FunSig { targs :: [Type ASTAnots], tret :: Type ASTAnots}
     deriving (Eq, Show, Read)
 
 -- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
@@ -144,10 +148,14 @@ data FunId = FunId { fident :: Ident, fsig :: FunSig}
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
 
-toFunSig :: ([Type ()], Type ()) -> FunSig
-toFunSig (args, ret) = FunSig args ret
+applyEA = fmap ($ emptyAnot)
 
-toFunId :: (String, ([Type ()], Type ())) -> FunId
+toFunSig :: ([ASTAnots -> Type ASTAnots], ASTAnots -> Type ASTAnots)
+         -> FunSig
+toFunSig (args, ret) = FunSig (applyEA args) (ret emptyAnot)
+
+toFunId :: (String, ([ASTAnots -> Type ASTAnots], ASTAnots -> Type ASTAnots))
+        -> FunId
 toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
 
 --------------------------------------------------------------------------------
@@ -176,10 +184,10 @@ popBlock = contexts %= (fromMaybe [] . tailMay)
 
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
 -- the identifier is '  return':ed, otherwise onErr is given the (var = 'Ident').
-lookupVar' :: (Ident -> Eval (Type ())) -> Ident -> Eval (Type ())
+lookupVar' :: (Ident -> Eval (Type ASTAnots)) -> Ident -> Eval (Type ASTAnots)
 lookupVar' onErr var = uses contexts (_lookupVar var) >>= maybeErr (onErr var)
 
-_lookupVar :: Ident -> Contexts -> Maybe (Type ())
+_lookupVar :: Ident -> Contexts -> Maybe (Type ASTAnots)
 _lookupVar = mfind . Map.lookup
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it

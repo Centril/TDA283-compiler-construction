@@ -38,18 +38,18 @@ import Javalette.Abs
 identStr :: Ident -> String
 identStr (Ident i) = i
 
-argToVar :: Arg a -> Var
-argToVar (Arg _ typ ident) = Var ident $ void typ
+argToVar :: Arg ASTAnots -> Var
+argToVar (Arg _ typ ident) = Var ident typ
 
-argType :: Arg a -> Type a
+argType :: Arg ASTAnots -> Type ASTAnots
 argType (Arg _ t _) = t
 
-itemIdent :: Item a -> Ident
+itemIdent :: Item ASTAnots -> Ident
 itemIdent (Init _ i _) = i
 itemIdent (NoInit _ i) = i
 
-itemToVar :: Type a -> Item a -> Var
-itemToVar typ = flip Var (void typ) . itemIdent
+itemToVar :: Type ASTAnots -> Item ASTAnots -> Var
+itemToVar typ = flip Var typ . itemIdent
 
-progFuns :: Program a -> [TopDef a]
+progFuns :: Program ASTAnots -> [TopDef ASTAnots]
 progFuns (Program _ fns) = fns
