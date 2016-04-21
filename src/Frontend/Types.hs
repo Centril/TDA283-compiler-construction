@@ -36,19 +36,12 @@ module Frontend.Types (
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
     Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,
-    ASTAnot(..), ASTAnots,
-    Kind(..), WillExecute(..), Literal(..),
-
-    ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
-    TypeA, ExprA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
     runEval, warn, warn', warnln, info, info', infoln, err, err', errln,
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
-    functions, contexts, toFunId, toFunSig,
-    toWillExecute, showKind, emptyAnot, applyEA,
-    _LBool, _LInt, _LDouble, _LString
+    functions, contexts, toFunId, toFunSig
 ) where
 
 import Safe
@@ -73,85 +66,20 @@ import Utils.Monad
 
 import Javalette.Abs
 
---------------------------------------------------------------------------------
--- AST Annotations:
---------------------------------------------------------------------------------
-
--- | 'Kind': Models kinds of 'Type' in the Javalette language.
--- 'KConcrete' denotes the concrete kind,
--- 'KArrow' denotes a type constructor from one kind to another.
--- 'KConstraint' is special and used for constraints on types.
---
--- Note: for now, all types live in 'KConcrete'.
-data Kind = KConcrete | KConstraint |
-            KArrow { kaFrom :: Kind, kaTo :: Kind }
-    deriving (Eq, Show, Read, Ord)
-
-showKind :: Kind -> String
-showKind KConcrete    = "*"
-showKind KConstraint  = "Constraint"
-showKind (KArrow f t) = unwords [showf, "->", show t]
-    where showf   = case f of
-                    KArrow _ _ -> concat ["(", show f, ")"]
-                    _          -> show f
-
-data Literal = LBool Bool | LInt Integer | LDouble Double | LString String
-    deriving (Eq, Show, Read, Ord)
-
-makePrisms ''Literal
-
-data WillExecute = Always | Never | Unknown
-    deriving (Eq, Show, Read, Ord, Enum)
-
-toWillExecute :: Maybe Bool -> WillExecute
-toWillExecute (Just True)  = Always
-toWillExecute (Just False) = Never
-toWillExecute Nothing      = Unknown
-
-data ASTAnot = AType     { _anotType     :: Type ASTAnot } |
-               AWillExec { _anotWillExec :: WillExecute  } |
-               ACExprLit { _anotCExprLit :: Literal      } |
-               AKind     { _anotKind     :: Kind         }
-    deriving (Eq, Show, Read)
-
--- | 'ASTAnot': Annotations added to a 'Program' AST which can be safely
--- 'void':ed away.
-type ASTAnots = [ASTAnot]
-
-emptyAnot :: ASTAnots
-emptyAnot = []
-
-applyEA :: [ASTAnots -> b] -> [b]
-applyEA = fmap ($ emptyAnot)
-
---------------------------------------------------------------------------------
--- AST Annotations, Aliases:
---------------------------------------------------------------------------------
-
-type ProgramA = Program ASTAnots
-type TopDefA  = TopDef  ASTAnots
-type ArgA     = Arg     ASTAnots
-type BlockA   = Block   ASTAnots
-type StmtA    = Stmt    ASTAnots
-type ItemA    = Item    ASTAnots
-type TypeA    = Type    ASTAnots
-type ExprA    = Expr    ASTAnots
-type AddOpA   = AddOp   ASTAnots
-type MulOpA   = MulOp   ASTAnots
-type RelOpA   = RelOp   ASTAnots
+import Frontend.Annotations
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:
 --------------------------------------------------------------------------------
 
 -- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident (Type ASTAnots)
+type Context = Map Ident TypeA
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
 
 -- | 'Var': a variable specified by its 'Ident' and 'Type'.
-data Var = Var { vident :: Ident, vtype :: Type ASTAnots}
+data Var = Var { vident :: Ident, vtype :: TypeA }
     deriving (Eq, Show, Read)
 
 --------------------------------------------------------------------------------
@@ -160,7 +88,7 @@ data Var = Var { vident :: Ident, vtype :: Type ASTAnots}
 
 -- | 'FunSig': Signature of a function,
 -- argument list (types) followed by return type.
-data FunSig = FunSig { targs :: [Type ASTAnots], tret :: Type ASTAnots}
+data FunSig = FunSig { targs :: [TypeA], tret :: TypeA}
     deriving (Eq, Show, Read)
 
 -- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
@@ -170,11 +98,11 @@ data FunId = FunId { fident :: Ident, fsig :: FunSig}
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
 
-toFunSig :: ([ASTAnots -> Type ASTAnots], ASTAnots -> Type ASTAnots)
+toFunSig :: ([ASTAnots -> TypeA], ASTAnots -> TypeA)
          -> FunSig
 toFunSig (args, ret) = FunSig (applyEA args) (ret emptyAnot)
 
-toFunId :: (String, ([ASTAnots -> Type ASTAnots], ASTAnots -> Type ASTAnots))
+toFunId :: (String, ([ASTAnots -> TypeA], ASTAnots -> TypeA))
         -> FunId
 toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
 
@@ -204,10 +132,10 @@ popBlock = contexts %= (fromMaybe [] . tailMay)
 
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
 -- the identifier is '  return':ed, otherwise onErr is given the (var = 'Ident').
-lookupVar' :: (Ident -> Eval (Type ASTAnots)) -> Ident -> Eval (Type ASTAnots)
+lookupVar' :: (Ident -> Eval TypeA) -> Ident -> Eval TypeA
 lookupVar' onErr var = uses contexts (_lookupVar var) >>= maybeErr (onErr var)
 
-_lookupVar :: Ident -> Contexts -> Maybe (Type ASTAnots)
+_lookupVar :: Ident -> Contexts -> Maybe TypeA
 _lookupVar = mfind . Map.lookup
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it

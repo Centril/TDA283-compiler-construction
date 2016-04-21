@@ -29,25 +29,26 @@ Querying functions on AST in Javalette compiler frontend
 -}
 module Frontend.Query where
 
-import Frontend.Types
-
 import Javalette.Abs
+
+import Frontend.Annotations
+import Frontend.Types
 
 identStr :: Ident -> String
 identStr (Ident i) = i
 
-argToVar :: Arg ASTAnots -> Var
+argToVar :: ArgA -> Var
 argToVar (Arg _ typ ident) = Var ident typ
 
-argType :: Arg ASTAnots -> Type ASTAnots
+argType :: ArgA -> TypeA
 argType (Arg _ t _) = t
 
-itemIdent :: Item ASTAnots -> Ident
+itemIdent :: ItemA -> Ident
 itemIdent (Init _ i _) = i
 itemIdent (NoInit _ i) = i
 
-itemToVar :: Type ASTAnots -> Item ASTAnots -> Var
+itemToVar :: TypeA -> ItemA -> Var
 itemToVar typ = flip Var typ . itemIdent
 
-progFuns :: Program ASTAnots -> [TopDef ASTAnots]
+progFuns :: ProgramA -> [TopDefA]
 progFuns (Program _ fns) = fns

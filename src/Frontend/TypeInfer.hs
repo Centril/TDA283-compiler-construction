@@ -39,6 +39,7 @@ import Control.Arrow
 
 import Javalette.Abs
 
+import Frontend.Annotations
 import Frontend.Types
 import Frontend.Error
 import Frontend.Common
@@ -58,15 +59,12 @@ inferExp expr = case expr of
     EApp a ident e -> first (EApp a ident) <$> inferFun ident e
     Neg a e        -> inferUnary [Int a, Doub a] e
     Not a e        -> inferUnary [Bool a] e
-    EMul a l op r  -> inferBin (makeBin EMul a op) (mulOp op)  l r
-    EAdd a l op r  -> inferBin (makeBin EAdd a op) [Int a, Doub a] l r
+    EMul a l op r  -> inferBin ((flip . EMul) a op) (mulOp op)      l r
+    EAdd a l op r  -> inferBin ((flip . EAdd) a op) [Int a, Doub a] l r
     ERel a l op r  -> second (const $ Bool a) <$>
-                      inferBin (makeBin ERel a op) (relOp op) l r
-    EAnd a l r     -> inferBin (EAnd a)    [Bool a]    l r
-    EOr  a l r     -> inferBin (EOr a)     [Bool a]    l r
-
-makeBin :: (t -> a -> b -> c) -> t -> b -> a -> c
-makeBin f a = flip (f a)
+                      inferBin ((flip . ERel) a op) (relOp op)      l r
+    EAnd a l r     -> inferBin (EAnd a)             [Bool a]        l r
+    EOr  a l r     -> inferBin (EOr a)              [Bool a]        l r
 
 inferBin :: (ExprA -> ExprA -> ExprA)
          -> [TypeA]

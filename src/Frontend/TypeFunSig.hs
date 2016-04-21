@@ -36,6 +36,7 @@ import Control.Monad
 
 import Javalette.Abs
 
+import Frontend.Annotations
 import Frontend.Types
 import Frontend.Query
 import Frontend.Error

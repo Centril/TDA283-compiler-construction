@@ -21,6 +21,7 @@ import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
 import Frontend.ParseLex
+import Frontend.Annotations
 import Frontend.Types hiding (err)
 import Frontend.TypeCheck
 
