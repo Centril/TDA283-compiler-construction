@@ -42,7 +42,7 @@ import Javalette.Abs
 import Frontend.Types
 import Frontend.Query
 import Frontend.Error
-
+import Frontend.TypeInfer
 import Frontend.ReturnCheck
 
 import Utils.Monad
@@ -173,76 +173,3 @@ checkIdent types ident = do
     if vtyp `elem` types
         then return ident
         else wrongIdentTyp ident types vtyp
-
---------------------------------------------------------------------------------
--- Type inference:
---------------------------------------------------------------------------------
-
-inferExp :: ExprA -> Eval (ExprA, TypeA)
-inferExp expr = case expr of
-    EVar a ident   -> (EVar a ident,) <$> lookupVarE ident
-    EString a  v   -> return (EString a v, ConstStr a)
-    ELitInt a v    -> return (ELitInt a v, Int a     )
-    ELitDoub a v   -> return (ELitDoub a v, Doub a   )
-    ELitTrue a     -> return (ELitTrue a  , Bool a   )
-    ELitFalse a    -> return (ELitFalse a , Bool a   )
-    EApp a ident e -> first (EApp a ident) <$> inferFun ident e
-    Neg a e        -> inferUnary [Int a, Doub a] e
-    Not a e        -> inferUnary [Bool a] e
-    EMul a l op r  -> inferBin (makeBin EMul a op) (mulOp op)  l r
-    EAdd a l op r  -> inferBin (makeBin EAdd a op) [Int a, Doub a] l r
-    ERel a l op r  -> second (const $ Bool a) <$>
-                      inferBin (makeBin ERel a op) (relOp op) l r
-    EAnd a l r     -> inferBin (EAnd a)    [Bool a]    l r
-    EOr  a l r     -> inferBin (EOr a)     [Bool a]    l r
-
-makeBin :: (t -> a -> b -> c) -> t -> b -> a -> c
-makeBin f a = flip (f a)
-
-inferBin :: (ExprA -> ExprA -> ExprA)
-         -> [TypeA]
-         -> ExprA
-         -> ExprA
-         -> Eval (ExprA, TypeA)
-inferBin op accept le re = first (uncurry op) <$> inferBinary accept le re
-
-relOp :: RelOpA -> [TypeA]
-relOp oper | oper `elem` applyEA [NE, EQU] = applyEA [Int, Doub, Bool]
-           | otherwise                     = applyEA [Int, Doub]
-
-mulOp :: MulOpA -> [TypeA]
-mulOp oper | oper == Mod emptyAnot = applyEA [Int]
-           | otherwise             = applyEA [Int, Doub]
-
-inferBinary :: [TypeA] -> ExprA -> ExprA -> Eval ((ExprA, ExprA), TypeA)
-inferBinary types exprl exprr = do
-    (exprl', typl) <- inferExp exprl
-    (exprr', typr) <- inferExp exprr
-    if typl == typr && typl `elem` types
-        then return ((exprl', exprr'), typl)
-        else wrongBinExp exprl exprr typl typr
-
-inferUnary :: [TypeA] -> ExprA -> Eval (ExprA, TypeA)
-inferUnary types expr = do
-    r@(_, etyp) <- inferExp expr
-    if etyp `elem` types
-        then return r
-        else wrongUnaryExp expr types etyp
-
-inferFun :: Ident -> [ExprA] -> Eval ([ExprA], TypeA)
-inferFun ident exprs = do
-    FunSig texpected rtype <- lookupFunE ident
-    (exprs', tactual)      <- mapAndUnzipM inferExp exprs
-    if texpected == tactual
-        then return (exprs', rtype)
-        else wrongArgsTyp ident texpected tactual
-
---------------------------------------------------------------------------------
--- Lookups:
---------------------------------------------------------------------------------
-
-lookupFunE :: Ident -> Eval FunSig
-lookupFunE = lookupFun' funNotDef
-
-lookupVarE :: Ident -> Eval TypeA
-lookupVarE = lookupVar' varNotDef
