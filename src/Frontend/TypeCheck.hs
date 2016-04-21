@@ -35,7 +35,6 @@ module Frontend.TypeCheck (
 ) where
 
 import Control.Monad
-import Control.Arrow
 
 import Javalette.Abs
 
