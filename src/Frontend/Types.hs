@@ -44,7 +44,7 @@ module Frontend.Types (
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
     functions, contexts, toFunId, toFunSig,
-    toWillExecute,
+    toWillExecute, showKind,
     _LBool, _LInt, _LDouble, _LString
 ) where
 
@@ -84,6 +84,7 @@ data Kind = KConcrete | KConstraint |
             KArrow { kaFrom :: Kind, kaTo :: Kind }
     deriving (Eq, Show, Read, Ord)
 
+showKind :: Kind -> String
 showKind KConcrete    = "*"
 showKind KConstraint  = "Constraint"
 showKind (KArrow f t) = unwords [showf, "->", show t]

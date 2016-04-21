@@ -106,7 +106,7 @@ toFnSigId (FnDef a ret ident args _) =
 -- Type checking:
 --------------------------------------------------------------------------------
 
-checkProg :: Program a -> Eval (Program a)
+checkProg :: Program () -> Eval (Program a)
 checkProg (Program a funs) = Program a <$> mapM checkFunType funs
 
 checkFunType :: TopDef a -> Eval (TopDef a)
