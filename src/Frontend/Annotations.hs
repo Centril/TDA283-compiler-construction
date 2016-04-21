@@ -27,7 +27,6 @@ Portability : ALL
 
 AST Annotations in Javalette compiler.
 -}
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Frontend.Annotations (
@@ -43,25 +42,7 @@ module Frontend.Annotations (
     _LBool, _LInt, _LDouble, _LString
 ) where
 
-import Safe
-
-import Data.Maybe
-
-import Data.Map (Map)
-import qualified Data.Map as Map
-
-import Control.Monad()
-import Control.Applicative()
-import Control.Monad.Identity
-import Control.Monad.State
-import Control.Monad.Except
-import Control.Monad.Writer
-
 import Control.Lens hiding (Context, contexts)
-
-import Utils.Pointless
-import Utils.Foldable
-import Utils.Monad
 
 import Javalette.Abs
 

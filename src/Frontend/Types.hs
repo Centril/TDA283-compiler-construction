@@ -27,7 +27,7 @@ Portability : ALL
 
 Types for Frontend of Javalette compiler.
 -}
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Frontend.Types (

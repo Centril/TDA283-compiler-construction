@@ -29,7 +29,6 @@ Return checker for Javalette compiler,
 part of type checker that makes sure all branches
 that need do return.
 -}
-
 module Frontend.ReturnCheck (
     -- * Operations
     returnCheck
