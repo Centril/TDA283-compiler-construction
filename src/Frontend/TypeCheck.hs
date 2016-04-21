@@ -54,7 +54,7 @@ applyEA = fmap ($ emptyAnot)
 -- API:
 --------------------------------------------------------------------------------
 
-typeCheck :: Program () -> Eval (Program ASTAnots)
+typeCheck :: Program () -> Eval ProgramA
 typeCheck prog0 = do
     let prog1 = fmap (const emptyAnot) prog0
     -- P1: collect functions:
@@ -85,7 +85,7 @@ mainCorrect = lookupFunE mainId >>=
 -- Collecting function signatures:
 --------------------------------------------------------------------------------
 
-allFunctions :: Program ASTAnots -> Eval ()
+allFunctions :: ProgramA -> Eval ()
 allFunctions = collectFuns . (predefFuns ++) . extractFunIds
 
 collectFuns :: [FunId] -> Eval ()
@@ -99,10 +99,10 @@ predefFuns = map toFunId
      ("readInt",     ([        ], Int )),
      ("readDouble",  ([        ], Doub))]
 
-extractFunIds :: Program ASTAnots -> [FunId]
+extractFunIds :: ProgramA -> [FunId]
 extractFunIds = map toFnSigId . progFuns
 
-toFnSigId :: TopDef ASTAnots -> FunId
+toFnSigId :: TopDefA -> FunId
 toFnSigId (FnDef _ ret ident args _) =
     FunId ident $ FunSig (map argType args) ret
 
@@ -110,10 +110,10 @@ toFnSigId (FnDef _ ret ident args _) =
 -- Type checking:
 --------------------------------------------------------------------------------
 
-checkProg :: Program ASTAnots -> Eval (Program ASTAnots)
+checkProg :: ProgramA -> Eval ProgramA
 checkProg (Program a funs) = Program a <$> mapM checkFunType funs
 
-checkFunType :: TopDef ASTAnots -> Eval (TopDef ASTAnots)
+checkFunType :: TopDefA -> Eval TopDefA
 checkFunType (FnDef a rtype ident args block) = do
     pushBlock
     collectArgVars args

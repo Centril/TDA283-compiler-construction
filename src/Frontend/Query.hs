@@ -29,8 +29,6 @@ Querying functions on AST in Javalette compiler frontend
 -}
 module Frontend.Query where
 
-import Control.Monad
-
 import Frontend.Types
 
 import Javalette.Abs
