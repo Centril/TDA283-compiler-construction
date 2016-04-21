@@ -119,14 +119,14 @@ checkFunType (FnDef a rtype ident args block) = do
 collectArgVars :: [ArgA] -> Eval ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
-checkBlock :: TypeA -> BlockA -> Eval (BlockA)
+checkBlock :: TypeA -> BlockA -> Eval BlockA
 checkBlock frtyp (Block a block) =
     Block a <$> checkStms frtyp block <* popBlock
 
 checkStms :: TypeA -> [StmtA] -> Eval [StmtA]
 checkStms = mapM . checkStm
 
-checkStm :: TypeA -> StmtA -> Eval (StmtA)
+checkStm :: TypeA -> StmtA -> Eval StmtA
 checkStm typ stmt = case stmt of
     Empty _               -> return stmt
     BStmt a block         -> pushBlock >> BStmt a <$> checkBlock typ block
@@ -148,7 +148,7 @@ checkVoid :: TypeA -> Eval ()
 checkVoid frtyp = unless (void frtyp == Void ()) $
     wrongRetTyp (Void ()) $ void frtyp
 
-checkIdentExp :: Ident -> ExprA -> Eval (ExprA)
+checkIdentExp :: Ident -> ExprA -> Eval ExprA
 checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
 
 checkDecls :: TypeA -> [ItemA] -> Eval [ItemA]
@@ -156,23 +156,23 @@ checkDecls vtyp = mapM single
     where single item = checkDeclItem vtyp item <*
                         extendVar' varAlreadyDef (itemToVar vtyp item)
 
-checkDeclItem :: TypeA -> ItemA -> Eval (ItemA)
+checkDeclItem :: TypeA -> ItemA -> Eval ItemA
 checkDeclItem vtyp (Init a ident expr) = Init a ident <$> checkExp vtyp expr
 checkDeclItem _    item@(NoInit _ _)   = return item
 
-checkExp :: TypeA -> ExprA -> Eval (ExprA)
+checkExp :: TypeA -> ExprA -> Eval ExprA
 checkExp texpected expr = do
     (expr', tactual) <- inferExp expr
-    if void texpected == void tactual
+    if texpected == tactual
         then return expr'
-        else wrongExpTyp (void expr) (void texpected) (void tactual)
+        else wrongExpTyp expr texpected tactual
 
 checkIdent :: [TypeA] -> Ident -> Eval Ident
 checkIdent types ident = do
     vtyp <- lookupVarE ident
-    if (void vtyp) `elem` (void <$> types)
+    if vtyp `elem` types
         then return ident
-        else wrongIdentTyp ident (void <$> types) (void vtyp)
+        else wrongIdentTyp ident types vtyp
 
 --------------------------------------------------------------------------------
 -- Type inference:
@@ -244,5 +244,5 @@ inferFun ident exprs = do
 lookupFunE :: Ident -> Eval FunSig
 lookupFunE = lookupFun' funNotDef
 
-lookupVarE :: Ident -> Eval (TypeA)
+lookupVarE :: Ident -> Eval TypeA
 lookupVarE = lookupVar' varNotDef
