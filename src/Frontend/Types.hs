@@ -36,12 +36,16 @@ module Frontend.Types (
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
     Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,
+    ASTAnot(..), ASTAnots,
+    Kind(..), WillExecute(..), Literal(..),
 
     -- * Operations
     runEval, warn, warn', warnln, info, info', infoln, err, err', errln,
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
-    functions, contexts, toFunId, toFunSig
+    functions, contexts, toFunId, toFunSig,
+    toWillExecute,
+    _LBool, _LInt, _LDouble, _LString
 ) where
 
 import Safe
@@ -65,6 +69,49 @@ import Utils.Foldable
 import Utils.Monad
 
 import Javalette.Abs
+
+--------------------------------------------------------------------------------
+-- AST Annotations:
+--------------------------------------------------------------------------------
+
+-- | 'Kind': Models kinds of 'Type' in the Javalette language.
+-- 'KConcrete' denotes the concrete kind,
+-- 'KArrow' denotes a type constructor from one kind to another.
+-- 'KConstraint' is special and used for constraints on types.
+--
+-- Note: for now, all types live in 'KConcrete'.
+data Kind = KConcrete | KConstraint |
+            KArrow { kaFrom :: Kind, kaTo :: Kind }
+    deriving (Eq, Show, Read, Ord)
+
+showKind KConcrete    = "*"
+showKind KConstraint  = "Constraint"
+showKind (KArrow f t) = unwords [showf, "->", show t]
+    where showf   = case f of
+                    KArrow _ _ -> concat ["(", show f, ")"]
+                    _          -> show f
+
+data Literal = LBool Bool | LInt Integer | LDouble Double | LString String
+    deriving (Eq, Show, Read, Ord)
+
+makePrisms ''Literal
+
+data WillExecute = Always | Never | Unknown
+    deriving (Eq, Show, Read, Ord, Enum)
+
+toWillExecute :: Maybe Bool -> WillExecute
+toWillExecute (Just True)  = Always
+toWillExecute (Just False) = Never
+toWillExecute Nothing      = Unknown
+
+data ASTAnot = AType     { _anotType     :: Type ASTAnot } |
+               AWillExec { _anotWillExec :: WillExecute  } |
+               ACExprLit { _anotCExprLit :: Literal      } |
+               AKind     { _anotKind     :: Kind         }
+
+-- | 'ASTAnot': Annotations added to a 'Program' AST which can be safely
+-- 'void':ed away.
+type ASTAnots = [ASTAnot]
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:
@@ -218,7 +265,6 @@ data LogLevel = Info | Warn
 data LogItem = LogItem {
     logLvl :: LogLevel, logPhase :: Phase, logMsg :: String }
     deriving (Eq, Show, Read)
-
 
 errln, err' :: Phase -> [String] -> Eval a
 errln = unlines2nd err

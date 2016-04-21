@@ -51,7 +51,7 @@ import Utils.Monad
 -- API:
 --------------------------------------------------------------------------------
 
-typeCheck :: Program a -> Eval (Program a)
+typeCheck :: Program () -> Eval (Program ASTAnots)
 typeCheck prog1 = do
     -- P1: collect functions:
     info TypeChecker   "Collecting all functions"

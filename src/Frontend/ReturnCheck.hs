@@ -30,8 +30,6 @@ part of type checker that makes sure all branches
 that need do return.
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
-
 module Frontend.ReturnCheck (
     -- * Operations
     returnCheck
@@ -51,19 +49,6 @@ import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Error
-
-data Literal = LBool Bool | LInt Integer | LDouble Double | LString String
-    deriving (Eq, Show, Read, Ord)
-
-makePrisms ''Literal
-
-data WillExecute = Always | Never | Unknown
-    deriving (Eq, Show, Read, Ord, Enum)
-
-toWillExecute :: Maybe Bool -> WillExecute
-toWillExecute (Just True)  = Always
-toWillExecute (Just False) = Never
-toWillExecute Nothing      = Unknown
 
 returnCheck :: Program a -> Eval (Program a)
 returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs
