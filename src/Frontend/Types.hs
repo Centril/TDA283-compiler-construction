@@ -47,7 +47,7 @@ module Frontend.Types (
     initialEnv, pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
     functions, contexts, toFunId, toFunSig,
-    toWillExecute, showKind, emptyAnot,
+    toWillExecute, showKind, emptyAnot, applyEA,
     _LBool, _LInt, _LDouble, _LString
 ) where
 
@@ -121,6 +121,9 @@ type ASTAnots = [ASTAnot]
 emptyAnot :: ASTAnots
 emptyAnot = []
 
+applyEA :: [ASTAnots -> b] -> [b]
+applyEA = fmap ($ emptyAnot)
+
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:
 --------------------------------------------------------------------------------
@@ -150,8 +153,6 @@ data FunId = FunId { fident :: Ident, fsig :: FunSig}
 
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
-
-applyEA = fmap ($ emptyAnot)
 
 toFunSig :: ([ASTAnots -> Type ASTAnots], ASTAnots -> Type ASTAnots)
          -> FunSig

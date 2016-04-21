@@ -47,9 +47,6 @@ import Frontend.ReturnCheck
 
 import Utils.Monad
 
-makeBin f a = flip (f a)
-applyEA = fmap ($ emptyAnot)
-
 --------------------------------------------------------------------------------
 -- API:
 --------------------------------------------------------------------------------
@@ -198,6 +195,9 @@ inferExp expr = case expr of
                       inferBin (makeBin ERel a op) (relOp op) l r
     EAnd a l r     -> inferBin (EAnd a)    [Bool a]    l r
     EOr  a l r     -> inferBin (EOr a)     [Bool a]    l r
+
+makeBin :: (t -> a -> b -> c) -> t -> b -> a -> c
+makeBin f a = flip (f a)
 
 inferBin :: (ExprA -> ExprA -> ExprA)
          -> [TypeA]
