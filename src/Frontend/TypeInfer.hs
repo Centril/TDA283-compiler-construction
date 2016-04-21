@@ -31,8 +31,7 @@ Type inference for Javalette compiler.
 
 module Frontend.TypeInfer (
     -- * Operations
-    inferExp,
-    lookupFunE, lookupVarE
+    inferExp
 ) where
 
 import Control.Monad
@@ -42,6 +41,7 @@ import Javalette.Abs
 
 import Frontend.Types
 import Frontend.Error
+import Frontend.Common
 
 --------------------------------------------------------------------------------
 -- Type inference:
@@ -105,13 +105,3 @@ inferFun ident exprs = do
     if texpected == tactual
         then return (exprs', rtype)
         else wrongArgsTyp ident texpected tactual
-
---------------------------------------------------------------------------------
--- Lookups:
---------------------------------------------------------------------------------
-
-lookupFunE :: Ident -> Eval FunSig
-lookupFunE = lookupFun' funNotDef
-
-lookupVarE :: Ident -> Eval TypeA
-lookupVarE = lookupVar' varNotDef

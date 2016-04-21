@@ -27,8 +27,6 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-{-# LANGUAGE TupleSections #-}
-
 module Frontend.TypeCheck (
     -- * Operations
     typeCheck
@@ -41,6 +39,8 @@ import Javalette.Abs
 import Frontend.Types
 import Frontend.Query
 import Frontend.Error
+import Frontend.Common
+import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
 
@@ -65,42 +65,6 @@ typeCheck prog0 = do
     -- P4: return check the program.
     info ReturnChecker "Return checking the program"
     returnCheck prog2
-
---------------------------------------------------------------------------------
--- Checking for int main(void):
---------------------------------------------------------------------------------
-
-mainId :: Ident
-mainId = Ident "main"
-
-mainCorrect :: Eval ()
-mainCorrect = lookupFunE mainId >>=
-    flip unless wrongMainSig . (== FunSig [] (Int emptyAnot))
-
---------------------------------------------------------------------------------
--- Collecting function signatures:
---------------------------------------------------------------------------------
-
-allFunctions :: ProgramA -> Eval ()
-allFunctions = collectFuns . (predefFuns ++) . extractFunIds
-
-collectFuns :: [FunId] -> Eval ()
-collectFuns = mapM_ $ extendFun' funAlreadyDef
-
-predefFuns :: [FunId]
-predefFuns = map toFunId
-    [("printInt",    ([Int     ], Void)),
-     ("printDouble", ([Doub    ], Void)),
-     ("printString", ([ConstStr], Void)),
-     ("readInt",     ([        ], Int )),
-     ("readDouble",  ([        ], Doub))]
-
-extractFunIds :: ProgramA -> [FunId]
-extractFunIds = map toFnSigId . progFuns
-
-toFnSigId :: TopDefA -> FunId
-toFnSigId (FnDef _ ret ident args _) =
-    FunId ident $ FunSig (map argType args) ret
 
 --------------------------------------------------------------------------------
 -- Type checking:
