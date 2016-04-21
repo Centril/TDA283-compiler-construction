@@ -50,24 +50,24 @@ import Javalette.Abs
 import Frontend.Types
 import Frontend.Error
 
-returnCheck :: Program a -> Eval (Program a)
+returnCheck :: ProgramA -> Eval ProgramA
 returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs
 
-checkFunRet :: TopDef a -> Eval (TopDef a)
+checkFunRet :: TopDefA -> Eval TopDefA
 checkFunRet fun@(FnDef a rtype ident args block)
     | void rtype == Void () = return fun
     | otherwise     = FnDef a rtype ident args <<$> checkBlockTop ident block
 
-checkBlockTop :: Ident -> Block a -> Eval (Block a, Bool)
+checkBlockTop :: Ident -> BlockA -> Eval (BlockA, Bool)
 checkBlockTop fid block = do
     r@(_, hasRet) <- checkBlock fid block
     if hasRet then return r else insufficientFunRet fid
 
-checkBlock :: Ident -> Block a -> Eval (Block a, Bool)
+checkBlock :: Ident -> BlockA -> Eval (BlockA, Bool)
 checkBlock fid (Block a stmts) =
     (Block a *** or) <$> mapAndUnzipM (checkHasRet fid) stmts
 
-checkHasRet :: Ident -> Stmt a -> Eval (Stmt a, Bool)
+checkHasRet :: Ident -> StmtA -> Eval (StmtA, Bool)
 checkHasRet fid stmt = case stmt of
     Ret _ _               -> return (stmt, True)
     VRet _                -> return (stmt, True)
@@ -77,15 +77,16 @@ checkHasRet fid stmt = case stmt of
     CondElse a expr si se -> checkCondElse a fid expr si se
     _                     -> return (stmt, False)
 
-checkCond :: (Expr a -> Stmt a -> Stmt a) -> Ident
-          ->  Expr a -> Stmt a -> Eval (Stmt a, Bool)
+checkCond :: (ExprA -> StmtA -> StmtA) -> Ident
+          ->  ExprA -> StmtA -> Eval (StmtA, Bool)
 checkCond ctor fid expr stmt =
     case condLit mlit of
     Always -> checkRetWrap fid stmt $ ctor expr
     _      -> return (ctor expr stmt, False)
     where mlit = evalConstExpr expr
 
-checkCondElse :: a -> Ident -> Expr a -> Stmt a -> Stmt a -> Eval (Stmt a, Bool)
+checkCondElse :: ASTAnots -> Ident -> ExprA -> StmtA -> StmtA
+              -> Eval (StmtA, Bool)
 checkCondElse a fid expr si se =
     case condLit mlit of
     Always  -> checkRetWrap fid si $ flip ((CondElse a) expr) se
@@ -96,13 +97,13 @@ checkCondElse a fid expr si se =
         return (CondElse a expr si' se', siRet && seRet)
     where mlit = evalConstExpr expr
 
-checkRetWrap :: Ident -> Stmt a -> (Stmt a -> Stmt a) -> Eval (Stmt a, Bool)
+checkRetWrap :: Ident -> StmtA -> (StmtA -> StmtA) -> Eval (StmtA, Bool)
 checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
 
 condLit :: Maybe Literal -> WillExecute
 condLit mlit = toWillExecute $ mlit >>= (^? _LBool)
 
-evalConstExpr :: Expr a -> Maybe Literal
+evalConstExpr :: ExprA -> Maybe Literal
 evalConstExpr expr = case expr of
     EVar _ _     -> Nothing
     EApp _ _ _   -> Nothing
@@ -119,17 +120,17 @@ evalConstExpr expr = case expr of
     EAdd _ l o r -> evalAdd l o r
     ERel _ l o r -> evalRel l o r
 
-evalMul :: Expr a -> MulOp a -> Expr a -> Maybe Literal
+evalMul :: ExprA -> MulOpA -> ExprA -> Maybe Literal
 evalMul l o r = evalBinOp l r int doub
     where int  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LInt
           doub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LDouble
 
-evalAdd :: Expr a -> AddOp a -> Expr a -> Maybe Literal
+evalAdd :: ExprA -> AddOpA -> ExprA -> Maybe Literal
 evalAdd l o r = evalBinOp l r int doub
     where int  v er = plusFn o <:> v <*> er ^? _LInt
           doub v er = plusFn o <:> v <*> er ^? _LDouble
 
-evalRel :: Expr a -> RelOp a -> Expr a -> Maybe Literal
+evalRel :: ExprA -> RelOpA -> ExprA -> Maybe Literal
 evalRel l o r = do
     el <- evalConstExpr l
     er <- evalConstExpr r
@@ -140,20 +141,20 @@ evalRel l o r = do
         LDouble v -> evalRelStd v o er _LDouble
         LString v -> evalRelStd v o er _LString
 
-isBoolRel :: RelOp a -> Bool
+isBoolRel :: RelOpA -> Bool
 isBoolRel = (`elem` [EQU (), NE ()]) . void
 
-evalBoolOp :: (Bool -> Bool -> Bool) -> Expr a -> Expr a -> Maybe Literal
+evalBoolOp :: (Bool -> Bool -> Bool) -> ExprA -> ExprA -> Maybe Literal
 evalBoolOp o le ri = liftM2 (LBool .| o) (detLitBool le) (detLitBool ri)
 
-detLitBool :: Expr a -> Maybe Bool
+detLitBool :: ExprA -> Maybe Bool
 detLitBool x = evalConstExpr x >>= (^? _LBool)
 
-mulFetchRight :: (Eq a, Num a) => MulOp b -> Literal ->
+mulFetchRight :: (Eq a, Num a) => MulOpA -> Literal ->
                  Getting (First a) Literal a -> Maybe a
 mulFetchRight o er p = mfilter (\r -> r /= 0 || void o /= Div ()) $ er ^? p
 
-evalBinOp :: Expr a -> Expr a -> (Integer -> Literal -> Maybe Integer)
+evalBinOp :: ExprA -> ExprA -> (Integer -> Literal -> Maybe Integer)
           -> (Double -> Literal -> Maybe Double) -> Maybe Literal
 evalBinOp l r manipI manipD = do
         el <- evalConstExpr l
@@ -162,7 +163,7 @@ evalBinOp l r manipI manipD = do
                    LDouble v -> LDouble <$> manipD v er
                    _         -> Nothing
 
-evalNeg :: Expr a -> Maybe Literal
+evalNeg :: ExprA -> Maybe Literal
 evalNeg e = evalConstExpr e >>= f
     where f (LInt v)    = neg LInt v
           f (LDouble v) = neg LDouble v
@@ -171,10 +172,11 @@ evalNeg e = evalConstExpr e >>= f
 neg :: (Monad m, Num v) => (v -> r) -> v -> m r
 neg ctor v = return $ ctor $ -v
 
-evalRelStd :: Ord a => a -> RelOp b -> s -> Getting (First a) s a -> Maybe Bool
+evalRelStd :: Ord a => a -> RelOpA -> s
+           -> Getting (First a) s a -> Maybe Bool
 evalRelStd v o er t = relFn o <:> v <*> er ^? t
 
-relFn :: Ord a => RelOp b -> a -> a -> Bool
+relFn :: Ord a => RelOpA -> a -> a -> Bool
 relFn (LTH _) = (<)
 relFn (LE  _) = (<=)
 relFn (GTH _) = (>)
@@ -182,13 +184,13 @@ relFn (GE  _) = (>=)
 relFn (EQU _) = (==)
 relFn (NE  _) = (/=)
 
-plusFn :: Num a => AddOp b -> a -> a -> a
+plusFn :: Num a => AddOpA -> a -> a -> a
 plusFn (Plus  _) = (+)
 plusFn (Minus _) = (-)
 
 mulFn :: Num a
       => Maybe (a -> a -> a) -> (a -> a -> a)
-      -> MulOp b -> Maybe (a -> a -> a)
+      -> MulOpA -> Maybe (a -> a -> a)
 mulFn _ _ (Times _) = Just (*)
 mulFn _ d (Div   _) = Just d
 mulFn m _ (Mod   _) = m
