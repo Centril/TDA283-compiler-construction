@@ -27,8 +27,10 @@ Portability : ALL
 
 Combinators to ease writing common cases in pointfree style.
 -}
-
-module Utils.Pointless where
+module Utils.Pointless (
+    -- * Operations
+    (.|), (|.|), (|.)
+) where
 
 -- | '.|': Compose an unary function with a binary function.
 -- from: http://hackage.haskell.org/package/pointless-fun-1.1.0.5/docs/Data-Function-Pointless.html
