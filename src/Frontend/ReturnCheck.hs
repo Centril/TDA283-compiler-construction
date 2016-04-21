@@ -66,10 +66,10 @@ toWillExecute (Just False) = Never
 toWillExecute Nothing      = Unknown
 
 returnCheck :: Program a -> Eval (Program a)
-returnCheck (Program a funs) = Program a <$> mapM checkFun funs
+returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs
 
-checkFun :: TopDef a -> Eval (TopDef a)
-checkFun fun@(FnDef a rtype ident args block)
+checkFunRet :: TopDef a -> Eval (TopDef a)
+checkFunRet fun@(FnDef a rtype ident args block)
     | void rtype == Void () = return fun
     | otherwise     = FnDef a rtype ident args <<$> checkBlockTop ident block
 
