@@ -15,9 +15,29 @@
  - along with this program; if not, write to the Free Software
  - Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  -}
-module Utils.Terminal where
+
+{-|
+Module      : Utils.Terminal
+Description : Terminal related functions.
+Copyright   : (c) Björn Tropf, 2016
+                  Mazdak Farrokhzad, 2016
+License     : GPL-2+
+Stability   : unsafe
+Portability : ALL
+
+Terminal related functions.
+-}
+module Utils.Terminal (
+    -- * Operations
+    errStr, errLn, errChar, errPrint,
+    poutput, prettify,
+    handleArgs
+) where
 
 import System.IO
+
+import Language.Haskell.Exts.Parser
+import Language.Haskell.Exts.Pretty
 
 errStr, errLn :: String -> IO ()
 errStr = hPutStr   stderr
@@ -28,3 +48,16 @@ errChar = hPutChar stderr
 
 errPrint :: Show a => a -> IO ()
 errPrint = hPrint  stderr
+
+poutput :: Show a => a -> IO ()
+poutput = putStrLn . prettify . show
+
+prettify :: String -> String
+prettify str = case parseExp str of
+    ParseOk res -> prettyPrintStyleMode style
+        {lineLength = 120, ribbonsPerLine = 1.2} defaultMode res
+    ParseFailed{} -> str
+
+handleArgs :: [String] -> IO String
+handleArgs []    = getContents
+handleArgs (f:_) = readFile f

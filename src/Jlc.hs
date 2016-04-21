@@ -20,58 +20,49 @@ module Main where
 import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
-import Javalette.Abs
-
 import Frontend.ParseLex
 import Frontend.Types hiding (err)
 import Frontend.TypeCheck
 
 import Utils.Terminal
-import Utils.Debug
+
+--------------------------------------------------------------------------------
+-- main:
+--------------------------------------------------------------------------------
 
 main :: IO ()
 main = getArgs >>= handleArgs >>= compileUnit
 
-handleArgs :: [String] -> IO String
-handleArgs [] = getContents
-handleArgs (f:_) = readFile f
+--------------------------------------------------------------------------------
+-- Compilation of units:
+--------------------------------------------------------------------------------
 
 compileUnit :: String -> IO ()
 compileUnit code =
-    case  result of
-    Left  except  -> do
-        let phase = errPhase except
-        errLn $ phaseErr phase
-        putStrLn $ unwords ["ERROR!", "[" ++ show phase ++ "]", errMsg except]
-        output logs
-        exitFailure
-    Right (val, env) -> do
-        putStrLn "COMPILATION SUCCESS!"
-        putStrLn "Accumulated logs:"        >> printLogs logs
-        putStrLn "Final computed value:"    >> output val
-        putStrLn "Final environment value:" >> output env
-        errLn "OK"
-    where (result, logs) = runCompileComp code
+    let (result, logs) = runCompileComp code
+    in case result of
+    Left  failure -> compileUnitFailure logs failure
+    Right success -> compileUnitSuccess logs success
 
-printLogs :: InfoLog -> IO ()
-printLogs logs = putStrLn $ unlines $ showLog <$> logs
+compileUnitFailure :: InfoLog -> ErrMsg -> IO ()
+compileUnitFailure logs (ErrMsg phase msg) = do
+    errLn $ phaseErr phase
+    putStrLn $ unwords ["ERROR!", "[" ++ show phase ++ "]", msg]
+    printLogs logs
+    exitFailure
 
-showLog :: LogItem -> String
-showLog (LogItem lvl phase msg) =
-    concat ["[", show lvl, "] [", show phase, "]: " ++ prettify msg]
+compileUnitSuccess :: InfoLog -> (ProgramA, TCEnv) -> IO ()
+compileUnitSuccess logs (val, env) = do
+    putStrLn "COMPILATION SUCCESS!"
+    putStrLn "Accumulated logs:"        >> printLogs logs
+    putStrLn "Final computed value:"    >> poutput val
+    putStrLn "Final environment value:" >> poutput env
+    errLn "OK"
 
-output :: Show a => a -> IO ()
-output = putStrLn . prettify . show
-
-phaseErr :: Phase -> String
-phaseErr Parser        = "SYNTAX ERROR"
-phaseErr TypeChecker   = "TYPE ERROR"
-phaseErr ReturnChecker = "TYPE ERROR"
-
-runCompileComp :: String -> EvalResult (Program ASTAnots)
+runCompileComp :: String -> EvalResult ProgramA
 runCompileComp code = runEval (compileComp code) initialEnv
 
-compileComp :: String -> Eval (Program ASTAnots)
+compileComp :: String -> Eval ProgramA
 compileComp code = do
     ast1 <- parseProgram code
     info Parser "AST after parse"
@@ -80,3 +71,19 @@ compileComp code = do
     info TypeChecker "AST after type check"
     info TypeChecker $ show ast2
     return ast2
+
+--------------------------------------------------------------------------------
+-- Helpers:
+--------------------------------------------------------------------------------
+
+printLogs :: InfoLog -> IO ()
+printLogs logs = putStrLn $ unlines $ showLog <$> logs
+
+showLog :: LogItem -> String
+showLog (LogItem lvl phase msg) =
+    concat ["[", show lvl, "] [", show phase, "]: " ++ prettify msg]
+
+phaseErr :: Phase -> String
+phaseErr Parser        = "SYNTAX ERROR"
+phaseErr TypeChecker   = "TYPE ERROR"
+phaseErr ReturnChecker = "TYPE ERROR"

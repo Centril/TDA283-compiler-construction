@@ -27,18 +27,12 @@ Portability : ALL
 
 Debugging of stuff.
 -}
-module Utils.Debug where
+module Utils.Debug (
+    -- * Operations
+    debug
+) where
 
 import System.IO.Unsafe
-
-import Language.Haskell.Exts.Parser
-import Language.Haskell.Exts.Pretty
-
-prettify :: String -> String
-prettify str = case parseExp str of
-    ParseOk res -> prettyPrintStyleMode style
-        {lineLength = 120, ribbonsPerLine = 1.2} defaultMode res
-    ParseFailed{} -> str
 
 -- | 'debug': this function is morally dubious to use,
 -- it lacks referential transparency and might destroy your computer,
