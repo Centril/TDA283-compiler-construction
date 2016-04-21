@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Frontend.TypeInfer
+Module      : Frontend.Common
 Description : Common functions for Frontend of Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016

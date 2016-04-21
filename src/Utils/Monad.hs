@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Frontend.ReturnCheck
+Module      : Utils.Monad
 Description : General monadic, applicative, functor utility functions.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016

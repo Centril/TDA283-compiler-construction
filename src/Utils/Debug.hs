@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Debug
+Module      : Utils.Debug
 Description : Debugging of stuff.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016

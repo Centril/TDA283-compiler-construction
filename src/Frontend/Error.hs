@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Error
+Module      : Frontend.Error
 Description : Error messsages in Frontend of Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
