@@ -39,6 +39,9 @@ module Frontend.Types (
     ASTAnot(..), ASTAnots,
     Kind(..), WillExecute(..), Literal(..),
 
+    ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
+    TypeA, ExprA, AddOpA, MulOpA, RelOpA,
+
     -- * Operations
     runEval, warn, warn', warnln, info, info', infoln, err, err', errln,
     initialEnv, pushBlock, popBlock,
@@ -298,3 +301,20 @@ _log l p m = tell [LogItem l p m]
 unword2nd, unlines2nd :: (t1 -> String -> t) -> t1 -> [String] -> t
 unword2nd  f a b = f a $ unwords b
 unlines2nd f a b = f a $ unlines b
+
+
+
+
+
+
+type ProgramA = Program ASTAnots
+type TopDefA  = TopDef  ASTAnots
+type ArgA     = Arg     ASTAnots
+type BlockA   = Block   ASTAnots
+type StmtA    = Stmt    ASTAnots
+type ItemA    = Item    ASTAnots
+type TypeA    = Type    ASTAnots
+type ExprA    = Expr    ASTAnots
+type AddOpA   = AddOp   ASTAnots
+type MulOpA   = MulOp   ASTAnots
+type RelOpA   = RelOp   ASTAnots
