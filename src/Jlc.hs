@@ -23,7 +23,7 @@ import System.Exit ( exitFailure )
 import Frontend.ParseLex
 import Frontend.Annotations
 import Frontend.Environment
-import Frontend.Types hiding (err)
+import Frontend.Computation hiding (err)
 import Frontend.TypeCheck
 
 import Utils.Terminal

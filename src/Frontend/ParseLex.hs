@@ -36,7 +36,7 @@ import Javalette.Par
 import Javalette.Abs
 import Javalette.ErrM
 
-import Frontend.Types
+import Frontend.Computation
 
 -- | 'parseProgram': statefully parses a Javalette program into AST.
 parseProgram :: String -> Eval (Program ())

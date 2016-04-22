@@ -41,7 +41,7 @@ import Javalette.Abs
 
 import Frontend.Annotations
 import Frontend.Environment
-import Frontend.Types
+import Frontend.Computation
 import Frontend.Error
 import Frontend.Common
 

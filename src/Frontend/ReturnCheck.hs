@@ -47,7 +47,7 @@ import Utils.Monad
 import Javalette.Abs
 
 import Frontend.Annotations
-import Frontend.Types
+import Frontend.Computation
 import Frontend.Error
 
 returnCheck :: ProgramA -> Eval ProgramA

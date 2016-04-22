@@ -17,19 +17,19 @@
  -}
 
 {-|
-Module      : Frontend.Types
-Description : Types for Frontend of Javalette compiler.
+Module      : Frontend.Computation
+Description : Computation monad and operations in Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
 License     : GPL-2+
 Stability   : experimental
 Portability : ALL
 
-Types for Frontend of Javalette compiler.
+Computation monad and operations in Javalette compiler.
 -}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Frontend.Types (
+module Frontend.Computation (
     -- * Types
     Eval, EvalResult,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
