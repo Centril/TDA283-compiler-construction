@@ -35,7 +35,7 @@ module Frontend.Environment (
     FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
-    initialEnv, functions, contexts, toFunId, toFunSig
+    initialEnv, functions, contexts, toFunId
 ) where
 
 import Data.Map (Map, empty)
@@ -76,11 +76,8 @@ data FunId = FunId { fident :: Ident, fsig :: FunSig}
 -- | 'FnSigMap': Map of function identifiers -> signatures.
 type FnSigMap = Map Ident FunSig
 
-toFunSig :: ([ASTAnots -> TypeA], ASTAnots -> TypeA) -> FunSig
-toFunSig (args, ret) = FunSig (applyEA args) (ret emptyAnot)
-
-toFunId :: (String, ([ASTAnots -> TypeA], ASTAnots -> TypeA)) -> FunId
-toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
+toFunId :: (String, ([TypeA], TypeA)) -> FunId
+toFunId (ident, sig) = FunId (Ident ident) $ uncurry FunSig sig
 
 --------------------------------------------------------------------------------
 -- Operating Environment:

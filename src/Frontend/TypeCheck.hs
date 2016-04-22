@@ -56,16 +56,20 @@ typeCheck prog0 = do
     let prog1 = fmap (const emptyAnot) prog0
     -- P1: collect functions:
     info TypeChecker   "Collecting all functions"
-    allFunctions prog1
+    prog2 <- allFunctions prog1
+
+    info TypeChecker "AST after collect"
+    info TypeChecker $ show prog2
+
     -- P2: check for existance + correctness of main definition:
     info TypeChecker   "Checking existence of main"
     mainCorrect
     -- P3: type check the program
     info TypeChecker   "Type checking the program"
-    prog2 <- checkProg prog1
+    prog3 <- checkProg prog2
     -- P4: return check the program.
     info ReturnChecker "Return checking the program"
-    returnCheck prog2
+    returnCheck prog3
 
 --------------------------------------------------------------------------------
 -- Type checking:
@@ -94,19 +98,18 @@ checkStm :: TypeA -> StmtA -> Eval StmtA
 checkStm typ stmt = case stmt of
     Empty _               -> return stmt
     BStmt a block         -> pushBlock >> BStmt a <$> checkBlock typ block
-    Decl a vtyp items     -> Decl a vtyp <$> checkDecls vtyp items
+    Decl a vtyp items     -> checkDecls a vtyp items
     Ass a ident expr      -> Ass a ident <$> checkIdentExp ident expr
-    Incr a ident          -> Incr a <$> checkIdent [Int a, Doub a] ident
-    Decr a ident          -> Decr a <$> checkIdent [Int a, Doub a] ident
+    Incr a ident          -> Incr a <$> checkIdent [int, doub] ident
+    Decr a ident          -> Decr a <$> checkIdent [int, doub] ident
     SExp a expr           -> SExp a <<$> inferExp expr
     Ret a expr            -> Ret a <$> checkExp typ expr
     VRet a                -> checkVoid typ >> return (VRet a)
-    While a expr st       -> checkC (While a) a expr st
-    Cond a expr st        -> checkC (Cond a) a expr st
-    CondElse a expr si se -> checkC (CondElse a) a expr si <*> checkR se
+    While a expr st       -> checkC (While    a) expr st
+    Cond a expr st        -> checkC (Cond     a) expr st
+    CondElse a expr si se -> checkC (CondElse a) expr si <*> checkR se
     where checkR = checkStm typ
-          checkC ctor a expr st =
-              ctor <$> checkExp (Bool a) expr <*> checkR st
+          checkC ctor expr st = ctor <$> checkExp bool expr <*> checkR st
 
 checkVoid :: TypeA -> Eval ()
 checkVoid frtyp = unless (void frtyp == Void ()) $
@@ -115,10 +118,12 @@ checkVoid frtyp = unless (void frtyp == Void ()) $
 checkIdentExp :: Ident -> ExprA -> Eval ExprA
 checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
 
-checkDecls :: TypeA -> [ItemA] -> Eval [ItemA]
-checkDecls vtyp = mapM single
-    where single item = checkDeclItem vtyp item <*
-                        extendVar' varAlreadyDef (itemToVar vtyp item)
+checkDecls :: ASTAnots -> TypeA -> [ItemA] -> Eval StmtA
+checkDecls a vtyp items = do
+    (vtyp', _) <- inferType vtyp
+    Decl a vtyp' <$> mapM (single vtyp') items
+    where single vtyp' item = checkDeclItem vtyp' item <*
+                        extendVar' varAlreadyDef (itemToVar vtyp' item)
 
 checkDeclItem :: TypeA -> ItemA -> Eval ItemA
 checkDeclItem vtyp (Init a ident expr) = Init a ident <$> checkExp vtyp expr

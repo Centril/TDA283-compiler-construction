@@ -43,6 +43,8 @@ import Frontend.Query
 import Frontend.Error
 import Frontend.Common
 
+import Frontend.TypeInfer
+
 --------------------------------------------------------------------------------
 -- Checking for int main(void):
 --------------------------------------------------------------------------------
@@ -52,29 +54,40 @@ mainId = Ident "main"
 
 mainCorrect :: Eval ()
 mainCorrect = lookupFunE mainId >>=
-    flip unless wrongMainSig . (== FunSig [] (Int emptyAnot))
+    flip unless wrongMainSig . (== FunSig [] int)
 
 --------------------------------------------------------------------------------
 -- Collecting function signatures:
 --------------------------------------------------------------------------------
 
-allFunctions :: ProgramA -> Eval ()
-allFunctions = collectFuns . (predefFuns ++) . extractFunIds
+allFunctions :: ProgramA -> Eval ProgramA
+allFunctions (Program a funs) = do
+    funs' <- mapM checkFunSignature funs
+    collectFuns $ predefFuns ++ fmap toFnSigId funs'
+    return $ Program a funs'
+
+checkFunSignature :: TopDef ASTAnots -> Eval TopDefA
+checkFunSignature (FnDef a ret ident args block) = do
+    args'      <- mapM checkArgTypes args
+    (ret',  _) <- inferType ret
+    return $ FnDef a ret' ident args' block
+
+checkArgTypes :: Arg ASTAnots -> Eval ArgA
+checkArgTypes (Arg a atyp ident) = do
+    (atyp', _) <- inferType atyp
+    return $ Arg a atyp' ident
 
 collectFuns :: [FunId] -> Eval ()
 collectFuns = mapM_ $ extendFun' funAlreadyDef
 
 predefFuns :: [FunId]
 predefFuns = map toFunId
-    [("printInt",    ([Int     ], Void)),
-     ("printDouble", ([Doub    ], Void)),
-     ("printString", ([ConstStr], Void)),
-     ("readInt",     ([        ], Int )),
-     ("readDouble",  ([        ], Doub))]
-
-extractFunIds :: ProgramA -> [FunId]
-extractFunIds = map toFnSigId . progFuns
+    [("printInt",    ([int     ], tvoid)),
+     ("printDouble", ([doub    ], tvoid)),
+     ("printString", ([conststr], tvoid)),
+     ("readInt",     ([        ], int )),
+     ("readDouble",  ([        ], doub))]
 
 toFnSigId :: TopDefA -> FunId
 toFnSigId (FnDef _ ret ident args _) =
-    FunId ident $ FunSig (map argType args) ret
+    FunId ident $ FunSig (argType <$> args) ret

@@ -41,7 +41,9 @@ module Frontend.Annotations (
     toWillExecute, showKind, emptyAnot, applyEA,
     _LBool, _LInt, _LDouble, _LString,
     litBool, litDouble, litInt, litStr,
-    anotCExprLit, anotKind, anotType, anotWillExec
+    anotCExprLit, anotKind, anotType, anotWillExec,
+    int, conststr, doub, bool, tvoid,
+    addAnot, kAnot, tAnot, 
 ) where
 
 import Control.Lens hiding (Context, contexts)
@@ -76,7 +78,7 @@ showKind (KArrow f t) = unwords [showf, "->", show t]
 --------------------------------------------------------------------------------
 
 -- | 'Literal': Annotation for the literal that constant expressions result in.
-data Literal = LBool   { _litBool   :: Bool    }    |
+data Literal = LBool   { _litBool   :: Bool    } |
                LInt    { _litInt    :: Integer } |
                LDouble { _litDouble :: Double }  |
                LString { _litStr    :: String }
@@ -121,6 +123,37 @@ emptyAnot = []
 -- partially applies the empty annotation to it.
 applyEA :: [ASTAnots -> a] -> [a]
 applyEA = fmap ($ emptyAnot)
+
+addAnot :: ASTAnots -> ASTAnot -> ASTAnots
+addAnot a anot = a ++ [anot]
+
+kAnot :: ASTAnots -> Kind -> ASTAnots
+kAnot a kind = addAnot a $ AKind kind
+
+tAnot :: ASTAnots -> TypeA -> ASTAnots
+tAnot a typ = addAnot a $ AType typ
+
+--------------------------------------------------------------------------------
+-- Annotations, Kinds for primitive types:
+--------------------------------------------------------------------------------
+
+appConcrete :: (ASTAnots -> TypeA) -> TypeA
+appConcrete typ = typ [AKind KConcrete]
+
+conststr :: TypeA
+conststr = appConcrete ConstStr
+
+int :: TypeA
+int = appConcrete Int
+
+doub :: TypeA
+doub = appConcrete Doub
+
+bool :: TypeA
+bool = appConcrete Bool
+
+tvoid :: TypeA
+tvoid = appConcrete Void
 
 --------------------------------------------------------------------------------
 -- AST Annotations, Aliases:

@@ -31,7 +31,7 @@ Type inference for Javalette compiler.
 
 module Frontend.TypeInfer (
     -- * Operations
-    inferExp
+    inferExp, inferType
 ) where
 
 import Control.Monad
@@ -45,29 +45,19 @@ import Frontend.Computation
 import Frontend.Error
 import Frontend.Common
 
-appConcrete :: (ASTAnots -> TypeA) -> TypeA
-appConcrete typ = typ [AKind KConcrete]
-
-conststr :: TypeA
-conststr = appConcrete ConstStr
-
-int :: TypeA
-int = appConcrete Int
-
-doub :: TypeA
-doub = appConcrete Doub
-
-bool :: TypeA
-bool = appConcrete Bool
-
-tAnot :: ASTAnots -> TypeA -> ASTAnots
-tAnot a typ = a ++ [AType typ]
-
 simpleAnot :: ExprA -> TypeA -> (ExprA, TypeA)
 simpleAnot expr typ = (flip tAnot typ <$> expr, typ)
 
 flip3 :: (a -> b -> c -> r) -> c -> a -> b -> r
 flip3 f c a b = f a b c
+
+--------------------------------------------------------------------------------
+-- Kind inference:
+--------------------------------------------------------------------------------
+
+-- @TODO: For now, all types have a concrete kind, change this?
+inferType :: TypeA -> Eval (TypeA, Kind)
+inferType typ = return (flip kAnot KConcrete <$> typ, KConcrete)
 
 --------------------------------------------------------------------------------
 -- Type inference:
@@ -84,15 +74,20 @@ inferExp expr = case expr of
     EApp a ident e -> inferFun a ident e
     Neg a e        -> inferUnary Neg a e [int, doub]
     Not a e        -> inferUnary Not a e [bool]
-
     EMul a l op r  -> inferBin l r (mulOp op)  (emul op) (tAnot a)
     EAdd a l op r  -> inferBin l r [int, doub] (eadd op) (tAnot a)
-    ERel a l op r  -> inferBin l r (relOp op)  (erel op) (const $ tAnot a bool)
+    ERel a l op r  -> second (const bool) <$>
+                      inferBin l r (relOp op)  (erel op) (const $ tAnot a bool)
     EAnd a l r     -> inferBin l r [bool]      EAnd (tAnot a)
     EOr  a l r     -> inferBin l r [bool]      EOr (tAnot a)
 
+emul :: MulOp a -> a -> Expr a -> Expr a -> Expr a
 emul = flip3 EMul
+
+eadd :: AddOp a -> a -> Expr a -> Expr a -> Expr a
 eadd = flip3 EAdd
+
+erel :: RelOp a -> a -> Expr a -> Expr a -> Expr a
 erel = flip3 ERel
 
 relOp :: RelOpA -> [TypeA]
@@ -103,6 +98,10 @@ mulOp :: MulOpA -> [TypeA]
 mulOp oper | oper == Mod emptyAnot = [int]
            | otherwise             = [int, doub]
 
+inferBin :: Foldable t
+         => ExprA -> ExprA -> t TypeA
+         -> (ASTAnots -> ExprA -> ExprA -> ExprA) -> (TypeA -> ASTAnots)
+         -> Eval (ExprA, TypeA)
 inferBin exprl exprr accept ctor anot = do
     (exprl', typl) <- inferExp exprl
     (exprr', typr) <- inferExp exprr
@@ -114,7 +113,7 @@ inferUnary :: (ASTAnots -> ExprA -> ExprA)
            -> ASTAnots -> ExprA -> [TypeA]
            -> Eval (ExprA, TypeA)
 inferUnary ctor a expr accept = do
-    r@(expr', etyp) <- inferExp expr
+    (expr', etyp) <- inferExp expr
     if etyp `elem` accept
         then return (ctor (tAnot a etyp) expr', etyp)
         else wrongUnaryExp expr accept etyp
