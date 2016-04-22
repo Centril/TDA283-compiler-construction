@@ -28,27 +28,22 @@ Portability : ALL
 Types for Frontend of Javalette compiler.
 -}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Frontend.Types (
     -- * Types
-    TCEnv(..), Eval, EvalResult,
+    Eval, EvalResult,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
-    Context, Contexts, Var(..),
-    FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
     runEval, warn, warn', warnln, info, info', infoln, err, err', errln,
-    initialEnv, pushBlock, popBlock,
+    pushBlock, popBlock,
     lookupVar', lookupFun', extendVar', extendFun',
-    functions, contexts, toFunId, toFunSig
 ) where
 
 import Safe
 
 import Data.Maybe
 
-import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Control.Monad()
@@ -67,60 +62,11 @@ import Utils.Monad
 import Javalette.Abs
 
 import Frontend.Annotations
+import Frontend.Environment
 
 --------------------------------------------------------------------------------
--- Scopes / Contexts:
+-- Environment operations:
 --------------------------------------------------------------------------------
-
--- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident TypeA
-
--- | 'Contexts': List of 'Context'
-type Contexts = [Context]
-
--- | 'Var': a variable specified by its 'Ident' and 'Type'.
-data Var = Var { vident :: Ident, vtype :: TypeA }
-    deriving (Eq, Show, Read)
-
---------------------------------------------------------------------------------
--- Function Signatures:
---------------------------------------------------------------------------------
-
--- | 'FunSig': Signature of a function,
--- argument list (types) followed by return type.
-data FunSig = FunSig { targs :: [TypeA], tret :: TypeA}
-    deriving (Eq, Show, Read)
-
--- | 'FnId': Signature of a function ('FunSig') + 'Ident'.
-data FunId = FunId { fident :: Ident, fsig :: FunSig}
-    deriving (Eq, Show, Read)
-
--- | 'FnSigMap': Map of function identifiers -> signatures.
-type FnSigMap = Map Ident FunSig
-
-toFunSig :: ([ASTAnots -> TypeA], ASTAnots -> TypeA)
-         -> FunSig
-toFunSig (args, ret) = FunSig (applyEA args) (ret emptyAnot)
-
-toFunId :: (String, ([ASTAnots -> TypeA], ASTAnots -> TypeA))
-        -> FunId
-toFunId (ident, sig) = FunId (Ident ident) $ toFunSig sig
-
---------------------------------------------------------------------------------
--- Operating Environment:
---------------------------------------------------------------------------------
-
--- | 'TCEnv': The operating environment of an 'Eval' computation.
-data TCEnv = TCEnv {
-    _functions :: FnSigMap,  -- ^ Map of ident -> function signatures.
-    _contexts  :: Contexts } -- ^ Stack of contexts.
-    deriving (Eq, Show, Read)
-
-makeLenses ''TCEnv
-
--- | 'initialEnv': The initial empty environment.
-initialEnv :: TCEnv
-initialEnv = TCEnv Map.empty [Map.empty]
 
 -- | 'pushBlock': pushes a fresh and empty block to the 'Context' stack.
 pushBlock :: Eval ()

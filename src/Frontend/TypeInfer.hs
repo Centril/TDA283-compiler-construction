@@ -40,6 +40,7 @@ import Control.Arrow
 import Javalette.Abs
 
 import Frontend.Annotations
+import Frontend.Environment
 import Frontend.Types
 import Frontend.Error
 import Frontend.Common
