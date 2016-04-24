@@ -1,12 +1,8 @@
-.PHONY: grade src
+all: clean submita
 
-all: src grade
-
-src:
+clean:
 	rm -rf submission
-	mkdir submission
-	cd src && make
 
-grade:
-	cd grade && make
-	cd grade && ./Grade . ../submission
+submita:
+	mkdir -p submission
+	tar -zcf submission/partA-1.tar.gz doc lib src

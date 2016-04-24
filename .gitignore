@@ -81,3 +81,4 @@ cabal.sandbox.config
 grade/Grade
 src/Javalette/
 submission/
+jlc
