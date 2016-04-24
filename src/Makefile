@@ -13,11 +13,14 @@ jlc:
 	cp dist/build/jlc/jlc ../jlc
 
 doc: docclean
+	mkdir -p ../doc
 	mkdir -p build/doc
 	cat ../README.md > build/doc/README.md
 	cd Javalette && pandoc -f t2t -t markdown_github\
 		-o ../build/doc/bnf.md Doc.txt
-	cd build/doc && sed '1,4d' bnf.md > tmp && mv tmp bnf.md
+	cd build/doc && sed '1,2d' bnf.md > tmp && mv tmp bnf.md
+	cd build/doc && sed 's/This document/The following section/g'\
+		bnf.md > tmp && mv tmp bnf.md
 	cd build/doc && sed 's/\*\*|\*\*/\*\\\|\* /g'\
 		bnf.md > tmp && mv tmp bnf.md
 	cd build/doc && cat bnf.md >> README.md
@@ -36,6 +39,7 @@ jlcclean:
 	rm -f ../jlc
 
 docclean: bnfcclean bnfc
+	rm -rf ../doc
 	rm -rf build
 
 test:
