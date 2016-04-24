@@ -12,6 +12,13 @@ jlc:
 	cabal build
 	cp dist/build/jlc/jlc ../jlc
 
+doc: bnfcclean bnfc
+	cd Javalette && txt2tags -t tex Doc.txt
+	cd Javalette && pandoc -s Doc.tex -o Doc.md
+	cd Javalette && sed '1,12d' Doc.md > tmp; mv tmp Doc.md
+	cd Javalette && sed 's/{.*}//g' Doc.md > tmp; mv tmp Doc.md
+	cd Javalette && mv Doc.md ../../doc/bnfc.md
+
 bnfcclean:
 	rm -rf Javalette
 
