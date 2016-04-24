@@ -12,7 +12,7 @@ jlc:
 	cabal build
 	cp dist/build/jlc/jlc ../jlc
 
-doc: docclean
+doc: docclean bnfc
 	mkdir -p ../doc
 	mkdir -p build/doc
 	cat ../README.md > build/doc/README.md
@@ -34,11 +34,11 @@ bnfcclean:
 	rm -rf Javalette
 
 jlcclean:
-	rm -rf dist/build/jlc/jlc-tmp/
-	rm -f dist/build/jlc/jlc
+	rm -rf dist
+	rm -rf build
 	rm -f ../jlc
 
-docclean: bnfcclean bnfc
+docclean: bnfcclean
 	rm -rf ../doc
 	rm -rf build
 
