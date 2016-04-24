@@ -1,4 +1,62 @@
-<h2 id="the-lexical-structure-of-javalette">The lexical structure of Javalette</h2>
+<h1 id="javalette-compiler"><a href="https://github.com/Centril/TDA283-compiler-construction">Javalette Compiler</a></h1>
+<blockquote>
+<p>Javalette Compiler or <strong>jlc</strong> is a compiler for a small C-like language.</p>
+</blockquote>
+<h2 id="what">What?</h2>
+<p>A compiler written in haskell for the small C-like langauge called Javalette. This is for the course <strong><a href="http://www.cse.chalmers.se/edu/course/TDA283_Compiler_Construction/">TDA283, Compiler Construction</a></strong> at Chalmers University of Technology, Sweden.</p>
+<h2 id="copyright-license">Copyright &amp; License</h2>
+<p>Licensed under the <strong><a href="LICENSE.md">GPL 2+ License</a></strong>.<br />
+Copyright 2016 Björn Tropf, Mazdak Farrokhzad.</p>
+<h2 id="authors">Authors</h2>
+<p>The authors and contributors of this project are:</p>
+<p><strong>Björn Tropf <script type="text/javascript">
+<!--
+h='&#x67;&#x6d;&#x61;&#x69;&#108;&#46;&#x63;&#x6f;&#x6d;';a='&#64;';n='&#98;&#106;&#x6f;&#x65;&#114;&#110;&#116;&#114;&#x6f;&#112;&#102;';e=n+a+h;
+document.write('<a h'+'ref'+'="ma'+'ilto'+':'+e+'" clas'+'s="em' + 'ail">'+'&#60;&#98;&#106;&#x6f;&#x65;&#114;&#110;&#116;&#114;&#x6f;&#112;&#102;&#64;&#x67;&#x6d;&#x61;&#x69;&#108;&#46;&#x63;&#x6f;&#x6d;&#62;'+'<\/'+'a'+'>');
+// -->
+</script><noscript>&#60;&#98;&#106;&#x6f;&#x65;&#114;&#110;&#116;&#114;&#x6f;&#112;&#102;&#64;&#x67;&#x6d;&#x61;&#x69;&#108;&#46;&#x63;&#x6f;&#x6d;&#62;&#32;&#40;&#98;&#106;&#x6f;&#x65;&#114;&#110;&#116;&#114;&#x6f;&#112;&#102;&#32;&#x61;&#116;&#32;&#x67;&#x6d;&#x61;&#x69;&#108;&#32;&#100;&#x6f;&#116;&#32;&#x63;&#x6f;&#x6d;&#x29;</noscript></strong></p>
+<p><strong>Mazdak Farrokhzad <script type="text/javascript">
+<!--
+h='&#x67;&#x6d;&#x61;&#x69;&#108;&#46;&#x63;&#x6f;&#x6d;';a='&#64;';n='&#116;&#x77;&#x69;&#110;&#x67;&#x6f;&#x6f;&#x77;';e=n+a+h;
+document.write('<a h'+'ref'+'="ma'+'ilto'+':'+e+'" clas'+'s="em' + 'ail">'+'&#60;&#116;&#x77;&#x69;&#110;&#x67;&#x6f;&#x6f;&#x77;&#64;&#x67;&#x6d;&#x61;&#x69;&#108;&#46;&#x63;&#x6f;&#x6d;&#62;'+'<\/'+'a'+'>');
+// -->
+</script><noscript>&#60;&#116;&#x77;&#x69;&#110;&#x67;&#x6f;&#x6f;&#x77;&#64;&#x67;&#x6d;&#x61;&#x69;&#108;&#46;&#x63;&#x6f;&#x6d;&#62;&#32;&#40;&#116;&#x77;&#x69;&#110;&#x67;&#x6f;&#x6f;&#x77;&#32;&#x61;&#116;&#32;&#x67;&#x6d;&#x61;&#x69;&#108;&#32;&#100;&#x6f;&#116;&#32;&#x63;&#x6f;&#x6d;&#x29;</noscript></strong></p>
+<h2 id="installation-building">Installation &amp; Building</h2>
+<h3 id="requirements">Requirements</h3>
+<p>The recommended versions below are the versions which the project was tested with and is known to be working.</p>
+<ul>
+<li><strong><a href="https://www.gnu.org/software/make/">make</a></strong> or <a href="http://gradle.org/">gradle</a></li>
+<li><strong><a href="https://www.haskell.org/">haskell</a></strong>, recommended: 7.10.2</li>
+<li><strong><a href="https://www.haskell.org/cabal/">cabal</a></strong>, recommended: 1.22.4.0</li>
+<li><strong><a href="http://bnfc.digitalgrammars.com/">bnfc</a></strong> &gt;= 2.8</li>
+<li><strong><a href="https://www.haskell.org/alex/">alex</a></strong>, recommended: 3.1.4</li>
+<li><strong><a href="https://www.haskell.org/happy/">happy</a></strong>, recommended: 1.19.5</li>
+<li><strong><a href="http://johnmacfarlane.net/pandoc/">pandoc</a></strong>, recommended: 1.17.0.2, for building documentation.</li>
+</ul>
+<h3 id="building-from-git-repository">Building, from git repository:</h3>
+<p>First clone the repository to your local machine:</p>
+<pre class="shell"><code>git clone https://github.com/Centril/TDA283-compiler-construction</code></pre>
+<p>Assuming that:</p>
+<pre class="shell"><code>cd TDA283-Compiler-Construction</code></pre>
+<p>If you are building from the git repository with gradle, you can do:</p>
+<pre class="shell"><code>./gradlew build</code></pre>
+<p>To build and run tests.</p>
+<p>or alternatively using make:</p>
+<pre class="shell"><code>make all</code></pre>
+<h3 id="building-from-src-repository-using-make">Building, from src/ repository (using make):</h3>
+<p>Assuming that:</p>
+<pre class="shell"><code>cd src/</code></pre>
+<pre class="shell"><code>make all</code></pre>
+<h2 id="javalette-grammar-conflicts">Javalette Grammar conflicts</h2>
+<h3 id="shift-reduce">shift-reduce</h3>
+<p>The standard dangling else:</p>
+<div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"><span class="kw">if</span> ( cond ) { s; }
+<span class="kw">if</span> ( cond ) { s1; } <span class="kw">else</span> { s2; }</code></pre></div>
+<h3 id="reduce-reduce">reduce-reduce</h3>
+<p>There are no reduce-reduce conflicts.</p>
+<h2 id="javalette-language-specification">Javalette language specification</h2>
+<!-- references -->
+<h2 id="the-lexical-structure-of-javalette"><!-- references -->The lexical structure of Javalette</h2>
 <h3 id="identifiers">Identifiers</h3>
 <p>Identifiers <em>Ident</em> are unquoted strings beginning with a letter, followed by any combination of letters, digits, and the characters <code>_ '</code> reserved words excluded.</p>
 <h3 id="literals">Literals</h3>
