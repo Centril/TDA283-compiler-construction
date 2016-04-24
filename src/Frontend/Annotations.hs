@@ -37,16 +37,21 @@ module Frontend.Annotations (
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
     TypeA, ExprA, AddOpA, MulOpA, RelOpA,
 
+    Annotated, ML,
+
     -- * Operations
     toWillExecute, showKind, emptyAnot, applyEA,
     _LBool, _LInt, _LDouble, _LString,
     litBool, litDouble, litInt, litStr,
     anotCExprLit, anotKind, anotType, anotWillExec,
     int, conststr, doub, bool, tvoid,
-    addAnot, kAnot, tAnot, 
+    
+    (<@>), (+@), annotate,
+    addTyp, addTyp', addKind, addWE, addWE', addLit, addLit'
 ) where
 
-import Control.Lens hiding (Context, contexts)
+import Control.Lens hiding (Context, contexts, Empty)
+import Control.Lens.Extras (is)
 
 import Javalette.Abs
 
@@ -101,10 +106,12 @@ toWillExecute Nothing      = Unknown
 -- Annotations:
 --------------------------------------------------------------------------------
 
+type ML = Maybe Literal
+
 -- | 'ASTAnot': The annotations allowed in a Javalette AST.
 data ASTAnot = AType     { _anotType     :: Type [ASTAnot] } |
                AWillExec { _anotWillExec :: WillExecute    } |
-               ACExprLit { _anotCExprLit :: Literal        } |
+               ACExprLit { _anotCExprLit :: ML             } |
                AKind     { _anotKind     :: Kind           }
     deriving (Eq, Show, Read)
 
@@ -123,15 +130,6 @@ emptyAnot = []
 -- partially applies the empty annotation to it.
 applyEA :: [ASTAnots -> a] -> [a]
 applyEA = fmap ($ emptyAnot)
-
-addAnot :: ASTAnots -> ASTAnot -> ASTAnots
-addAnot a anot = a ++ [anot]
-
-kAnot :: ASTAnots -> Kind -> ASTAnots
-kAnot a kind = addAnot a $ AKind kind
-
-tAnot :: ASTAnots -> TypeA -> ASTAnots
-tAnot a typ = addAnot a $ AType typ
 
 --------------------------------------------------------------------------------
 -- Annotations, Kinds for primitive types:
@@ -191,3 +189,99 @@ type MulOpA   = MulOp   ASTAnots
 
 -- | 'RelOpA': 'RelOp' annotated with 'ASTAnots'.
 type RelOpA   = RelOp   ASTAnots
+
+--------------------------------------------------------------------------------
+-- AST Annotations, Shallow mapping:
+--------------------------------------------------------------------------------
+
+-- | 'Annotated': annotatable nodes.
+class Annotated f where
+    -- | 'annotate': changes the annotation of a node and only that node.
+    -- Unlike 'fmap', it does not map all subnodes, and the type of the
+    -- annotation must be the same before and after.
+    annotate :: (a -> a) -> f a -> f a
+
+-- | '(<@>)': infix version of annotating operator.
+(<@>) :: Annotated f => (a -> a) -> f a -> f a
+(<@>) = annotate
+
+-- | '(+@)': given an annotated structure, adds an annotation to it.
+(+@) :: Annotated f => f [a] -> a -> f [a]
+n +@ a = (++ [a]) <@> n
+
+instance Annotated Program where annotate f (Program a td) = Program (f a) td
+instance Annotated TopDef  where
+    annotate f (FnDef a t i args b) = FnDef (f a) t i args b
+instance Annotated Arg     where annotate f (Arg a t i) = Arg (f a) t i
+instance Annotated Block   where annotate f (Block a s) = Block (f a) s
+instance Annotated Stmt    where
+    annotate f x = case x of
+        Empty    a       -> Empty    (f a)
+        BStmt    a b     -> BStmt    (f a) b
+        Decl     a t i   -> Decl     (f a) t i
+        Ass      a i e   -> Ass      (f a) i e
+        Incr     a i     -> Incr     (f a) i
+        Decr     a i     -> Decr     (f a) i
+        Ret      a e     -> Ret      (f a) e
+        VRet     a       -> VRet     (f a)
+        Cond     a c s   -> Cond     (f a) c s
+        CondElse a c i e -> CondElse (f a) c i e
+        While    a c s   -> While    (f a) c s
+        SExp     a e     -> SExp     (f a) e
+instance Annotated Item    where
+    annotate f x = case x of
+        NoInit a i   -> NoInit (f a) i
+        Init   a i e -> Init   (f a) i e
+instance Annotated Type    where
+    annotate f (Fun a r as) = Fun (f a) r as
+    annotate f x            = fmap f x
+instance Annotated Expr    where
+    annotate f x = case x of
+        EVar      a i     -> EVar      (f a) i
+        ELitInt   a i     -> ELitInt   (f a) i
+        ELitDoub  a d     -> ELitDoub  (f a) d
+        ELitTrue  a       -> ELitTrue  (f a)
+        ELitFalse a       -> ELitFalse (f a)
+        EApp      a i e   -> EApp      (f a) i e
+        EString   a s     -> EString   (f a) s
+        Neg       a e     -> Neg       (f a) e
+        Not       a e     -> Not       (f a) e
+        EMul      a l o r -> EMul      (f a) l o r
+        EAdd      a l o r -> EAdd      (f a) l o r
+        ERel      a l o r -> ERel      (f a) l o r
+        EAnd      a l   r -> EAnd      (f a) l   r
+        EOr       a l   r -> EOr       (f a) l   r
+instance Annotated AddOp   where annotate = fmap
+instance Annotated MulOp   where annotate = fmap
+instance Annotated RelOp   where annotate = fmap
+
+-- | 'addKind': adds a kind annotation to a node.
+addKind :: Annotated f => f ASTAnots -> Kind -> (f ASTAnots, Kind)
+addKind x kind = (x +@ AKind kind, kind)
+
+-- | 'addWE': adds a WillExecute annotation to a node.
+addWE :: Annotated f => WillExecute -> f ASTAnots -> f ASTAnots
+addWE we x = f <@> x
+    where f as = if any (is _AWillExec) as then as else as ++ [AWillExec we]
+
+-- | 'addWE'': adds a WillExecute annotation to a node.
+addWE' :: (Applicative m, Annotated f)
+       => f ASTAnots -> WillExecute -> t -> m (f ASTAnots, t)
+addWE' stmt we hasR = pure (addWE we stmt, hasR)
+
+-- | 'addLit': adds a maybe constant literal annotation to a node.
+addLit :: Annotated f => f ASTAnots -> ML -> (f ASTAnots, ML)
+addLit  expr lit = (expr +@ ACExprLit lit, lit)
+
+-- | 'addLit'': adds a constant literal annotation to a node.
+addLit' :: Annotated f => f ASTAnots -> Literal -> (f ASTAnots, ML)
+addLit' expr = addLit expr . Just
+
+-- | 'addTyp': adds a type annotation to a node.
+addTyp :: Annotated f => f [ASTAnot] -> TypeA -> (f [ASTAnot], TypeA)
+addTyp  expr typ = (expr +@ AType typ, typ)
+
+-- | 'addTyp'': adds a type annotation to a node.
+addTyp' :: (Monad m, Annotated f)
+        => f [ASTAnot] -> TypeA -> m (f [ASTAnot], TypeA)
+addTyp' expr = return . addTyp expr

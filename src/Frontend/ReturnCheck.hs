@@ -39,10 +39,11 @@ import Data.Monoid
 import Control.Arrow
 import Control.Monad
 
-import Control.Lens
+import Control.Lens hiding (op, re)
 
 import Utils.Pointless
 import Utils.Monad
+import Utils.Function
 
 import Javalette.Abs
 
@@ -55,8 +56,8 @@ returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs
 
 checkFunRet :: TopDefA -> Eval TopDefA
 checkFunRet fun@(FnDef a rtype ident args block)
-    | void rtype == Void () = return fun
-    | otherwise     = FnDef a rtype ident args <<$> checkBlockTop ident block
+    | rtype == tvoid = return fun
+    | otherwise      = FnDef a rtype ident args <<$> checkBlockTop ident block
 
 checkBlockTop :: Ident -> BlockA -> Eval (BlockA, Bool)
 checkBlockTop fid block = do
@@ -67,113 +68,132 @@ checkBlock :: Ident -> BlockA -> Eval (BlockA, Bool)
 checkBlock fid (Block a stmts) =
     (Block a *** or) <$> mapAndUnzipM (checkHasRet fid) stmts
 
+checkBStmt :: ASTAnots -> BlockA -> Ident -> Eval (StmtA, Bool)
+checkBStmt a block fid = first (addWE Always . BStmt a) <$> checkBlock fid block
+
 checkHasRet :: Ident -> StmtA -> Eval (StmtA, Bool)
 checkHasRet fid stmt = case stmt of
-    Ret _ _               -> return (stmt, True)
-    VRet _                -> return (stmt, True)
-    BStmt a block         -> first (BStmt a) <$> checkBlock fid block
-    While a expr st       -> checkCond (While a) fid expr st
-    Cond  a expr st       -> checkCond (Cond a) fid expr st
-    CondElse a expr si se -> checkCondElse a fid expr si se
-    _                     -> return (stmt, False)
+    While    a expr st    -> checkCond While a expr st    fid
+    Cond     a expr st    -> checkCond Cond  a expr st    fid
+    CondElse a expr si se -> checkCondElse   a expr si se fid
+    BStmt    a block      -> checkBStmt      a block      fid
+    Ret  {}               -> addWE' stmt Always True
+    VRet {}               -> addWE' stmt Always True
+    _                     -> addWE' stmt Always False
 
-checkCond :: (ExprA -> StmtA -> StmtA) -> Ident
-          ->  ExprA -> StmtA -> Eval (StmtA, Bool)
-checkCond ctor fid expr stmt =
-    case condLit mlit of
-    Always -> checkRetWrap fid stmt $ ctor expr
-    _      -> return (ctor expr stmt, False)
-    where mlit = evalConstExpr expr
+checkCond :: (ASTAnots -> ExprA -> StmtA -> StmtA)
+          ->  ASTAnots -> ExprA -> StmtA -> Ident
+          -> Eval (StmtA, Bool)
+checkCond ctor a expr stmt fid = first (addWE Always) <$> case we of
+    Always -> checkRetWrap fid stmt' $ ctor a expr'
+    _      -> return (ctor a expr' stmt', False)
+    where (expr', we) = condExpr expr
+          stmt'       = addWE we stmt
 
-checkCondElse :: ASTAnots -> Ident -> ExprA -> StmtA -> StmtA
+checkCondElse :: ASTAnots -> ExprA -> StmtA -> StmtA -> Ident
               -> Eval (StmtA, Bool)
-checkCondElse a fid expr si se =
-    case condLit mlit of
-    Always  -> checkRetWrap fid si $ flip (CondElse a expr) se
-    Never   -> checkRetWrap fid se $ CondElse a expr si
-    Unknown -> do
-        (si', siRet) <- checkHasRet fid si
-        (se', seRet) <- checkHasRet fid se
-        return (CondElse a expr si' se', siRet && seRet)
-    where mlit = evalConstExpr expr
+checkCondElse a expr si se fid = first (addWE Always) <$> case we of
+    Always  -> checkRetWrap fid si' $ flip (CondElse a expr') se'
+    Never   -> checkRetWrap fid se' $ CondElse a expr' si'
+    Unknown -> do (si'', siRet) <- checkHasRet fid si'
+                  (se'', seRet) <- checkHasRet fid se'
+                  return (CondElse a expr' si'' se'', siRet && seRet)
+    where (expr', we) = condExpr expr
+          (si', se')  = addWE § (we, weOpposite we) <§> (si, se)
+
+weOpposite :: WillExecute -> WillExecute
+weOpposite Always  = Never
+weOpposite Never   = Always
+weOpposite Unknown = Unknown
+
+condExpr :: ExprA -> (ExprA, WillExecute)
+condExpr = second (toWillExecute . (>>= (^? _LBool))) . evalConstExpr
 
 checkRetWrap :: Ident -> StmtA -> (StmtA -> StmtA) -> Eval (StmtA, Bool)
 checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
 
-condLit :: Maybe Literal -> WillExecute
-condLit mlit = toWillExecute $ mlit >>= (^? _LBool)
-
-evalConstExpr :: ExprA -> Maybe Literal
+evalConstExpr :: ExprA -> (ExprA, ML)
 evalConstExpr expr = case expr of
-    EVar {}      -> Nothing
-    EApp {}      -> Nothing
-    ELitTrue _   -> pure $ LBool True
-    ELitFalse _  -> pure $ LBool False
-    ELitInt _  v -> pure $ LInt v
-    ELitDoub _ v -> pure $ LDouble v
-    EString _  v -> pure $ LString v
-    Not _  e     -> LBool . not <$> detLitBool e
-    Neg _  e     -> evalNeg e
-    EOr _  l r   -> evalBoolOp (||) l r
-    EAnd _ l r   -> evalBoolOp (&&) l r
-    EMul _ l o r -> evalMul l o r
-    EAdd _ l o r -> evalAdd l o r
-    ERel _ l o r -> evalRel l o r
+    EVar {}        -> addLit  expr Nothing
+    EApp {}        -> addLit  expr Nothing
+    ELitTrue  _    -> addLit' expr $ LBool True
+    ELitFalse _    -> addLit' expr $ LBool False
+    ELitInt   _ v  -> addLit' expr $ LInt    v
+    ELitDoub  _ v  -> addLit' expr $ LDouble v
+    EString   _ v  -> addLit' expr $ LString v
+    Not  a e       -> evalNot a e
+    Neg  a e       -> evalNeg a e
+    EOr  a l r     -> evalBoolOp (||) EOr  a l r
+    EAnd a l r     -> evalBoolOp (&&) EAnd a l r
+    EMul a l op r  -> evalMul a l op r
+    EAdd a l op r  -> evalAdd a l op r
+    ERel a l op r  -> evalRel a l op r
 
-evalMul :: ExprA -> MulOpA -> ExprA -> Maybe Literal
-evalMul l o r = evalBinOp l r int doub
-    where int  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LInt
-          doub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LDouble
+evalNot :: ASTAnots -> ExprA -> (ExprA, ML)
+evalNot a expr = addLit (Not a expr') $ LBool . not <$> lit
+    where (expr', lit) = detLitBool expr
 
-evalAdd :: ExprA -> AddOpA -> ExprA -> Maybe Literal
-evalAdd l o r = evalBinOp l r int doub
-    where int  v er = plusFn o <:> v <*> er ^? _LInt
-          doub v er = plusFn o <:> v <*> er ^? _LDouble
-
-evalRel :: ExprA -> RelOpA -> ExprA -> Maybe Literal
-evalRel l o r = do
-    el <- evalConstExpr l
-    er <- evalConstExpr r
-    fmap LBool $ case el of
-        LBool   v -> relFn <$> mfilter isBoolRel (pure o) <*>
-                     pure v <*> er ^? _LBool
-        LInt    v -> evalRelStd v o er _LInt
-        LDouble v -> evalRelStd v o er _LDouble
-        LString v -> evalRelStd v o er _LString
-
-isBoolRel :: RelOpA -> Bool
-isBoolRel = (`elem` [EQU (), NE ()]) . void
-
-evalBoolOp :: (Bool -> Bool -> Bool) -> ExprA -> ExprA -> Maybe Literal
-evalBoolOp o le ri = liftM2 (LBool .| o) (detLitBool le) (detLitBool ri)
-
-detLitBool :: ExprA -> Maybe Bool
-detLitBool x = evalConstExpr x >>= (^? _LBool)
-
-mulFetchRight :: (Eq a, Num a) => MulOpA -> Literal ->
-                 Getting (First a) Literal a -> Maybe a
-mulFetchRight o er p = mfilter (\r -> r /= 0 || void o /= Div ()) $ er ^? p
-
-evalBinOp :: ExprA -> ExprA -> (Integer -> Literal -> Maybe Integer)
-          -> (Double -> Literal -> Maybe Double) -> Maybe Literal
-evalBinOp l r manipI manipD = do
-        el <- evalConstExpr l
-        er <- evalConstExpr r
-        case el of LInt v    -> LInt <$> manipI v er
-                   LDouble v -> LDouble <$> manipD v er
-                   _         -> Nothing
-
-evalNeg :: ExprA -> Maybe Literal
-evalNeg e = evalConstExpr e >>= f
-    where f (LInt v)    = neg LInt v
+evalNeg :: ASTAnots -> ExprA -> (ExprA, ML)
+evalNeg a expr = addLit (Neg a expr') $ lit >>= f
+    where (expr', lit)  = evalConstExpr expr
+          f (LInt    v) = neg LInt    v
           f (LDouble v) = neg LDouble v
           f _           = Nothing
+
+evalBoolOp :: (Bool -> Bool -> Bool)
+           -> (ASTAnots -> ExprA -> ExprA -> ExprA)
+           ->  ASTAnots -> ExprA -> ExprA
+           -> (ExprA, Maybe Literal)
+evalBoolOp op ctor a l r = addLit (ctor a l' r') $ liftM2 (LBool .| op) ll rl
+    where ((l', ll), (r', rl)) = (detLitBool l, detLitBool r)
+
+detLitBool :: ExprA -> (ExprA, Maybe Bool)
+detLitBool expr = second (>>= (^? _LBool)) $ evalConstExpr expr
+
+evalBin ::  ExprA -> ExprA
+        -> (ExprA -> ExprA -> Maybe Literal -> (ExprA, Maybe Literal))
+        -> (Maybe Literal  -> Maybe Literal -> Maybe Literal)
+        -> (ExprA, Maybe Literal)
+evalBin l r g f = g l' r' $ f llit rlit
+    where ((l', llit), (r', rlit)) = (evalConstExpr l, evalConstExpr r)
+
+evalAdd :: ASTAnots -> ExprA -> AddOpA -> ExprA -> (ExprA, ML)
+evalAdd a l op r = evalArith EAdd a l op r (handle _LInt) (handle _LDouble)
+    where handle c v er = plusFn op <:> v <*> er ^? c
+
+evalMul :: ASTAnots -> ExprA -> MulOpA -> ExprA -> (ExprA, ML)
+evalMul a l o r = evalArith EMul a l o r hint hdoub
+    where hint  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LInt
+          hdoub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LDouble
+
+evalArith :: (ASTAnots -> ExprA -> t1 -> ExprA -> ExprA)
+          ->  ASTAnots -> ExprA -> t1 -> ExprA
+          -> (Integer -> Literal -> Maybe Integer)
+          -> (Double  -> Literal -> Maybe Double)
+          -> (ExprA, Maybe Literal)
+evalArith ctor a l op r hint hdoub = evalBin l r wrap makeLit
+    where wrap l' r' = addLit $ ctor a l' op r'
+          makeLit llit rlit = do
+            (ll, rl) <- liftM2 (,) llit rlit
+            case ll of LInt    v -> LInt    <$> hint v rl
+                       LDouble v -> LDouble <$> hdoub v rl
+                       _         -> Nothing
+
+evalRel :: ASTAnots -> ExprA -> RelOpA -> ExprA -> (ExprA, ML)
+evalRel a l op r = evalBin l r (\l' r' -> addLit $ ERel a l' op r') makeLit
+    where makeLit llit rlit = do
+            (ll, rl) <- liftM2 (,) llit rlit
+            fmap LBool $ case ll of
+                LBool   v -> relFn <$> mfilter isBoolRel (pure op)
+                             <*> pure v <*> rl ^? _LBool
+                LInt    v -> evalRelStd v op rl _LInt
+                LDouble v -> evalRelStd v op rl _LDouble
+                LString v -> evalRelStd v op rl _LString
 
 neg :: (Monad m, Num v) => (v -> r) -> v -> m r
 neg ctor v = return $ ctor $ -v
 
-evalRelStd :: Ord a => a -> RelOpA -> s
-           -> Getting (First a) s a -> Maybe Bool
+evalRelStd :: Ord a => a -> RelOpA -> s -> Getting (First a) s a -> Maybe Bool
 evalRelStd v o er t = relFn o <:> v <*> er ^? t
 
 relFn :: Ord a => RelOpA -> a -> a -> Bool
@@ -194,3 +214,10 @@ mulFn :: Num a
 mulFn _ _ (Times _) = Just (*)
 mulFn _ d (Div   _) = Just d
 mulFn m _ (Mod   _) = m
+
+mulFetchRight :: (Eq a, Num a) => MulOpA -> Literal ->
+                 Getting (First a) Literal a -> Maybe a
+mulFetchRight o er p = mfilter (\r -> r /= 0 || void o /= Div ()) $ er ^? p
+
+isBoolRel :: RelOpA -> Bool
+isBoolRel = (`elem` [EQU (), NE ()]) . void
