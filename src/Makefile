@@ -12,11 +12,20 @@ jlc:
 	cabal build
 	cp dist/build/jlc/jlc ../jlc
 
-doc: bnfcclean bnfc
-	cd Javalette && pandoc -f t2t -t markdown_github -o Doc.md Doc.txt
-	cd Javalette && sed '1,4d' Doc.md > Doc.sed
-	cd Javalette && sed 's/\*\*|\*\*/\*\\\|\* /g' Doc.sed > Doc.md
-	cd Javalette && mv Doc.md ../../doc/bnfc.md
+doc: docclean
+	mkdir -p build/doc
+	cat ../README.md > build/doc/README.md
+	cd Javalette && pandoc -f t2t -t markdown_github\
+		-o ../build/doc/bnf.md Doc.txt
+	cd build/doc && sed '1,4d' bnf.md > tmp && mv tmp bnf.md
+	cd build/doc && sed 's/\*\*|\*\*/\*\\\|\* /g'\
+		bnf.md > tmp && mv tmp bnf.md
+	cd build/doc && cat bnf.md >> README.md
+	cd build/doc && pandoc -f markdown_github -t html5\
+		-o README.html README.md
+	cd build/doc && pandoc -f html -o latex\
+		-o README.pdf README.html
+	cd build/doc && cp README.* ../../../doc
 
 bnfcclean:
 	rm -rf Javalette
@@ -25,6 +34,9 @@ jlcclean:
 	rm -rf dist/build/jlc/jlc-tmp/
 	rm -f dist/build/jlc/jlc
 	rm -f ../jlc
+
+docclean: bnfcclean bnfc
+	rm -rf build
 
 test:
 	@cabal build > /dev/null 2>&1

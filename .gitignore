@@ -80,5 +80,6 @@ cabal.sandbox.config
 # Special, project related:
 grade/Grade
 src/Javalette/
+src/build/
 submission/
 jlc
