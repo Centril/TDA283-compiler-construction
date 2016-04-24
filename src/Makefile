@@ -14,7 +14,7 @@ jlc:
 
 doc: bnfcclean bnfc
 	cd Javalette && pandoc -f t2t -t markdown_github -o Doc.md Doc.txt
-	cd Javalette && sed '1,12d' Doc.md > Doc.sed
+	cd Javalette && sed '1,4d' Doc.md > Doc.sed
 	cd Javalette && sed 's/\*\*|\*\*/\*\\\|\* /g' Doc.sed > Doc.md
 	cd Javalette && mv Doc.md ../../doc/bnfc.md
 

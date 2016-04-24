@@ -1,3 +1,11 @@
+The lexical structure of Javalette
+----------------------------------
+
+### Identifiers
+
+Identifiers *Ident* are unquoted strings beginning with a letter, followed by any combination of letters, digits, and the characters `_ '` reserved words excluded.
+
+### Literals
 
 Integer literals *Integer* are nonempty sequences of digits.
 
