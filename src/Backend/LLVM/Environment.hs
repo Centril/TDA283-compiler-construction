@@ -37,11 +37,16 @@ module Backend.LLVM.Environment (
     initialLEnv
 ) where
 
-import Data.Map (Map, empty)
+import Data.Map (Map, empty, (!))
 
 import Control.Lens hiding (Context, contexts)
 
+import Javalette.Abs
+
+import Common.Computation
+
 import Frontend.Environment
+
 import Backend.LLVM.LLVMAst
 
 --------------------------------------------------------------------------------
@@ -51,15 +56,47 @@ import Backend.LLVM.LLVMAst
 -- TODO: Move FnSigMap to Common
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
-    _constants :: LConstGlobals, -- ^ Accumulated list of constants.
-    _functions :: FnSigMap,      -- ^ Map of ident -> function signatures.
-    _tempCount :: Int,           -- ^ Counter for temporary SSA in LLVM.
-    _newLabels :: [Int],         -- ^ Supply of new labels.
-    _labels    :: LLabels }      -- ^ Accumulated labels.
+    _constants  :: LConstGlobals, -- ^ Accumulated list of constants.
+    _lfunctions :: FnSigMap,      -- ^ Map of ident -> function signatures.
+    _tempCount  :: Int,           -- ^ Counter for temporary SSA in LLVM.
+    _labelCount :: Int,           -- ^ Counter for labels.
+    _labels     :: LLabels }      -- ^ Accumulated labels.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
 initialLEnv :: FnSigMap -> LEnv
-initialLEnv fns = LEnv [] fns 0 [1..] []
+initialLEnv fns = LEnv [] fns 0 0 []
+
+--------------------------------------------------------------------------------
+-- Computation alias:
+--------------------------------------------------------------------------------
+
+type LComp a = Comp LEnv a
+
+--------------------------------------------------------------------------------
+-- Environment operations:
+--------------------------------------------------------------------------------
+
+-- | 'lookupFun': Return the 'FunSig' of a function ident.
+lookupLFun :: Ident -> LComp FunSig
+lookupLFun = uses lfunctions . flip (!)
+
+_newTemp :: LComp Int
+_newTemp = use tempCount <* (tempCount %= (+1))
+
+newTemp :: LComp LIdent
+newTemp = (("t" ++ ) . show) <$> _newTemp
+
+_newLabel :: LComp Int
+_newLabel = use labelCount <* (labelCount %= (+1))
+
+newLabel :: String -> LComp LLabelRef
+newLabel str = ((str ++ ) . show) <$> _newLabel
+
+pushConst :: LConstGlobal -> LComp ()
+pushConst c = constants %= (++ [c])
+
+pushLabel :: LLabel -> LComp ()
+pushLabel l = labels %= (++ [l])
