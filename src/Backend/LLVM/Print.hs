@@ -35,20 +35,18 @@ import Data.List
 
 import Backend.LLVM.LLVMAst
 
-u = undefined
-
 type LLVMCode = String
 
---joinComma :: [[a]] -> [a]
+joinComma :: [String] -> String
 joinComma = intercalate ", "
 
--- unLineList ::
-unLineFun f a = unlines $ fmap f a
+unlineFun :: (a -> String) -> [a] -> String
+unlineFun f a = unlines $ fmap f a
 
 printLLVMAst :: LLVMAst -> LLVMCode
-printLLVMAst (LLVMAst g c d) = unlines [unLineFun printConstGlobal g,
-                                        unLineFun printFunDecl c,
-                                        unLineFun printFunDef d]
+printLLVMAst (LLVMAst g c d) = unlines [unlineFun printConstGlobal g,
+                                        unlineFun printFunDecl c,
+                                        unlineFun printFunDef d]
 
 printConstGlobal :: LConstGlobal -> LLVMCode
 printConstGlobal (LConstGlobal i t v) =
@@ -88,7 +86,7 @@ printLabel' :: LIdent -> LLVMCode
 printLabel' l = "label " ++ printIdentVar l
 
 printLabels :: LLabels -> LLVMCode
-printLabels = unLineFun printLabel
+printLabels = unlineFun printLabel
 
 printOp :: LOp -> LLVMCode
 printOp = \case
@@ -127,7 +125,7 @@ printInstIndent :: LInst -> LLVMCode
 printInstIndent i = "\n\t" ++  printInst i
 
 printInsts :: LInsts -> LLVMCode
-printInsts = unLineFun printInstIndent
+printInsts = unlineFun printInstIndent
 
 printExpr :: LExpr -> LLVMCode
 printExpr = \case
