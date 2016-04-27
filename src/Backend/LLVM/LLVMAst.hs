@@ -27,12 +27,7 @@ Portability : ALL
 
 The LLVM AST in the LLVM backend of the Javalette compiler.
 -}
-module Backend.LLVM.LLVMAst (
-    -- * Types
-
-    -- * Operations
-
-) where
+module Backend.LLVM.LLVMAst where
 
 data LLVMAst = LLVMAST {
     _lGConsts :: LConstGlobals, _lFDecls :: LFunDecls, _lFDefs :: LFunDefs }
