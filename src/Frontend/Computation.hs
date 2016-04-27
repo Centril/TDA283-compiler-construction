@@ -81,9 +81,9 @@ _lookupVar :: Ident -> Contexts -> Maybe TypeA
 _lookupVar = mfind . Map.lookup
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
--- is 'return':ed, otherwise, onErr is given the (var = 'Ident').
+-- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
 lookupFun' :: (Ident -> Eval FunSig) -> Ident -> Eval FunSig
-lookupFun' onErr var = uses functions (Map.lookup var) >>= maybeErr (onErr var)
+lookupFun' onErr fun = uses functions (Map.lookup fun) >>= maybeErr (onErr fun)
 
 -- | 'extendVar': Extends the current scope with the given variable with ident
 -- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
