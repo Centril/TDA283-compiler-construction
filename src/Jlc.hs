@@ -28,7 +28,11 @@ import Frontend.Environment
 import Frontend.Computation
 import Frontend.TypeCheck
 
+import Backend.AlphaRename
+
 import Utils.Terminal
+
+import Control.Monad
 
 --------------------------------------------------------------------------------
 -- main:
@@ -66,15 +70,18 @@ compileUnitSuccess logs (val, env) = do
 runCompileComp :: String -> EvalResult ProgramA
 runCompileComp code = runComp (compileComp code) initialTCEnv
 
+pinfo :: Show a => Phase -> String -> a -> Comp s ()
+pinfo p header x = info p header >> info p (show x)
+
 compileComp :: String -> Eval ProgramA
 compileComp code = do
     ast1 <- parseProgram code
-    info Parser "AST after parse"
-    info Parser $ show ast1
+    pinfo Parser "AST after parse" ast1
     ast2 <- typeCheck ast1
-    info TypeChecker "AST after type check"
-    info TypeChecker $ show ast2
-    return ast2
+    pinfo TypeChecker "AST after type check" ast2
+    let ast3 = alphaRename ast2
+    pinfo AlphaRenamer "AST after alpha rename" (void ast3)
+    return ast3
 
 --------------------------------------------------------------------------------
 -- Helpers:
