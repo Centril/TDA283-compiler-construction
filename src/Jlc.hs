@@ -20,10 +20,12 @@ module Main where
 import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
+import Common.Computation hiding (err)
+
 import Frontend.ParseLex
 import Frontend.Annotations
 import Frontend.Environment
-import Frontend.Computation hiding (err)
+import Frontend.Computation
 import Frontend.TypeCheck
 
 import Utils.Terminal
@@ -62,7 +64,7 @@ compileUnitSuccess logs (val, env) = do
     errLn "OK"
 
 runCompileComp :: String -> EvalResult ProgramA
-runCompileComp code = runEval (compileComp code) initialEnv
+runCompileComp code = runComp (compileComp code) initialEnv
 
 compileComp :: String -> Eval ProgramA
 compileComp code = do
@@ -89,3 +91,6 @@ phaseErr :: Phase -> String
 phaseErr Parser        = "SYNTAX ERROR"
 phaseErr TypeChecker   = "TYPE ERROR"
 phaseErr ReturnChecker = "TYPE ERROR"
+phaseErr AlphaRenamer  = "ALPHA-RENAME ERROR"
+phaseErr Compiler      = "COMPILE ERROR"
+phaseErr Linker        = "LINK ERROR"
