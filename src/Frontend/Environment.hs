@@ -35,7 +35,7 @@ module Frontend.Environment (
     FunSig(..), FunId(..), FnSigMap,
 
     -- * Operations
-    initialEnv, functions, contexts, toFunId
+    initialTCEnv, functions, contexts, toFunId
 ) where
 
 import Data.Map (Map, empty)
@@ -91,6 +91,6 @@ data TCEnv = TCEnv {
 
 makeLenses ''TCEnv
 
--- | 'initialEnv': The initial empty environment.
-initialEnv :: TCEnv
-initialEnv = TCEnv empty [empty]
+-- | 'initialTCEnv': The initial empty typechecker environment.
+initialTCEnv :: TCEnv
+initialTCEnv = TCEnv empty [empty]

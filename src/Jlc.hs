@@ -64,7 +64,7 @@ compileUnitSuccess logs (val, env) = do
     errLn "OK"
 
 runCompileComp :: String -> EvalResult ProgramA
-runCompileComp code = runComp (compileComp code) initialEnv
+runCompileComp code = runComp (compileComp code) initialTCEnv
 
 compileComp :: String -> Eval ProgramA
 compileComp code = do
