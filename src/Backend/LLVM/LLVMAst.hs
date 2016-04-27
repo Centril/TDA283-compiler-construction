@@ -29,16 +29,16 @@ The LLVM AST in the LLVM backend of the Javalette compiler.
 -}
 module Backend.LLVM.LLVMAst where
 
-data LLVMAst = LLVMAST {
+data LLVMAst = LLVMAst {
     _lGConsts :: LConstGlobals, _lFDecls :: LFunDecls, _lFDefs :: LFunDefs }
     deriving (Eq, Ord, Show, Read)
 
 data LConstGlobal = LConstGlobal {
-    _lCGType :: LType, _lCGIdent :: LIdent, _lCFVal :: LValue }
+    _lCGIdent :: LIdent, _lCGType :: LType, _lCFVal :: LValue }
     deriving (Eq, Ord, Show, Read)
 
 data LFunDecl = LFunDecl {
-    _lFcRetType :: LType, _lFcIdent :: LIdent, _lFcArgType :: LTypes }
+    _lFcRetType :: LType, _lFcIdent :: LIdent, _lFcArgTypes :: LTypes }
     deriving (Eq, Ord, Show, Read)
 
 data LFunDef = LFunDef {
@@ -53,7 +53,7 @@ data LType = LVoid                                      |
              LArray { _lADim :: Int, _lAType :: LType }
     deriving (Eq, Ord, Show, Read)
 
-data LArg = LArg { _lArgId :: LIdent, _lArgType :: LType }
+data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
     deriving (Eq, Ord, Show, Read)
 
 data LLabel = LLabel { _lLaIdent :: LIdent, _lLaInsts :: LInsts }
@@ -70,7 +70,7 @@ data LValRef = LVInt { _lVInt :: Int }       |
 data LTValRef = LTValRef { _lTType :: LType, _lTVRef :: LValRef }
     deriving (Eq, Ord, Show, Read)
 
-data LFunRef = LFunSig {
+data LFunRef = LFunRef {
     _lFrIdent :: LIdent, _lFrArgRef :: LTValRef }
     deriving (Eq, Ord, Show, Read)
 
@@ -79,7 +79,7 @@ data LInst = LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr } |
              LIExpr LExpr                                       |
              LVCall LFunRef                                     |
              LABr LLabelRef                                     |
-             LCBr LTValRef LLabelRef LLabelRef                  |
+             LCBr LTValRef LIdent LIdent                        |
              LRet LTValRef                                      |
              LStore LTValRef LTValRef                           |
              LUnreachable
