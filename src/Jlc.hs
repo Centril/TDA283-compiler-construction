@@ -29,10 +29,9 @@ import Frontend.Computation
 import Frontend.TypeCheck
 
 import Backend.AlphaRename
+import Backend.PreOpt
 
 import Utils.Terminal
-
-import Control.Monad
 
 --------------------------------------------------------------------------------
 -- main:
@@ -80,8 +79,10 @@ compileComp code = do
     ast2 <- typeCheck ast1
     pinfo TypeChecker "AST after type check" ast2
     let ast3 = alphaRename ast2
-    pinfo AlphaRenamer "AST after alpha rename" (void ast3)
-    return ast3
+    pinfo AlphaRenamer "AST after alpha rename" ast3
+    let ast4 = preOpt ast3
+    pinfo PreOptimizer "AST after pre optimizing" ast4
+    return ast4
 
 --------------------------------------------------------------------------------
 -- Helpers:
@@ -99,5 +100,6 @@ phaseErr Parser        = "SYNTAX ERROR"
 phaseErr TypeChecker   = "TYPE ERROR"
 phaseErr ReturnChecker = "TYPE ERROR"
 phaseErr AlphaRenamer  = "ALPHA-RENAME ERROR"
+phaseErr PreOptimizer  = "PRE-OPTIMIZE ERROR"
 phaseErr Compiler      = "COMPILE ERROR"
 phaseErr Linker        = "LINK ERROR"

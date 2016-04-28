@@ -88,7 +88,8 @@ runSEWT ev e = runWriterT $ runExceptT $ runStateT (_runSEWT ev) e
 
 -- | 'Phase': Identifiers of various compilation phases.
 data Phase = Parser | TypeChecker | ReturnChecker |
-             AlphaRenamer | Compiler | Linker
+             AlphaRenamer | PreOptimizer |
+             Compiler | Linker
     deriving (Eq, Show, Read, Ord, Enum)
 
 -- | 'ErrMsg': Type of error messages in 'Err'.

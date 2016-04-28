@@ -27,7 +27,8 @@ Portability : ALL
 
 AST Annotations in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell, DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase,
+             UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
 
 module Frontend.Annotations (
     -- * Types
@@ -39,18 +40,23 @@ module Frontend.Annotations (
 
     Annotated, ML,
 
+    AnotExtract,
+
     -- * Operations
     toWillExecute, showKind, emptyAnot, applyEA,
     _LBool, _LInt, _LDouble, _LString,
     litBool, litDouble, litInt, litStr,
+    _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec,
     int, conststr, doub, bool, tvoid,
     
-    (<@>), (+@), annotate,
+    (<@>), (+@), annotate, extractAnot,
     addTyp, addTyp', addKind, addWE, addWE', addLit, addLit'
 ) where
 
 import Data.Data
+
+import qualified Data.Generics.Uniplate.Data as U
 
 import Control.Lens hiding (Context, contexts, Empty)
 import Control.Lens.Extras (is)
@@ -289,3 +295,15 @@ addTyp  expr typ = (expr +@ AType typ, typ)
 addTyp' :: (Monad m, Annotated f)
         => f [ASTAnot] -> TypeA -> m (f [ASTAnot], TypeA)
 addTyp' expr = return . addTyp expr
+
+--------------------------------------------------------------------------------
+-- AST Annotations, Shallow getting:
+--------------------------------------------------------------------------------
+
+-- | 'AnotExtract': exposes the anotation in some annotated structure.
+class AnotExtract f where
+    -- | 'extractAnot': extracts the annotation.
+    extractAnot :: f ASTAnots -> ASTAnots
+
+instance Data (f ASTAnots) => AnotExtract f where
+    extractAnot = head . U.childrenBi
