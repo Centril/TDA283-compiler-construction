@@ -27,7 +27,7 @@ Portability : ALL
 
 AST Annotations in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DeriveDataTypeable #-}
 
 module Frontend.Annotations (
     -- * Types
@@ -50,8 +50,12 @@ module Frontend.Annotations (
     addTyp, addTyp', addKind, addWE, addWE', addLit, addLit'
 ) where
 
+import Data.Data
+
 import Control.Lens hiding (Context, contexts, Empty)
 import Control.Lens.Extras (is)
+
+import Common.Uniplate()
 
 import Javalette.Abs
 
@@ -67,7 +71,7 @@ import Javalette.Abs
 -- Note: for now, all types live in 'KConcrete'.
 data Kind = KConcrete | KConstraint |
             KArrow { kaFrom :: Kind, kaTo :: Kind }
-    deriving (Eq, Show, Read, Ord)
+    deriving (Eq, Show, Read, Ord, Data, Typeable)
 
 -- | 'showKind': pretty prints the 'Kind' using haskell convention.
 showKind :: Kind -> String
@@ -87,14 +91,14 @@ data Literal = LBool   { _litBool   :: Bool    } |
                LInt    { _litInt    :: Integer } |
                LDouble { _litDouble :: Double }  |
                LString { _litStr    :: String }
-    deriving (Eq, Show, Read, Ord)
+    deriving (Eq, Show, Read, Ord, Data, Typeable)
 
 makeLenses ''Literal
 makePrisms ''Literal
 
 -- | 'WillExecute': Annotation for when statements will or will not be executed.
 data WillExecute = Always | Never | Unknown
-    deriving (Eq, Show, Read, Ord, Enum)
+    deriving (Eq, Show, Read, Ord, Enum, Data, Typeable)
 
 -- | 'toWillExecute': Convert from 'Maybe' 'Bool' to 'WillExecute'.
 toWillExecute :: Maybe Bool -> WillExecute
@@ -113,7 +117,7 @@ data ASTAnot = AType     { _anotType     :: Type [ASTAnot] } |
                AWillExec { _anotWillExec :: WillExecute    } |
                ACExprLit { _anotCExprLit :: ML             } |
                AKind     { _anotKind     :: Kind           }
-    deriving (Eq, Show, Read)
+    deriving (Eq, Show, Read, Data, Typeable)
 
 makePrisms ''ASTAnot
 makeLenses ''ASTAnot
