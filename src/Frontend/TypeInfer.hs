@@ -40,8 +40,6 @@ import Javalette.Abs
 
 import Utils.Function
 
-import Frontend.Annotations
-import Frontend.Environment
 import Frontend.Computation
 import Frontend.Error
 import Frontend.Common

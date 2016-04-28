@@ -37,13 +37,14 @@ module Backend.LLVM.Environment (
     initialLEnv
 ) where
 
-import Data.Map (Map, empty, (!))
+import Data.Map ((!))
 
 import Control.Lens hiding (Context, contexts)
 
 import Javalette.Abs
 
 import Common.Computation
+import Common.Abcd
 
 import Frontend.Environment
 
@@ -70,33 +71,22 @@ initialLEnv :: FnSigMap -> LEnv
 initialLEnv fns = LEnv [] fns 0 0 []
 
 --------------------------------------------------------------------------------
--- Computation alias:
+-- Environment operations:
 --------------------------------------------------------------------------------
 
 type LComp a = Comp LEnv a
 
---------------------------------------------------------------------------------
--- Environment operations:
---------------------------------------------------------------------------------
-
--- | 'lookupFun': Return the 'FunSig' of a function ident.
 lookupLFun :: Ident -> LComp FunSig
 lookupLFun = uses lfunctions . flip (!)
 
-_newTemp :: LComp Int
-_newTemp = use tempCount <* (tempCount %= (+1))
-
 newTemp :: LComp LIdent
-newTemp = (("t" ++ ) . show) <$> _newTemp
-
-_newLabel :: LComp Int
-_newLabel = use labelCount <* (labelCount %= (+1))
+newTemp = freshOf "t" tempCount
 
 newLabel :: String -> LComp LLabelRef
-newLabel str = ((str ++ ) . show) <$> _newLabel
+newLabel = flip freshOf labelCount
 
 pushConst :: LConstGlobal -> LComp ()
-pushConst c = constants %= (++ [c])
+pushConst = sAppendL constants
 
 pushLabel :: LLabel -> LComp ()
-pushLabel l = labels %= (++ [l])
+pushLabel = sAppendL labels

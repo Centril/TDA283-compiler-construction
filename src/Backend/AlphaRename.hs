@@ -34,12 +34,8 @@ module Backend.AlphaRename (
     alphaRename
 ) where
 
-import Prelude hiding (lookup)
-
-import Safe
-
 import Data.Maybe
-import Data.Map (Map, empty, lookup, insert)
+import Data.Map (Map, insert)
 
 import Control.Monad
 import Control.Monad.State
@@ -47,10 +43,11 @@ import Control.Monad.State
 import Control.Lens hiding (from, to)
 
 import Utils.List
-import Utils.Foldable
 import Utils.Pointless
 
 import Javalette.Abs
+
+import Common.StateOps
 
 import Frontend.Annotations
 
@@ -71,45 +68,36 @@ alphaRename :: ProgramA -> ProgramA
 alphaRename = flip evalState (AREnv [] 0) . arProg
 
 --------------------------------------------------------------------------------
--- Environment operations:
+-- Alpha Renaming:
 --------------------------------------------------------------------------------
 
 -- | 'ARComp': The type of computations for alpha renaming.
 type ARComp a = State AREnv a
 
---pushBlock, popBlock :: ARComp ()
-pushBlock = substs %= (empty:)
-popBlock  = substs %= (fromMaybe [] . tailMay)
-
 arRef :: Ident -> ARComp Ident
-arRef i = uses substs $ fromJust .| mfind . lookup $ i
+arRef i = uses substs $ fromJust .| ctxFirst $ i
 
 newSubst :: Ident -> ARComp Ident
-newSubst from = do
-    to <- (Ident . ("v" ++) . show) <$> use nameCount <* (nameCount %= (+1))
-    substs %= modifyf (insert from to)
-    return to
-
---------------------------------------------------------------------------------
--- Alpha Renaming:
---------------------------------------------------------------------------------
+newSubst from = do to <- Ident <$> freshOf "v" nameCount
+                   substs %= modifyf (insert from to)
+                   return to
 
 arProg :: ProgramA -> ARComp ProgramA
 arProg (Program a funs) = Program a <$> mapM arFun funs
 
 arFun :: TopDefA -> ARComp TopDefA
-arFun (FnDef a r i p b) = pushBlock >>
+arFun (FnDef a r i p b) = sPushM substs >>
                           liftM2 (FnDef a r i) (mapM arArg p) (arBlock b)
 
 arArg :: ArgA -> ARComp ArgA
 arArg (Arg a t i) = Arg a t <$> newSubst i
 
 arBlock :: BlockA -> ARComp BlockA
-arBlock (Block a block) = Block a <$> mapM arStmt block <* popBlock
+arBlock (Block a block) = Block a <$> mapM arStmt block <* sPopM substs
 
 arStmt :: StmtA -> ARComp StmtA
 arStmt stmt = case stmt of
-    BStmt    a b       -> pushBlock >> BStmt a <$> arBlock b
+    BStmt    a b       -> sPushM substs >> BStmt a <$> arBlock b
     Decl     a t is    -> Decl a t <$> mapM arItem is
     Ass      a i e     -> liftM2 (Ass a) (arRef i) (arExpr e)
     Incr     a i       -> Incr a <$> arRef i

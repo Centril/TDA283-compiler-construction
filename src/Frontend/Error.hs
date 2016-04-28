@@ -29,7 +29,6 @@ Error messsages in Frontend of Javalette compiler.
 -}
 module Frontend.Error where
 
-import Common.Computation
 import Frontend.Computation
 import Frontend.Query
 

@@ -47,7 +47,6 @@ import Utils.Function
 
 import Javalette.Abs
 
-import Frontend.Annotations
 import Frontend.Computation
 import Frontend.Error
 

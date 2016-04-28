@@ -36,13 +36,10 @@ import Control.Monad
 
 import Javalette.Abs
 
-import Frontend.Annotations
-import Frontend.Environment
 import Frontend.Computation
 import Frontend.Query
 import Frontend.Error
 import Frontend.Common
-
 import Frontend.TypeInfer
 
 --------------------------------------------------------------------------------

@@ -30,6 +30,9 @@ Operating environment of type checker in Javalette compiler.
 {-# LANGUAGE TemplateHaskell #-}
 
 module Frontend.Environment (
+    -- * Modules
+    module Frontend.Annotations,
+
     -- * Types
     TCEnv(..), Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,

@@ -36,8 +36,6 @@ import Javalette.Par
 import Javalette.Abs
 import Javalette.ErrM
 
-import Common.Computation
-
 import Frontend.Computation
 
 -- | 'parseProgram': statefully parses a Javalette program into AST.

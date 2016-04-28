@@ -31,7 +31,6 @@ module Frontend.Query where
 
 import Javalette.Abs
 
-import Frontend.Annotations
 import Frontend.Environment
 
 identStr :: Ident -> String

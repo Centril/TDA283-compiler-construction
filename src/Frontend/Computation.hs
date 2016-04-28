@@ -27,81 +27,68 @@ Portability : ALL
 
 Computation monad and operations in Javalette compiler.
 -}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 module Frontend.Computation (
+    -- * Modules
+    module Common.StateOps,
+    module Common.Computation,
+    module Frontend.Environment,
+
     -- * Types
     Eval, EvalResult,
 
     -- * Operations
-    pushBlock, popBlock,
     lookupVar', lookupFun',
     extendVar', extendFun',
 ) where
 
-import Safe
-
-import Data.Maybe
-
-import qualified Data.Map as Map
+import Prelude hiding (lookup)
+import Data.Map (lookup, insert)
 
 import Control.Monad()
 import Control.Applicative()
 
 import Control.Lens hiding (Context, contexts)
 
-import Utils.Foldable
 import Utils.Monad
 
 import Javalette.Abs
 
 import Common.Computation
+import Common.StateOps
 
-import Frontend.Annotations
 import Frontend.Environment
 
 --------------------------------------------------------------------------------
 -- Environment operations:
 --------------------------------------------------------------------------------
 
--- | 'pushBlock': pushes a fresh and empty block to the 'Context' stack.
-pushBlock :: Eval ()
-pushBlock = contexts %= (Map.empty:)
-
--- | 'popBlock': pops the top block from the 'Context' stack.
-popBlock :: Eval ()
-popBlock = contexts %= (fromMaybe [] . tailMay)
-
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
--- the identifier is '  return':ed, otherwise onErr is given the (var = 'Ident').
+-- the identifier is 'return':ed, otherwise onErr is given the (var = 'Ident').
 lookupVar' :: (Ident -> Eval TypeA) -> Ident -> Eval TypeA
-lookupVar' onErr var = uses contexts (_lookupVar var) >>= maybeErr (onErr var)
-
-_lookupVar :: Ident -> Contexts -> Maybe TypeA
-_lookupVar = mfind . Map.lookup
+lookupVar' onErr var = uses contexts (ctxFirst var) >>= maybeErr (onErr var)
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
 -- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
 lookupFun' :: (Ident -> Eval FunSig) -> Ident -> Eval FunSig
-lookupFun' onErr fun = uses functions (Map.lookup fun) >>= maybeErr (onErr fun)
+lookupFun' onErr fun = uses functions (lookup fun) >>= maybeErr (onErr fun)
 
 -- | 'extendVar': Extends the current scope with the given variable with ident
 -- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
 extendVar' :: (Ident -> Eval ()) -> Var -> Eval ()
 extendVar' onErr (Var ident typ) = do
     (c : ctxs) <- use contexts
-    maybe (contexts .= Map.insert ident typ c:ctxs)
+    maybe (contexts .= insert ident typ c:ctxs)
           (const $ onErr ident)
-          (Map.lookup ident c)
+          (lookup ident c)
 
 -- | 'extendVar': Extends the accumulated function signatures with the given
 -- signature as 'FnId'. If function exists, onError is used.
 extendFun' :: (Ident -> Eval ()) -> FunId -> Eval ()
 extendFun' onErr (FunId ident sig) = do
     funs <- use functions
-    maybe (functions .= Map.insert ident sig funs)
+    maybe (functions .= insert ident sig funs)
           (const $ onErr ident)
-          (Map.lookup ident funs)
+          (lookup ident funs)
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:

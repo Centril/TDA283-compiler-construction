@@ -36,9 +36,8 @@ import Control.Monad
 
 import Javalette.Abs
 
-import Common.Computation
+import Utils.Monad
 
-import Frontend.Annotations
 import Frontend.Computation
 import Frontend.Query
 import Frontend.Error
@@ -46,8 +45,6 @@ import Frontend.Common
 import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
-
-import Utils.Monad
 
 --------------------------------------------------------------------------------
 -- API:
@@ -82,7 +79,7 @@ checkProg (Program a funs) = Program a <$> mapM checkFunType funs
 
 checkFunType :: TopDefA -> Eval TopDefA
 checkFunType (FnDef a rtype ident args block) = do
-    pushBlock
+    sPushM contexts
     collectArgVars args
     FnDef a rtype ident args <$> checkBlock rtype block
 
@@ -91,7 +88,7 @@ collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
 checkBlock :: TypeA -> BlockA -> Eval BlockA
 checkBlock frtyp (Block a block) =
-    Block a <$> checkStms frtyp block <* popBlock
+    Block a <$> checkStms frtyp block <* sPopM contexts
 
 checkStms :: TypeA -> [StmtA] -> Eval [StmtA]
 checkStms = mapM . checkStm
@@ -99,7 +96,7 @@ checkStms = mapM . checkStm
 checkStm :: TypeA -> StmtA -> Eval StmtA
 checkStm typ stmt = case stmt of
     Empty _               -> return stmt
-    BStmt a block         -> pushBlock >> BStmt a <$> checkBlock typ block
+    BStmt a block         -> sPushM contexts >> BStmt a <$> checkBlock typ block
     Decl a vtyp items     -> checkDecls a vtyp items
     Ass a ident expr      -> Ass a ident <$> checkIdentExp ident expr
     Incr a ident          -> Incr a <$> checkIdent [int, doub] ident
