@@ -36,13 +36,13 @@ module Frontend.TypeInfer (
 
 import Control.Monad
 
-import Javalette.Abs
-
 import Utils.Function
 
 import Frontend.Computation
 import Frontend.Error
 import Frontend.Common
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Kind inference:

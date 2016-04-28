@@ -45,10 +45,10 @@ import Utils.Pointless
 import Utils.Monad
 import Utils.Function
 
-import Javalette.Abs
-
 import Frontend.Computation
 import Frontend.Error
+
+import Javalette.Abs
 
 returnCheck :: ProgramA -> Eval ProgramA
 returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs

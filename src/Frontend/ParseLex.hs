@@ -32,11 +32,11 @@ module Frontend.ParseLex (
     parseProgram
 ) where
 
+import Frontend.Computation
+
 import Javalette.Par
 import Javalette.Abs
 import Javalette.ErrM
-
-import Frontend.Computation
 
 -- | 'parseProgram': statefully parses a Javalette program into AST.
 parseProgram :: String -> Eval (Program ())

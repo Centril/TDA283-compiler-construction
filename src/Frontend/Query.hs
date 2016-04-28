@@ -29,9 +29,9 @@ Querying functions on AST in Javalette compiler frontend
 -}
 module Frontend.Query where
 
-import Javalette.Abs
-
 import Frontend.Environment
+
+import Javalette.Abs
 
 identStr :: Ident -> String
 identStr (Ident i) = i

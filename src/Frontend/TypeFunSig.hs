@@ -34,13 +34,13 @@ module Frontend.TypeFunSig (
 
 import Control.Monad
 
-import Javalette.Abs
-
 import Frontend.Computation
 import Frontend.Query
 import Frontend.Error
 import Frontend.Common
 import Frontend.TypeInfer
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):

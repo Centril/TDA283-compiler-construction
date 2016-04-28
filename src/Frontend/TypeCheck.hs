@@ -34,8 +34,6 @@ module Frontend.TypeCheck (
 
 import Control.Monad
 
-import Javalette.Abs
-
 import Utils.Monad
 
 import Frontend.Computation
@@ -45,6 +43,8 @@ import Frontend.Common
 import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- API:

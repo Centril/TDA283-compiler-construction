@@ -32,12 +32,10 @@ module Frontend.Common (
     lookupFunE, lookupVarE
 ) where
 
-import Javalette.Abs
-
-import Frontend.Annotations
-import Frontend.Environment
 import Frontend.Computation
 import Frontend.Error
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Lookups:

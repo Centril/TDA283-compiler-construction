@@ -45,9 +45,9 @@ import Data.Map (Map, empty)
 
 import Control.Lens hiding (Context, contexts)
 
-import Javalette.Abs
-
 import Frontend.Annotations
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:

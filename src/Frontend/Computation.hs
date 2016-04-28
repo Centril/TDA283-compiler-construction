@@ -51,12 +51,12 @@ import Control.Lens hiding (Context, contexts)
 
 import Utils.Monad
 
-import Javalette.Abs
-
 import Common.Computation
 import Common.StateOps
 
 import Frontend.Environment
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Environment operations:

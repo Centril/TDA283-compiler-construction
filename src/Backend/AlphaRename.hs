@@ -45,11 +45,11 @@ import Control.Lens hiding (from, to)
 import Utils.List
 import Utils.Pointless
 
-import Javalette.Abs
-
 import Common.StateOps
 
 import Frontend.Annotations
+
+import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Operating Environment:
