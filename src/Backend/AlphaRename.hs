@@ -28,6 +28,7 @@ Portability : ALL
 Alpha renaming in backend of Javalette compiler.
 -}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Backend.AlphaRename (
     -- * Operations
@@ -36,6 +37,8 @@ module Backend.AlphaRename (
 
 import Data.Maybe
 import Data.Map (Map, insert)
+
+import qualified Data.Generics.Uniplate.Data as U
 
 import Control.Monad
 import Control.Monad.State
@@ -46,6 +49,7 @@ import Utils.List
 import Utils.Pointless
 
 import Common.StateOps
+import Common.Uniplate()
 
 import Frontend.Annotations
 
@@ -87,7 +91,8 @@ arProg (Program a funs) = Program a <$> mapM arFun funs
 
 arFun :: TopDefA -> ARComp TopDefA
 arFun (FnDef a r i p b) = sPushM substs >>
-                          liftM2 (FnDef a r i) (mapM arArg p) (arBlock b)
+                          liftM2 (FnDef a r i) (mapM arArg p) (arBlock b) <*
+                          (nameCount .= 0)
 
 arArg :: ArgA -> ARComp ArgA
 arArg (Arg a t i) = Arg a t <$> newSubst i
@@ -115,17 +120,5 @@ arItem (Init   a i e) = liftM2 (flip (Init a)) (arExpr e) (newSubst i)
 arItem (NoInit a i  ) = NoInit a <$> newSubst i
 
 arExpr :: ExprA -> ARComp ExprA
-arExpr expr = case expr of
-    EVar a i     -> EVar a   <$> arRef i
-    EApp a i e   -> EApp a i <$> mapM arExpr e
-    Neg  a e     -> Neg  a   <$> arExpr e
-    Not  a e     -> Not  a   <$> arExpr e
-    EMul a l o r -> arBin l r $ flip (EMul a) o
-    EAdd a l o r -> arBin l r $ flip (EAdd a) o
-    ERel a l o r -> arBin l r $ flip (ERel a) o
-    EAnd a l   r -> arBin l r $       EAnd a
-    EOr  a l   r -> arBin l r $       EOr  a
-    _            -> return expr
-
-arBin :: ExprA -> ExprA -> (ExprA -> ExprA -> ExprA) -> ARComp ExprA
-arBin l r ctor = liftM2 ctor (arExpr l) (arExpr r)
+arExpr = U.transformM $ \case EVar a i -> EVar a <$> arRef i
+                              x        -> return x
