@@ -29,7 +29,7 @@ General utility for functions and arrows.
 -}
 module Utils.Function (
     -- * Operations
-    flip3, (§), (<§>)
+    flip3, (§), (<§>), untilMatch, untilEq
 ) where
 
 -- | 'flip3': move the third argument of a function to the front.
@@ -44,3 +44,18 @@ flip3 f c a b = f a b c
 -- a pair of functions to a pair of values.
 (<§>) :: (a -> b, c -> d) -> (a, c) -> (b, d)
 (<§>) (f, g) (a, b) = (f a, g b)
+
+-- | 'untilMatch': applies the second argument which is the function f, starting
+-- with the value in the third argument, which is x, and replaces it with that
+-- one, until the first argument which is a binary predicate, p, yields false
+-- when given the last accepted x and f x.
+-- This function is a generalization of 'until'
+untilMatch :: (a -> a -> Bool) -> (a -> a) -> a -> a
+untilMatch p f x
+    | p x x'    = x
+    | otherwise = untilMatch p f x'
+    where x' = f x
+
+-- | 'untilEq': specialization of 'untilMatch' for '(==)'
+untilEq :: Eq a => (a -> a) -> a -> a
+untilEq = untilMatch (==)

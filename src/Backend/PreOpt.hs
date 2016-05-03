@@ -41,6 +41,7 @@ import Control.Monad
 import Control.Lens hiding (from, to, Empty)
 
 import Utils.Foldable
+import Utils.Function
 
 import Frontend.Annotations
 
@@ -59,9 +60,7 @@ preOpt = deadNuke
 
 -- | 'deadNuke': uses annotations to nuke away dead code.
 deadNuke :: ProgramA -> ProgramA
-deadNuke = untilSame $ tBlock *.* tStmt
-
-f *.* g = U.transformBi f . U.transformBi g
+deadNuke = untilEq $ U.transformBi tBlock . U.transformBi tStmt
 
 tStmt :: StmtA -> StmtA
 tStmt = \case
@@ -86,10 +85,6 @@ tBlock (Block a stmts) = Block a $ stmts >>=
     \case BStmt _ (Block _ ss) -> ss
           Empty _              -> []
           stmt                 -> [stmt]
-
-untilSame :: Eq a => (a -> a) -> a -> a
-untilSame f x = if c == x then x else untilSame f c
-    where c = f x
 
 always :: Annotated f => f ASTAnots -> f ASTAnots
 always = addWE Always
