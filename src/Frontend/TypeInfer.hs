@@ -42,7 +42,7 @@ import Frontend.Computation
 import Frontend.Error
 import Frontend.Common
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- Kind inference:

@@ -29,7 +29,7 @@ General monadic, applicative, functor utility functions.
 -}
 module Utils.Monad (
     -- * Operations
-    (<!>), (<:>), (<<$>), (<>$>), maybeErr
+    (<!>), (<:>), (<<$>), (<>$>), maybeErr, (<$$>)
 ) where
 
 -- | '<!>': sequential application of a non-applicative value
@@ -58,3 +58,7 @@ f <>$> y = f . fst <$> y
 -- whenNothing is run, otherwise the value in 'Just' is 'return':ed.
 maybeErr :: Monad m => m a -> Maybe a -> m a
 maybeErr whenNothing = maybe whenNothing return
+
+-- | '<$$>': alias for composition of fmap with itself.
+(<$$>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
+(<$$>) = (<$>) . (<$>)

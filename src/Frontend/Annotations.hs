@@ -61,9 +61,7 @@ import qualified Data.Generics.Uniplate.Data as U
 import Control.Lens hiding (Context, contexts, Empty)
 import Control.Lens.Extras (is)
 
-import Common.Uniplate()
-
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- Kinds:

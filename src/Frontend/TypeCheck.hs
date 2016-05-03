@@ -44,7 +44,7 @@ import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- API:

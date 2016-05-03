@@ -40,7 +40,7 @@ import Frontend.Error
 import Frontend.Common
 import Frontend.TypeInfer
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):

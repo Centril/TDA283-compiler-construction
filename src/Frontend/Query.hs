@@ -31,7 +31,7 @@ module Frontend.Query where
 
 import Frontend.Environment
 
-import Javalette.Abs
+import Common.AST
 
 identStr :: Ident -> String
 identStr (Ident i) = i

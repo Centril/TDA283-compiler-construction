@@ -50,10 +50,9 @@ import Utils.Pointless
 
 import Common.StateOps
 import Common.Uniplate()
+import Common.AST
 
 import Frontend.Annotations
-
-import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Operating Environment:

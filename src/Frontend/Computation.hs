@@ -53,10 +53,9 @@ import Utils.Monad
 
 import Common.Computation
 import Common.StateOps
+import Common.AST
 
 import Frontend.Environment
-
-import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Environment operations:

@@ -47,7 +47,7 @@ import Control.Lens hiding (Context, contexts)
 
 import Frontend.Annotations
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:

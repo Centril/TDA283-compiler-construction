@@ -41,8 +41,7 @@ import Data.Map ((!))
 
 import Control.Lens hiding (Context, contexts)
 
-import Javalette.Abs
-
+import Common.AST
 import Common.Computation
 import Common.Abcd
 

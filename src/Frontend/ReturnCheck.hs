@@ -48,7 +48,7 @@ import Utils.Function
 import Frontend.Computation
 import Frontend.Error
 
-import Javalette.Abs
+import Common.AST
 
 returnCheck :: ProgramA -> Eval ProgramA
 returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs

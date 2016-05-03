@@ -32,7 +32,7 @@ module Frontend.Error where
 import Frontend.Computation
 import Frontend.Query
 
-import Javalette.Abs
+import Common.AST
 
 terr :: String -> Eval a
 terr = err TypeChecker
