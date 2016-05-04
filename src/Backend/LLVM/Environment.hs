@@ -31,10 +31,10 @@ Operating environment of LLVM Backend in Javalette compiler.
 
 module Backend.LLVM.Environment (
     -- * Types
-    LEnv(..),
+    LEnv(..), LComp,
 
     -- * Operations
-    initialLEnv
+    initialLEnv, newTemp, newLabel, pushConst, pushInst
 ) where
 
 import Data.Map ((!))
@@ -43,7 +43,7 @@ import Control.Lens hiding (Context, contexts)
 
 import Common.AST
 import Common.Computation
-import Common.Abcd
+import Common.StateOps
 
 import Frontend.Environment
 
@@ -60,7 +60,7 @@ data LEnv = LEnv {
     _lfunctions :: FnSigMap,      -- ^ Map of ident -> function signatures.
     _tempCount  :: Int,           -- ^ Counter for temporary SSA in LLVM.
     _labelCount :: Int,           -- ^ Counter for labels.
-    _labels     :: LLabels }      -- ^ Accumulated labels.
+    _insts      :: LInsts }       -- ^ Accumulated instructions.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
@@ -87,5 +87,5 @@ newLabel = flip freshOf labelCount
 pushConst :: LConstGlobal -> LComp ()
 pushConst = sAppendL constants
 
-pushLabel :: LLabel -> LComp ()
-pushLabel = sAppendL labels
+pushInst :: LInst -> LComp ()
+pushInst = sAppendL insts

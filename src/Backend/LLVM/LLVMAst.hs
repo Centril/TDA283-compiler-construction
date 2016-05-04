@@ -72,12 +72,12 @@ data LFunRef = LFunRef {
     deriving (Eq, Ord, Show, Read)
 
 -- TODO: Name the expressions
-data LInst = LLabel { _lLaIdent :: LIdent }                     |
+data LInst = LLabel { _lLaIdent :: LLabelRef }                  |
              LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr } |
              LIExpr LExpr                                       |
              LVCall LFunRef                                     |
-             LABr LIdent                                     |
-             LCBr LTValRef LIdent LIdent                        |
+             LABr LLabelRef                                     |
+             LCBr LTValRef LLabelRef LLabelRef                  |
              LRet LTValRef                                      |
              LStore LTValRef LTValRef                           |
              LUnreachable
@@ -100,6 +100,8 @@ data LExpr = LLoad LTValRef                           |
              LGElemPtr LType LIdent LTIndex [LTIndex] |
              LPtrToInt LType LValRef LType
              deriving (Eq, Ord, Show, Read)
+
+type LLabelRef = LIdent
 
 type LValue = String
 type LIdent = String
