@@ -116,6 +116,7 @@ printInst = \case
     LABr i       -> "br " ++ printLabel i
     LCBr r i1 i2 -> "br " ++ joinComma [printTValRef r, printLabel i1,
                                         printLabel i2]
+    LVRet        -> "ret void"
     LRet r       -> "ret " ++ printTValRef r
     LStore r1 r2 -> "store " ++ joinComma [printTValRef r1, printTValRef r2]
     LUnreachable -> "unreachable"

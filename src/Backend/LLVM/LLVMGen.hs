@@ -41,6 +41,7 @@ import Frontend.Annotations
 
 import Backend.LLVM.Environment
 import Backend.LLVM.LLVMAst
+import Backend.LLVM.Print
 
 u = undefined
 
@@ -51,21 +52,20 @@ compileLLVM prog = do
 
 compileFun :: TopDefA -> LComp LFunDef
 compileFun (FnDef _ rtyp name args block) = do
-    name' <- compileFName name
-    rtyp' <- compileFRTyp rtyp
-    args' <- mapM compileFArg args
+    let name' = compileFName name
+    let rtyp' = compileFRTyp rtyp
+    let args' = compileFArg <$> args
     insts <- compileFBlock block
-
     return $ LFunDef rtyp' name' args' insts
 
-compileFName :: Ident -> LComp LIdent
-compileFName = pure . _ident
+compileFName :: Ident -> LIdent
+compileFName = _ident
 
-compileFRTyp :: TypeA -> LComp LType
-compileFRTyp = u
+compileFRTyp :: TypeA -> LType
+compileFRTyp = compileType
 
-compileFArg :: ArgA -> LComp LArg
-compileFArg = u
+compileFArg :: ArgA -> LArg
+compileFArg arg = LArg (compileType $ _aTyp arg) (_ident $ _aIdent arg)
 
 compileFBlock :: BlockA -> LComp LInsts
 compileFBlock block = compileFBlock' block >> getInsts <* clearInsts
@@ -88,7 +88,7 @@ compileStmt = \case
     Incr     _ i       -> u
     Decr     _ i       -> u
     Ret      _ e       -> compileRet e
-    VRet     _         -> u
+    VRet     _         -> pushInst LVRet
     Cond     _ c si    -> compileCond     c si
     CondElse _ c si se -> compileCondElse c si se
     While    _ c sw    -> compileWhile    c sw
@@ -110,9 +110,6 @@ compileAss name e = do
 
 compileRet :: ExprA -> LComp ()
 compileRet e = LRet <$> compileExpr e >>= pushInst
-
-compileVRet :: LComp ()
-compileVRet = u
 
 compileCond :: ExprA -> StmtA -> LComp ()
 compileCond c si = do
@@ -154,13 +151,55 @@ compileCondStmt stmt _then _cont = do
     pushInst $ LABr _cont
 
 compileExpr :: ExprA -> LComp LTValRef
-compileExpr = u
+compileExpr = \case
+    EVar      _ i     -> u
+    ELitInt   _ v     -> compileLInt   sizeofInt   v
+    ELitDoub  _ v     -> compileLFloat sizeofFloat v
+    EString   _ v     -> compileCString v
+    ELitTrue  _       -> compileLInt   sizeofBool  1
+    ELitFalse _       -> compileLInt   sizeofBool  0
+    EApp      _ i es  -> u
+    Neg       _ e     -> u
+    Not       _ e     -> u
+    EMul      _ l o r -> u
+    EAdd      _ l o r -> u
+    ERel      _ l o r -> u
+    EAnd      _ l   r -> u
+    EOr       _ l   r -> u
+
+compileCString :: String -> LComp LTValRef
+compileCString v = do
+    temp <- newTemp
+    ref  <- newConstRef "cstring"
+    let tchar = LInt sizeofChar
+    let typ   = LArray (1 + length v) tchar
+    pushConst $ LConstGlobal ref typ v
+    pushInst  $ LAssign temp (strPointer (LPtr typ) ref)
+    return    $ LTValRef (LPtr tchar) (LRef ref)
+
+zeroIndex :: LTIndex
+zeroIndex = (LInt 32, 0)
+
+strPointer :: LType -> LIdent -> LExpr
+strPointer t i = LGElemPtr t i zeroIndex [zeroIndex]
+
+compileLInt :: Int -> Integer -> LComp LTValRef
+compileLInt s v = return $ LTValRef (LInt s) (LVInt v)
+
+compileLFloat :: Int -> Double -> LComp LTValRef
+compileLFloat s v = return $ LTValRef (LFloat s) (LVFloat v)
+
+sizeofBool, sizeofChar, sizeofInt, sizeofFloat :: Int
+sizeofBool  = 1
+sizeofChar  = 8
+sizeofInt   = 32
+sizeofFloat = 64
 
 compileType :: TypeA -> LType
 compileType = \case
-    Int      _ -> LInt   32
-    Doub     _ -> LFloat 32
-    Bool     _ -> LInt   1
+    Int      _ -> LInt   sizeofInt
+    Doub     _ -> LFloat sizeofFloat
+    Bool     _ -> LInt   sizeofBool
     Void     _ -> LVoid
     ConstStr _ -> u
     Fun      _ rtyp argst -> u

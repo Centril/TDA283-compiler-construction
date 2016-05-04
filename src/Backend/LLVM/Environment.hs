@@ -34,7 +34,10 @@ module Backend.LLVM.Environment (
     LEnv(..), LComp,
 
     -- * Operations
-    initialLEnv, newTemp, newLabel, pushConst, pushInst, clearInsts, getInsts
+    initialLEnv,
+    newTemp, newLabel,
+    newConstRef, pushConst,
+    pushInst, clearInsts, getInsts
 ) where
 
 import Data.Map ((!))
@@ -57,17 +60,18 @@ import Backend.LLVM.LLVMAst
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
     _constants  :: LConstGlobals, -- ^ Accumulated list of constants.
-    _lfunctions :: FnSigMap,      -- ^ Map of ident -> function signatures.
+    _constCount :: Int,           -- ^ Counter for constants.
     _tempCount  :: Int,           -- ^ Counter for temporary SSA in LLVM.
     _labelCount :: Int,           -- ^ Counter for labels.
-    _insts      :: LInsts }       -- ^ Accumulated instructions.
+    _insts      :: LInsts,        -- ^ Accumulated instructions.
+    _lfunctions :: FnSigMap }     -- ^ Map of ident -> function signatures.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
 initialLEnv :: FnSigMap -> LEnv
-initialLEnv fns = LEnv [] fns 0 0 []
+initialLEnv = LEnv [] 0 0 0 []
 
 --------------------------------------------------------------------------------
 -- Environment operations:
@@ -83,6 +87,9 @@ newTemp = freshOf "t" tempCount
 
 newLabel :: String -> LComp LLabelRef
 newLabel = flip freshOf labelCount
+
+newConstRef :: String -> LComp LIdent
+newConstRef = flip freshOf constCount
 
 pushConst :: LConstGlobal -> LComp ()
 pushConst = sAppendL constants

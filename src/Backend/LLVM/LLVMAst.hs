@@ -59,8 +59,8 @@ data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
 data LOp = LEq | LNe | LUlt | LSgt | LUle | LSge
     deriving (Eq, Ord, Show, Read, Enum)
 
-data LValRef = LVInt { _lVInt :: Int }       |
-               LVFloat { _lVFloat :: Float } |
+data LValRef = LVInt { _lVInt :: Integer }       |
+               LVFloat { _lVFloat :: Double } |
                LRef { _lRIdent :: LIdent }
     deriving (Eq, Ord, Show, Read)
 
@@ -78,6 +78,7 @@ data LInst = LLabel { _lLaIdent :: LLabelRef }                  |
              LVCall LFunRef                                     |
              LABr LLabelRef                                     |
              LCBr LTValRef LLabelRef LLabelRef                  |
+             LVRet                                              |
              LRet LTValRef                                      |
              LStore LTValRef LTValRef                           |
              LUnreachable
