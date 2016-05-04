@@ -39,7 +39,7 @@ module Frontend.Annotations (
 
     -- * Operations
     toWillExecute, showKind, emptyAnot,
-    _LBool, _LInt, _LDouble, _LString,
+    _LitBool, _LitInt, _LitDouble, _LitString,
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec,
@@ -88,10 +88,10 @@ showKind (KArrow f t) = unwords [showf, "->", show t]
 type ML = Maybe Literal
 
 -- | 'Literal': Annotation for the literal that constant expressions result in.
-data Literal = LBool   { _litBool   :: Bool    } |
-               LInt    { _litInt    :: Integer } |
-               LDouble { _litDouble :: Double }  |
-               LString { _litStr    :: String }
+data Literal = LitBool   { _litBool   :: Bool    } |
+               LitInt    { _litInt    :: Integer } |
+               LitDouble { _litDouble :: Double }  |
+               LitString { _litStr    :: String }
     deriving (Eq, Show, Read, Ord, Data, Typeable)
 
 makeLenses ''Literal

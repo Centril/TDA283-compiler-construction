@@ -105,7 +105,7 @@ weOpposite Never   = Always
 weOpposite Unknown = Unknown
 
 condExpr :: ExprA -> (ExprA, WillExecute)
-condExpr = second (toWillExecute . (>>= (^? _LBool))) . evalConstExpr
+condExpr = second (toWillExecute . (>>= (^? _LitBool))) . evalConstExpr
 
 checkRetWrap :: Ident -> StmtA -> (StmtA -> StmtA) -> Eval (StmtA, Bool)
 checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
@@ -114,39 +114,39 @@ evalConstExpr :: ExprA -> (ExprA, ML)
 evalConstExpr expr = case expr of
     EVar {}        -> addLit  expr Nothing
     EApp {}        -> addLit  expr Nothing
-    ELitTrue  _    -> addLit' expr $ LBool True
-    ELitFalse _    -> addLit' expr $ LBool False
-    ELitInt   _ v  -> addLit' expr $ LInt    v
-    ELitDoub  _ v  -> addLit' expr $ LDouble v
-    EString   _ v  -> addLit' expr $ LString v
+    ELitTrue  _    -> addLit' expr $ LitBool True
+    ELitFalse _    -> addLit' expr $ LitBool False
+    ELitInt   _ v  -> addLit' expr $ LitInt    v
+    ELitDoub  _ v  -> addLit' expr $ LitDouble v
+    EString   _ v  -> addLit' expr $ LitString v
     Not  a e       -> evalNot a e
     Neg  a e       -> evalNeg a e
-    EOr  a l r     -> evalBoolOp (||) EOr  a l r
-    EAnd a l r     -> evalBoolOp (&&) EAnd a l r
+    EOr  a l r     -> evaLitBoolOp (||) EOr  a l r
+    EAnd a l r     -> evaLitBoolOp (&&) EAnd a l r
     EMul a l op r  -> evalMul a l op r
     EAdd a l op r  -> evalAdd a l op r
     ERel a l op r  -> evalRel a l op r
 
 evalNot :: ASTAnots -> ExprA -> (ExprA, ML)
-evalNot a expr = addLit (Not a expr') $ LBool . not <$> lit
+evalNot a expr = addLit (Not a expr') $ LitBool . not <$> lit
     where (expr', lit) = detLitBool expr
 
 evalNeg :: ASTAnots -> ExprA -> (ExprA, ML)
 evalNeg a expr = addLit (Neg a expr') $ lit >>= f
     where (expr', lit)  = evalConstExpr expr
-          f (LInt    v) = neg LInt    v
-          f (LDouble v) = neg LDouble v
+          f (LitInt    v) = neg LitInt    v
+          f (LitDouble v) = neg LitDouble v
           f _           = Nothing
 
-evalBoolOp :: (Bool -> Bool -> Bool)
+evaLitBoolOp :: (Bool -> Bool -> Bool)
            -> (ASTAnots -> ExprA -> ExprA -> ExprA)
            ->  ASTAnots -> ExprA -> ExprA
            -> (ExprA, Maybe Literal)
-evalBoolOp op ctor a l r = addLit (ctor a l' r') $ liftM2 (LBool .| op) ll rl
+evaLitBoolOp op ctor a l r = addLit (ctor a l' r') $ liftM2 (LitBool .| op) ll rl
     where ((l', ll), (r', rl)) = (detLitBool l, detLitBool r)
 
 detLitBool :: ExprA -> (ExprA, Maybe Bool)
-detLitBool expr = second (>>= (^? _LBool)) $ evalConstExpr expr
+detLitBool expr = second (>>= (^? _LitBool)) $ evalConstExpr expr
 
 evalBin ::  ExprA -> ExprA
         -> (ExprA -> ExprA -> Maybe Literal -> (ExprA, Maybe Literal))
@@ -156,13 +156,13 @@ evalBin l r g f = g l' r' $ f llit rlit
     where ((l', llit), (r', rlit)) = (evalConstExpr l, evalConstExpr r)
 
 evalAdd :: ASTAnots -> ExprA -> AddOpA -> ExprA -> (ExprA, ML)
-evalAdd a l op r = evalArith EAdd a l op r (handle _LInt) (handle _LDouble)
+evalAdd a l op r = evalArith EAdd a l op r (handle _LitInt) (handle _LitDouble)
     where handle c v er = plusFn op <:> v <*> er ^? c
 
 evalMul :: ASTAnots -> ExprA -> MulOpA -> ExprA -> (ExprA, ML)
 evalMul a l o r = evalArith EMul a l o r hint hdoub
-    where hint  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LInt
-          hdoub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LDouble
+    where hint  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LitInt
+          hdoub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LitDouble
 
 evalArith :: (ASTAnots -> ExprA -> t1 -> ExprA -> ExprA)
           ->  ASTAnots -> ExprA -> t1 -> ExprA
@@ -173,20 +173,20 @@ evalArith ctor a l op r hint hdoub = evalBin l r wrap makeLit
     where wrap l' r' = addLit $ ctor a l' op r'
           makeLit llit rlit = do
             (ll, rl) <- liftM2 (,) llit rlit
-            case ll of LInt    v -> LInt    <$> hint v rl
-                       LDouble v -> LDouble <$> hdoub v rl
+            case ll of LitInt    v -> LitInt    <$> hint v rl
+                       LitDouble v -> LitDouble <$> hdoub v rl
                        _         -> Nothing
 
 evalRel :: ASTAnots -> ExprA -> RelOpA -> ExprA -> (ExprA, ML)
 evalRel a l op r = evalBin l r (\l' r' -> addLit $ ERel a l' op r') makeLit
     where makeLit llit rlit = do
             (ll, rl) <- liftM2 (,) llit rlit
-            fmap LBool $ case ll of
-                LBool   v -> relFn <$> mfilter isBoolRel (pure op)
-                             <*> pure v <*> rl ^? _LBool
-                LInt    v -> evalRelStd v op rl _LInt
-                LDouble v -> evalRelStd v op rl _LDouble
-                LString v -> evalRelStd v op rl _LString
+            fmap LitBool $ case ll of
+                LitBool   v -> relFn <$> mfilter isBoolRel (pure op)
+                             <*> pure v <*> rl ^? _LitBool
+                LitInt    v -> evalRelStd v op rl _LitInt
+                LitDouble v -> evalRelStd v op rl _LitDouble
+                LitString v -> evalRelStd v op rl _LitString
 
 neg :: (Monad m, Num v) => (v -> r) -> v -> m r
 neg ctor v = return $ ctor $ -v
