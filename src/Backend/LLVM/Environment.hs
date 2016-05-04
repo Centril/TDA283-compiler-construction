@@ -34,7 +34,7 @@ module Backend.LLVM.Environment (
     LEnv(..), LComp,
 
     -- * Operations
-    initialLEnv, newTemp, newLabel, pushConst, pushInst
+    initialLEnv, newTemp, newLabel, pushConst, pushInst, clearInsts, getInsts
 ) where
 
 import Data.Map ((!))
@@ -89,3 +89,9 @@ pushConst = sAppendL constants
 
 pushInst :: LInst -> LComp ()
 pushInst = sAppendL insts
+
+clearInsts :: LComp ()
+clearInsts = insts .= []
+
+getInsts :: LComp LInsts
+getInsts = use insts
