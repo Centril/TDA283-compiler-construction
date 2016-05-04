@@ -31,7 +31,7 @@ AST Annotations in Javalette compiler.
 
 module Frontend.Annotations (
     -- * Types
-    ASTAnot(..), ASTAnots,
+    ASTAnot(..), AnotKey (..), ASTAnots,
     Kind(..), WillExecute(..), Literal(..), ML,
 
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,

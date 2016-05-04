@@ -31,9 +31,13 @@ LLVM code generator in the LLVM backend of the Javalette compiler.
 
 module Backend.LLVM.LLVMGen where
 
+import Data.Map ((!))
+
 import Control.Monad
 
 import Control.Lens hiding (Empty, op)
+
+import Utils.Shallow
 
 import Common.AST
 
@@ -152,7 +156,7 @@ compileCondStmt stmt _then _cont = do
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
-    EVar      _ i     -> u
+    e@(EVar   _ i)    -> compileEVar e
     ELitInt   _ v     -> compileLInt   sizeofInt   v
     ELitDoub  _ v     -> compileLFloat sizeofFloat v
     EString   _ v     -> compileCString v
@@ -167,15 +171,36 @@ compileExpr = \case
     EAnd      _ l   r -> u
     EOr       _ l   r -> u
 
+compileEVar :: ExprA -> LComp LTValRef
+compileEVar e = do
+    temp <- newTemp
+    let AType typ = extract e ! AKType
+    let typ' = compileType typ
+    let name = _ident $ _eIdent e
+    pushInst $ LAssign temp  $ LLoad $ LTValRef (LPtr typ') (LRef name)
+    return   $ LTValRef typ' $ LRef temp
+
 compileCString :: String -> LComp LTValRef
 compileCString v = do
     temp <- newTemp
     ref  <- newConstRef "cstring"
-    let tchar = LInt sizeofChar
-    let typ   = LArray (1 + length v) tchar
+    let typ   = LArray (1 + length v) charType
     pushConst $ LConstGlobal ref typ v
     pushInst  $ LAssign temp (strPointer (LPtr typ) ref)
-    return    $ LTValRef (LPtr tchar) (LRef ref)
+    return    $ LTValRef strType $ LRef ref
+
+compileType :: TypeA -> LType
+compileType = \case
+    Int      _ -> LInt   sizeofInt
+    Doub     _ -> LFloat sizeofFloat
+    Bool     _ -> LInt   sizeofBool
+    Void     _ -> LVoid
+    ConstStr _ -> strType
+    Fun      _ rtyp argst -> u
+
+charType, strType :: LType
+charType = LInt sizeofChar
+strType  = LPtr charType
 
 zeroIndex :: LTIndex
 zeroIndex = (LInt 32, 0)
@@ -194,12 +219,3 @@ sizeofBool  = 1
 sizeofChar  = 8
 sizeofInt   = 32
 sizeofFloat = 64
-
-compileType :: TypeA -> LType
-compileType = \case
-    Int      _ -> LInt   sizeofInt
-    Doub     _ -> LFloat sizeofFloat
-    Bool     _ -> LInt   sizeofBool
-    Void     _ -> LVoid
-    ConstStr _ -> u
-    Fun      _ rtyp argst -> u
