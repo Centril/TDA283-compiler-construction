@@ -101,6 +101,7 @@ data LExpr
     | LFMul LTValRef LValRef
     | LDiv LTValRef LValRef
     | LFDiv LTValRef LValRef
+    | LXor LTValRef LValRef
     | LICmp LOp LTValRef LValRef
     | LFCmp LOp LTValRef LValRef
     | LGElemPtr LType LIdent LTIndex [LTIndex]

@@ -140,6 +140,7 @@ printExpr = \case
     LFMul r1 r2       -> printMathOp "fmul" r1 r2
     LDiv r1 r2        -> printMathOp "div" r1 r2
     LFDiv r1 r2       -> printMathOp "fdiv" r1 r2
+    LXor  r1 r2       -> printMathOp "xor" r1 r2
     LICmp o r1 r2     -> printCmp "icmp" o r1 r2
     LFCmp o r1 r2     -> printCmp "fcmp" o r1 r2
     LGElemPtr t i x y -> printGetPtr "getelementptr" t i x y
