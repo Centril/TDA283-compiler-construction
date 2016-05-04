@@ -43,7 +43,7 @@ data LFunDecl = LFunDecl {
 
 data LFunDef = LFunDef {
     _lFdRetType :: LType, _lFdIdent :: LIdent, _lFdArgs :: LArgs,
-    _lFdLabels :: LLabels }
+    _lFdInsts :: LInsts }
     deriving (Eq, Ord, Show, Read)
 
 data LType = LVoid                                      |
@@ -54,9 +54,6 @@ data LType = LVoid                                      |
     deriving (Eq, Ord, Show, Read)
 
 data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
-    deriving (Eq, Ord, Show, Read)
-
-data LLabel = LLabel { _lLaIdent :: LIdent, _lLaInsts :: LInsts }
     deriving (Eq, Ord, Show, Read)
 
 data LOp = LEq | LNe | LUlt | LSgt | LUle | LSge
@@ -75,10 +72,11 @@ data LFunRef = LFunRef {
     deriving (Eq, Ord, Show, Read)
 
 -- TODO: Name the expressions
-data LInst = LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr } |
+data LInst = LLabel { _lLaIdent :: LIdent }                     |
+             LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr } |
              LIExpr LExpr                                       |
              LVCall LFunRef                                     |
-             LABr LLabelRef                                     |
+             LABr LIdent                                     |
              LCBr LTValRef LIdent LIdent                        |
              LRet LTValRef                                      |
              LStore LTValRef LTValRef                           |
@@ -104,7 +102,6 @@ data LExpr = LLoad LTValRef                           |
              deriving (Eq, Ord, Show, Read)
 
 type LValue = String
-type LLabelRef = LIdent
 type LIdent = String
 type LIndex = Int
 type LTIndex = (LType, LIndex)
@@ -113,7 +110,6 @@ type LConstGlobals = [LConstGlobal]
 type LFunDecls     = [LFunDecl]
 type LFunDefs      = [LFunDef]
 
-type LLabels = [LLabel]
 type LInsts  = [LInst]
 type LTypes  = [LType]
 type LArgs   = [LArg]

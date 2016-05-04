@@ -58,9 +58,9 @@ printFunDecl (LFunDecl t i ts) =
             "(", printTypes ts, ")\n"]
 
 printFunDef :: LFunDef ->  LLVMCode
-printFunDef (LFunDef t i as l) =
+printFunDef (LFunDef t i as is) =
     concat ["\ndefine ", printType t, " ", printIdentFun i,
-            "(", printArgs as, ") {\n", printLabels l, "\n}\n"]
+            "(", printArgs as, ") {\n", printInsts is, "\n}\n"]
 
 printType :: LType -> LLVMCode
 printType = \case
@@ -79,14 +79,8 @@ printArg (LArg t i) = printType t ++ " " ++ printIdentVar i
 printArgs :: LArgs -> LLVMCode
 printArgs a = joinComma $ printArg <$> a
 
-printLabel :: LLabel -> LLVMCode
-printLabel (LLabel i is) = printIdentPure i ++ ":\n" ++ printInsts is
-
-printLabel' :: LIdent -> LLVMCode
-printLabel' l = "label " ++ printIdentVar l
-
-printLabels :: LLabels -> LLVMCode
-printLabels = unlineFun printLabel
+printLabel :: LIdent -> LLVMCode
+printLabel i = "label " ++ printIdent i
 
 printOp :: LOp -> LLVMCode
 printOp = \case
@@ -111,12 +105,13 @@ printFunRef (LFunRef i r) = printIdentFun i ++ " (" ++ printTValRef r ++ ")"
 
 printInst :: LInst -> LLVMCode
 printInst = \case
+    LLabel i     -> printIdent i ++ ":"
     LAssign i e  -> printIdentVar i ++ " = " ++ printExpr e
     LIExpr e     -> printExpr e
     LVCall fr    -> "call void " ++ printFunRef fr
-    LABr l       -> "br " ++ printLabel' l
-    LCBr r l1 l2 -> "br " ++ joinComma [printTValRef r, printLabel' l1,
-                                        printLabel' l2]
+    LABr i       -> "br " ++ printLabel i
+    LCBr r i1 i2 -> "br " ++ joinComma [printTValRef r, printLabel i1,
+                                        printLabel i2]
     LRet r       -> "ret " ++ printTValRef r
     LStore r1 r2 -> "store " ++ joinComma [printTValRef r1, printTValRef r2]
     LUnreachable -> "unreachable"
@@ -160,8 +155,8 @@ printGetPtr :: LLVMCode -> LType -> LIdent -> LTIndex -> [LTIndex] -> LLVMCode
 printGetPtr c t i x y = unwords [c, printType t, printIdentFun i,
                                    printTIndex x, printTIndexes y]
 
-printIdentPure :: LIdent -> LLVMCode
-printIdentPure = show
+printIdent :: LIdent -> LLVMCode
+printIdent = show
 
 printIdentVar :: LIdent -> LLVMCode
 printIdentVar i = "%" ++ show i
