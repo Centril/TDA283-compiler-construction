@@ -56,7 +56,7 @@ inferType typ = return $ addKind typ KConcrete
 
 inferExp :: ExprA -> Eval (ExprA, TypeA)
 inferExp expr = case expr of
-    EVar _ name -> addTyp  expr <$> lookupVarE name
+    EVar _ name  -> addTyp  expr <$> lookupVarE name
     EString   {} -> addTyp' expr conststr
     ELitInt   {} -> addTyp' expr int
     ELitDoub  {} -> addTyp' expr doub
@@ -73,8 +73,8 @@ inferExp expr = case expr of
     where ib = inferBin id expr
 
 relOp :: RelOpA -> [TypeA]
-relOp oper | oper `elem` applyEA [NE, EQU] = [int, doub, bool]
-           | otherwise                     = [int, doub]
+relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = [int, doub, bool]
+           | otherwise                                 = [int, doub]
 
 mulOp :: MulOpA -> [TypeA]
 mulOp oper | oper == Mod emptyAnot = [int]
@@ -95,7 +95,7 @@ inferUnary expr accept = do
         then addTyp' (expr {_eExpr = expr'}) etyp
         else wrongUnaryExp expr accept etyp
 
-inferFun :: ExprA -> Eval (Expr [ASTAnot], TypeA)
+inferFun :: ExprA -> Eval (ExprA, TypeA)
 inferFun expr = do
     FunSig texpected rtype <- lookupFunE $ _eIdent expr
     (exprs', tactual)      <- mapAndUnzipM inferExp $ _eAppExprs expr

@@ -27,39 +27,34 @@ Portability : ALL
 
 AST Annotations in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase,
-             UndecidableInstances, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase, TupleSections #-}
 
 module Frontend.Annotations (
     -- * Types
     ASTAnot(..), ASTAnots,
-    Kind(..), WillExecute(..), Literal(..),
+    Kind(..), WillExecute(..), Literal(..), ML,
 
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
     TypeA, ExprA, AddOpA, MulOpA, RelOpA,
 
-    Annotated, ML,
-
-    AnotExtract,
-
     -- * Operations
-    toWillExecute, showKind, emptyAnot, applyEA,
+    toWillExecute, showKind, emptyAnot,
     _LBool, _LInt, _LDouble, _LString,
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec,
     int, conststr, doub, bool, tvoid,
     
-    (<@>), (+@), annotate, extractAnot,
-    addTyp, addTyp', addKind, addWE, addWE', addLit, addLit'
+    (+@), addTyp, addTyp', addKind, addWE, addWE', always, addLit, addLit'
 ) where
 
 import Data.Data
 
-import qualified Data.Generics.Uniplate.Data as U
+import Data.Map (Map, empty, singleton, alter)
 
 import Control.Lens hiding (Context, contexts, Empty)
-import Control.Lens.Extras (is)
+
+import Utils.Shallow
 
 import Common.AST
 
@@ -90,6 +85,8 @@ showKind (KArrow f t) = unwords [showf, "->", show t]
 -- Literal & WillExecute:
 --------------------------------------------------------------------------------
 
+type ML = Maybe Literal
+
 -- | 'Literal': Annotation for the literal that constant expressions result in.
 data Literal = LBool   { _litBool   :: Bool    } |
                LInt    { _litInt    :: Integer } |
@@ -114,10 +111,11 @@ toWillExecute Nothing      = Unknown
 -- Annotations:
 --------------------------------------------------------------------------------
 
-type ML = Maybe Literal
+data AnotKey = AKType | AKWillExec | AKCExprLit | AKKind
+    deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
 
 -- | 'ASTAnot': The annotations allowed in a Javalette AST.
-data ASTAnot = AType     { _anotType     :: Type [ASTAnot] } |
+data ASTAnot = AType     { _anotType     :: Type (Map AnotKey ASTAnot) } |
                AWillExec { _anotWillExec :: WillExecute    } |
                ACExprLit { _anotCExprLit :: ML             } |
                AKind     { _anotKind     :: Kind           }
@@ -128,38 +126,28 @@ makeLenses ''ASTAnot
 
 -- | 'ASTAnot': Annotations added to a 'Program' AST which can be safely
 -- 'void':ed away.
-type ASTAnots = [ASTAnot]
+type ASTAnots = Map AnotKey ASTAnot
 
 -- | 'emptyAnot': no annotations, for nodes where annotations have no meaning.
 emptyAnot :: ASTAnots
-emptyAnot = []
+emptyAnot = empty
 
--- | 'applyEA': given a node constructor that accepts an 'ASTAnots',
--- partially applies the empty annotation to it.
-applyEA :: [ASTAnots -> a] -> [a]
-applyEA = fmap ($ emptyAnot)
+addToEmpty :: AnotKey -> ASTAnot -> (ASTAnots -> a) -> a
+addToEmpty k a ctor = ctor $ singleton k a
 
 --------------------------------------------------------------------------------
 -- Annotations, Kinds for primitive types:
 --------------------------------------------------------------------------------
 
 appConcrete :: (ASTAnots -> TypeA) -> TypeA
-appConcrete typ = typ [AKind KConcrete]
+appConcrete = addToEmpty AKKind $ AKind KConcrete
 
-conststr :: TypeA
+conststr, int, doub, bool, tvoid :: TypeA
 conststr = appConcrete ConstStr
-
-int :: TypeA
-int = appConcrete Int
-
-doub :: TypeA
-doub = appConcrete Doub
-
-bool :: TypeA
-bool = appConcrete Bool
-
-tvoid :: TypeA
-tvoid = appConcrete Void
+int      = appConcrete Int
+doub     = appConcrete Doub
+bool     = appConcrete Bool
+tvoid    = appConcrete Void
 
 --------------------------------------------------------------------------------
 -- AST Annotations, Aliases:
@@ -199,75 +187,50 @@ type MulOpA   = MulOp   ASTAnots
 type RelOpA   = RelOp   ASTAnots
 
 --------------------------------------------------------------------------------
--- AST Annotations, Shallow mapping:
+-- AST Annotations, helpers:
 --------------------------------------------------------------------------------
 
--- | 'Annotated': annotatable nodes.
-class Annotated f where
-    -- | 'annotate': changes the annotation of a node and only that node.
-    -- Unlike 'fmap', it does not map all subnodes, and the type of the
-    -- annotation must be the same before and after.
-    annotate :: (a -> a) -> f a -> f a
+-- | '(+@)': given an annotation map and a structure with that, adds an
+-- annotation to it. If an annotation of that type already exists, nothing
+-- happens. In other words, from the perspective of this function, the annotated
+-- annotation map is "insert once only".
+(+@) :: Shallowable f => (AnotKey, ASTAnot) -> f ASTAnots-> f ASTAnots
+(k, a) +@ n = alter (maybe (Just a) Just) k <@> n
 
--- | '(<@>)': infix version of annotating operator.
-(<@>) :: Annotated f => (a -> a) -> f a -> f a
-(<@>) = annotate
-
--- | '(+@)': given an annotated structure, adds an annotation to it.
-(+@) :: Annotated f => f [a] -> a -> f [a]
-n +@ a = (++ [a]) <@> n
-
-instance Annotated Program where annotate = over pAnot
-instance Annotated TopDef  where annotate = over fAnot
-instance Annotated Arg     where annotate = over aAnot
-instance Annotated Block   where annotate = over bAnot
-instance Annotated Stmt    where annotate = over sAnot
-instance Annotated Item    where annotate = over iAnot
-instance Annotated Type    where annotate = over tAnot
-instance Annotated Expr    where annotate = over eAnot
-instance Annotated AddOp   where annotate = fmap
-instance Annotated MulOp   where annotate = fmap
-instance Annotated RelOp   where annotate = fmap
+addH :: Shallowable f
+     => (t -> (AnotKey, ASTAnot)) -> f ASTAnots -> t -> (f ASTAnots, t)
+addH f x a = (f a +@ x, a)
 
 -- | 'addKind': adds a kind annotation to a node.
-addKind :: Annotated f => f ASTAnots -> Kind -> (f ASTAnots, Kind)
-addKind x kind = (x +@ AKind kind, kind)
+addKind :: Shallowable f => f ASTAnots -> Kind -> (f ASTAnots, Kind)
+addKind = addH $ (AKKind,) . AKind
 
 -- | 'addWE': adds a WillExecute annotation to a node.
-addWE :: Annotated f => WillExecute -> f ASTAnots -> f ASTAnots
-addWE we x = f <@> x
-    where f as = if any (is _AWillExec) as then as else as ++ [AWillExec we]
+addWE :: Shallowable f => WillExecute -> f ASTAnots -> f ASTAnots
+addWE we x = (AKWillExec, AWillExec we) +@ x
 
 -- | 'addWE'': adds a WillExecute annotation to a node.
-addWE' :: (Applicative m, Annotated f)
+addWE' :: (Applicative m, Shallowable f)
        => f ASTAnots -> WillExecute -> t -> m (f ASTAnots, t)
-addWE' stmt we hasR = pure (addWE we stmt, hasR)
+addWE' stmt we = pure . (addWE we stmt,)
+
+-- | 'always': adds an Always annotation to a node.
+always :: Shallowable f => f ASTAnots -> f ASTAnots
+always = addWE Always
 
 -- | 'addLit': adds a maybe constant literal annotation to a node.
-addLit :: Annotated f => f ASTAnots -> ML -> (f ASTAnots, ML)
-addLit  expr lit = (expr +@ ACExprLit lit, lit)
+addLit :: Shallowable f => f ASTAnots -> ML -> (f ASTAnots, ML)
+addLit = addH $ (AKCExprLit,) . ACExprLit
 
 -- | 'addLit'': adds a constant literal annotation to a node.
-addLit' :: Annotated f => f ASTAnots -> Literal -> (f ASTAnots, ML)
-addLit' expr = addLit expr . Just
+addLit' :: Shallowable f => f ASTAnots -> Literal -> (f ASTAnots, ML)
+addLit' x = addLit x . Just
 
 -- | 'addTyp': adds a type annotation to a node.
-addTyp :: Annotated f => f [ASTAnot] -> TypeA -> (f [ASTAnot], TypeA)
-addTyp  expr typ = (expr +@ AType typ, typ)
+addTyp :: Shallowable f => f ASTAnots -> TypeA -> (f ASTAnots, TypeA)
+addTyp = addH $ (AKType,) . AType
 
 -- | 'addTyp'': adds a type annotation to a node.
-addTyp' :: (Monad m, Annotated f)
-        => f [ASTAnot] -> TypeA -> m (f [ASTAnot], TypeA)
-addTyp' expr = return . addTyp expr
-
---------------------------------------------------------------------------------
--- AST Annotations, Shallow getting:
---------------------------------------------------------------------------------
-
--- | 'AnotExtract': exposes the anotation in some annotated structure.
-class AnotExtract f where
-    -- | 'extractAnot': extracts the annotation.
-    extractAnot :: f ASTAnots -> ASTAnots
-
-instance Data (f ASTAnots) => AnotExtract f where
-    extractAnot = head . U.childrenBi
+addTyp' :: (Applicative m, Shallowable f)
+        => f ASTAnots -> TypeA -> m (f ASTAnots, TypeA)
+addTyp' x = pure . addTyp x

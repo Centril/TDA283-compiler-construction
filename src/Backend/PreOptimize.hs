@@ -33,13 +33,13 @@ module Backend.PreOptimize (
     preOptimize
 ) where
 
-import Data.Data
 import qualified Data.Generics.Uniplate.Data as U
 
 import Control.Monad
 
 import Control.Lens hiding (from, to, Empty)
 
+import Utils.Shallow
 import Utils.Foldable
 import Utils.Function
 
@@ -55,7 +55,7 @@ preOptimize :: ProgramA -> ProgramA
 preOptimize = stripDeadCode
 
 --------------------------------------------------------------------------------
--- Dead Nuking:
+-- Dead Code Stripping:
 --------------------------------------------------------------------------------
 
 -- | 'stripDeadCode': uses annotations to strip dead code.
@@ -64,8 +64,8 @@ stripDeadCode = untilEq $ U.transformBi tBlock . U.transformBi tStmt
 
 tStmt :: StmtA -> StmtA
 tStmt = \case
-    c@(While _ e s) -> stripCond s e c
-    c@(Cond _ e s)         -> stripCond s e c
+    c@(While    _ e si)    -> stripWhile si e c
+    c@(Cond     _ e si)    -> stripIf    si e c
     c@(CondElse _ e si se) -> case getWE si of
         Just Never         -> wrapBStmt e se
         Just Always        -> wrapBStmt e si
@@ -75,8 +75,14 @@ tStmt = \case
         _                  -> s
     stmt                   -> stmt
 
-stripCond :: Data (f ASTAnots) => f ASTAnots -> ExprA -> StmtA -> StmtA
-stripCond s e c = case getWE s of
+stripIf :: StmtA -> ExprA -> StmtA -> StmtA
+stripIf s e c = case getWE s of
+    Just Always -> wrapBStmt e s
+    Just Never  -> wrapExpr e
+    _           -> c
+
+stripWhile :: StmtA -> ExprA -> StmtA -> StmtA
+stripWhile s e c = case getWE s of
     Just Never -> wrapExpr e
     _          -> c
 
@@ -86,9 +92,6 @@ tBlock (Block a stmts) = Block a $ stmts >>=
           Empty _              -> []
           stmt                 -> [stmt]
 
-always :: Annotated f => f ASTAnots -> f ASTAnots
-always = addWE Always
-
 wrapBStmt :: ExprA -> StmtA -> StmtA
 wrapBStmt e s = always $ BStmt emptyAnot $
                 always $ Block emptyAnot [wrapExpr e, s]
@@ -96,8 +99,8 @@ wrapBStmt e s = always $ BStmt emptyAnot $
 wrapExpr :: ExprA -> StmtA
 wrapExpr e = always $ SExp emptyAnot e
 
-getWE :: AnotExtract f => f ASTAnots -> Maybe WillExecute
-getWE = mfind (^? _AWillExec) . extractAnot
+getWE :: Extractable f => f ASTAnots -> Maybe WillExecute
+getWE = mfind (^? _AWillExec) . extract
 
-getCLit :: AnotExtract f => f ASTAnots -> ML
-getCLit = join . mfind (^? _ACExprLit) . extractAnot
+getCLit :: Extractable f => f ASTAnots -> ML
+getCLit = join . mfind (^? _ACExprLit) . extract

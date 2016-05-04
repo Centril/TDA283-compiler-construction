@@ -35,6 +35,7 @@ import Data.Data
 
 import Control.Lens hiding (Empty, op)
 
+import Utils.Shallow
 import Utils.Monad
 
 import qualified Javalette.Abs as J
@@ -210,6 +211,22 @@ instance Functor Expr where
 instance Functor AddOp where fmap = over addAnot
 instance Functor MulOp where fmap = over mAnot
 instance Functor RelOp where fmap = over rAnot
+
+--------------------------------------------------------------------------------
+-- Overable instances:
+--------------------------------------------------------------------------------
+
+instance Overable Program where overF = pAnot
+instance Overable TopDef  where overF = fAnot
+instance Overable Arg     where overF = aAnot
+instance Overable Block   where overF = bAnot
+instance Overable Stmt    where overF = sAnot
+instance Overable Item    where overF = iAnot
+instance Overable Type    where overF = tAnot
+instance Overable Expr    where overF = eAnot
+instance Overable AddOp   where overF = addAnot
+instance Overable MulOp   where overF = mAnot
+instance Overable RelOp   where overF = rAnot
 
 --------------------------------------------------------------------------------
 -- Converting:

@@ -67,7 +67,7 @@ checkBlock fid (Block a stmts) =
     (Block a *** or) <$> mapAndUnzipM (checkHasRet fid) stmts
 
 checkBStmt :: ASTAnots -> BlockA -> Ident -> Eval (StmtA, Bool)
-checkBStmt a block fid = first (addWE Always . BStmt a) <$> checkBlock fid block
+checkBStmt a block fid = first (always . BStmt a) <$> checkBlock fid block
 
 checkHasRet :: Ident -> StmtA -> Eval (StmtA, Bool)
 checkHasRet fid stmt = case stmt of
@@ -82,7 +82,7 @@ checkHasRet fid stmt = case stmt of
 checkCond :: (ASTAnots -> ExprA -> StmtA -> StmtA)
           ->  ASTAnots -> ExprA -> StmtA -> Ident
           -> Eval (StmtA, Bool)
-checkCond ctor a expr stmt fid = first (addWE Always) <$> case we of
+checkCond ctor a expr stmt fid = first always <$> case we of
     Always -> checkRetWrap fid stmt' $ ctor a expr'
     _      -> return (ctor a expr' stmt', False)
     where (expr', we) = condExpr expr
@@ -90,7 +90,7 @@ checkCond ctor a expr stmt fid = first (addWE Always) <$> case we of
 
 checkCondElse :: ASTAnots -> ExprA -> StmtA -> StmtA -> Ident
               -> Eval (StmtA, Bool)
-checkCondElse a expr si se fid = first (addWE Always) <$> case we of
+checkCondElse a expr si se fid = first always <$> case we of
     Always  -> checkRetWrap fid si' $ flip (CondElse a expr') se'
     Never   -> checkRetWrap fid se' $ CondElse a expr' si'
     Unknown -> do (si'', siRet) <- checkHasRet fid si'
