@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Backend.PreOpt
+Module      : Backend.PreOptimize
 Description : Pre optimizations in backend of Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
@@ -28,9 +28,9 @@ Portability : ALL
 Pre optimizations in backend of Javalette compiler.
 -}
 {-# LANGUAGE LambdaCase #-}
-module Backend.PreOpt (
+module Backend.PreOptimize (
     -- * Operations
-    preOpt
+    preOptimize
 ) where
 
 import Data.Data
@@ -51,32 +51,32 @@ import Frontend.Annotations
 -- API:
 --------------------------------------------------------------------------------
 
-preOpt :: ProgramA -> ProgramA
-preOpt = deadNuke
+preOptimize :: ProgramA -> ProgramA
+preOptimize = stripDeadCode
 
 --------------------------------------------------------------------------------
 -- Dead Nuking:
 --------------------------------------------------------------------------------
 
--- | 'deadNuke': uses annotations to nuke away dead code.
-deadNuke :: ProgramA -> ProgramA
-deadNuke = untilEq $ U.transformBi tBlock . U.transformBi tStmt
+-- | 'stripDeadCode': uses annotations to strip dead code.
+stripDeadCode :: ProgramA -> ProgramA
+stripDeadCode = untilEq $ U.transformBi tBlock . U.transformBi tStmt
 
 tStmt :: StmtA -> StmtA
 tStmt = \case
-    c@(While _ e s) -> nukeCond s e c
-    c@(Cond _ e s) -> nukeCond s e c
+    c@(While _ e s) -> stripCond s e c
+    c@(Cond _ e s)         -> stripCond s e c
     c@(CondElse _ e si se) -> case getWE si of
-        Just Never  -> wrapBStmt e se
-        Just Always -> wrapBStmt e si
-        _          -> c
-    s@(SExp _ e)   -> case getCLit e of
-        Just _     -> always $ Empty emptyAnot
-        _          -> s
-    stmt           -> stmt
+        Just Never         -> wrapBStmt e se
+        Just Always        -> wrapBStmt e si
+        _                  -> c
+    s@(SExp _ e)           -> case getCLit e of
+        Just _             -> always $ Empty emptyAnot
+        _                  -> s
+    stmt                   -> stmt
 
-nukeCond :: Data (f ASTAnots) => f ASTAnots -> ExprA -> StmtA -> StmtA
-nukeCond s e c = case getWE s of
+stripCond :: Data (f ASTAnots) => f ASTAnots -> ExprA -> StmtA -> StmtA
+stripCond s e c = case getWE s of
     Just Never -> wrapExpr e
     _          -> c
 

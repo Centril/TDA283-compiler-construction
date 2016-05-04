@@ -29,7 +29,7 @@ import Frontend.Computation
 import Frontend.TypeCheck
 
 import Backend.AlphaRename
-import Backend.PreOpt
+import Backend.PreOptimize
 
 import Utils.Terminal
 
@@ -80,7 +80,7 @@ compileComp code = do
     pinfo TypeChecker "AST after type check" ast2
     let ast3 = alphaRename ast2
     pinfo AlphaRenamer "AST after alpha rename" ast3
-    let ast4 = preOpt ast3
+    let ast4 = preOptimize ast3
     pinfo PreOptimizer "AST after pre optimizing" ast4
     return ast4
 
