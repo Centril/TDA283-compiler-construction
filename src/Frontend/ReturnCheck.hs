@@ -142,7 +142,8 @@ evaLitBoolOp :: (Bool -> Bool -> Bool)
            -> (ASTAnots -> ExprA -> ExprA -> ExprA)
            ->  ASTAnots -> ExprA -> ExprA
            -> (ExprA, Maybe Literal)
-evaLitBoolOp op ctor a l r = addLit (ctor a l' r') $ liftM2 (LitBool .| op) ll rl
+evaLitBoolOp op ctor a l r =
+    addLit (ctor a l' r') $ liftM2 (LitBool .| op) ll rl
     where ((l', ll), (r', rl)) = (detLitBool l, detLitBool r)
 
 detLitBool :: ExprA -> (ExprA, Maybe Bool)
@@ -161,8 +162,8 @@ evalAdd a l op r = evalArith EAdd a l op r (handle _LitInt) (handle _LitDouble)
 
 evalMul :: ASTAnots -> ExprA -> MulOpA -> ExprA -> (ExprA, ML)
 evalMul a l o r = evalArith EMul a l o r hint hdoub
-    where hint  v er = mulFn (Just mod) div o <!> v <*> mulFetchRight o er _LitInt
-          hdoub v er = mulFn Nothing (/) o <!> v <*> mulFetchRight o er _LitDouble
+    where hint  v er = mulFn (Just mod) div o <!> v <*> mulFetchR o er _LitInt
+          hdoub v er = mulFn Nothing (/) o <!> v <*> mulFetchR o er _LitDouble
 
 evalArith :: (ASTAnots -> ExprA -> t1 -> ExprA -> ExprA)
           ->  ASTAnots -> ExprA -> t1 -> ExprA
@@ -213,9 +214,9 @@ mulFn _ _ (Times _) = Just (*)
 mulFn _ d (Div   _) = Just d
 mulFn m _ (Mod   _) = m
 
-mulFetchRight :: (Eq a, Num a) => MulOpA -> Literal ->
+mulFetchR :: (Eq a, Num a) => MulOpA -> Literal ->
                  Getting (First a) Literal a -> Maybe a
-mulFetchRight o er p = mfilter (\r -> r /= 0 || void o /= Div ()) $ er ^? p
+mulFetchR o er p = mfilter (\r -> r /= 0 || void o /= Div ()) $ er ^? p
 
 isBoolRel :: RelOpA -> Bool
 isBoolRel = (`elem` [EQU (), NE ()]) . void
