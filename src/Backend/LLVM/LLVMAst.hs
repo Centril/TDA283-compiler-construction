@@ -46,11 +46,12 @@ data LFunDef = LFunDef {
     _lFdInsts :: LInsts }
     deriving (Eq, Ord, Show, Read)
 
-data LType = LVoid                                      |
-             LInt { _lIBits :: Int }                    |
-             LFloat { _lFBits :: Int }                  |
-             LPtr { _lTPtr :: LType }                   |
-             LArray { _lADim :: Int, _lAType :: LType }
+data LType
+    = LVoid
+    | LInt { _lIBits :: Int }
+    | LFloat { _lFBits :: Int }
+    | LPtr { _lTPtr :: LType }
+    | LArray { _lADim :: Int, _lAType :: LType }
     deriving (Eq, Ord, Show, Read)
 
 data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
@@ -59,10 +60,11 @@ data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
 data LOp = LEq | LNe | LUlt | LSgt | LUle | LSge
     deriving (Eq, Ord, Show, Read, Enum)
 
-data LValRef = LVInt { _lVInt :: Integer }    |
-               LVFloat { _lVFloat :: Double } |
-               LRef { _lRIdent :: LIdent }    |
-               LNull
+data LValRef
+    = LVInt { _lVInt :: Integer }
+    | LVFloat { _lVFloat :: Double }
+    | LRef { _lRIdent :: LIdent }
+    | LNull
     deriving (Eq, Ord, Show, Read)
 
 data LTValRef = LTValRef { _lTType :: LType, _lTVRef :: LValRef }
@@ -73,35 +75,37 @@ data LFunRef = LFunRef {
     deriving (Eq, Ord, Show, Read)
 
 -- TODO: Name the expressions
-data LInst = LLabel { _lLaIdent :: LLabelRef }                  |
-             LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr } |
-             LIExpr LExpr                                       |
-             LVCall LFunRef                                     |
-             LABr LLabelRef                                     |
-             LCBr LTValRef LLabelRef LLabelRef                  |
-             LVRet                                              |
-             LRet LTValRef                                      |
-             LStore LTValRef LTValRef                           |
-             LUnreachable
-             deriving (Eq, Ord, Show, Read)
+data LInst
+    = LLabel { _lLaIdent :: LLabelRef }
+    | LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr }
+    | LIExpr LExpr
+    | LVCall LFunRef
+    | LABr LLabelRef
+    | LCBr LTValRef LLabelRef LLabelRef
+    | LVRet
+    | LRet LTValRef
+    | LStore LTValRef LTValRef
+    | LUnreachable
+    deriving (Eq, Ord, Show, Read)
 
-data LExpr = LLoad LTValRef                           |
-             LAlloca LType                            |
-             LCall LType LFunRef                      |
-             LBitcast LType LValRef LType             |
-             LAdd LTValRef LValRef                    |
-             LFAdd LTValRef LValRef                   |
-             LSub LTValRef LValRef                    |
-             LFSub LTValRef LValRef                   |
-             LMul LTValRef LValRef                    |
-             LFMul LTValRef LValRef                   |
-             LDiv LTValRef LValRef                    |
-             LFDiv LTValRef LValRef                   |
-             LICmp LOp LTValRef LValRef               |
-             LFCmp LOp LTValRef LValRef               |
-             LGElemPtr LType LIdent LTIndex [LTIndex] |
-             LPtrToInt LType LValRef LType
-             deriving (Eq, Ord, Show, Read)
+data LExpr
+    = LLoad LTValRef
+    | LAlloca LType
+    | LCall LType LFunRef
+    | LBitcast LType LValRef LType
+    | LAdd LTValRef LValRef
+    | LFAdd LTValRef LValRef
+    | LSub LTValRef LValRef
+    | LFSub LTValRef LValRef
+    | LMul LTValRef LValRef
+    | LFMul LTValRef LValRef
+    | LDiv LTValRef LValRef
+    | LFDiv LTValRef LValRef
+    | LICmp LOp LTValRef LValRef
+    | LFCmp LOp LTValRef LValRef
+    | LGElemPtr LType LIdent LTIndex [LTIndex]
+    | LPtrToInt LType LValRef LType
+    deriving (Eq, Ord, Show, Read)
 
 type LLabelRef = LIdent
 
