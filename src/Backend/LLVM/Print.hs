@@ -96,23 +96,20 @@ printValRef = \case
     LVInt i   -> show i
     LVFloat f -> show f
     LRef r    -> printIdentVar r
+    LNull     -> "null"
 
 printTValRef :: LTValRef -> LLVMCode
 printTValRef (LTValRef t r) = printType t ++ " " ++ printValRef r
 
 printFunRef :: LFunRef -> LLVMCode
-printFunRef (LFunRef i (LTValRef t v)) =
-    printType t ++ " " ++ printIdentFun i ++ "(" ++ printValRef v ++ ")"
-
-printFunRefVoid :: LFunRef -> LLVMCode
-printFunRefVoid (LFunRef i r) =
-    printIdentFun i ++ "(" ++ printTValRef r ++ ")"
+printFunRef (LFunRef i args) =
+    printIdentFun i ++ "(" ++ joinComma (printTValRef <$> args) ++ ")"
 
 printInst :: LInst -> LLVMCode
 printInst = \case
     LAssign i e  -> printIdentVar i ++ " = " ++ printExpr e
     LIExpr e     -> printExpr e
-    LVCall fr    -> "call void " ++ printFunRefVoid fr
+    LVCall fr    -> "call void " ++ printFunRef fr
     LABr i       -> "br " ++ printLabel i
     LCBr r i1 i2 -> "br " ++ joinComma [printTValRef r, printLabel i1,
                                         printLabel i2]
@@ -133,7 +130,7 @@ printExpr :: LExpr -> LLVMCode
 printExpr = \case
     LLoad r           -> unwords ["load", printTValRef r]
     LAlloca t         -> unwords ["alloca", printType t]
-    LCall f           -> unwords ["call", printFunRef f]
+    LCall t fr        -> unwords ["call", printType t, printFunRef fr]
     LBitcast t1 r t2  -> printToOp "bitcast" t1 r t2
     LAdd r1 r2        -> printMathOp "add" r1 r2
     LFAdd r1 r2       -> printMathOp "fadd" r1 r2

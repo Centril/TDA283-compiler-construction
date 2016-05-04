@@ -59,16 +59,17 @@ data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
 data LOp = LEq | LNe | LUlt | LSgt | LUle | LSge
     deriving (Eq, Ord, Show, Read, Enum)
 
-data LValRef = LVInt { _lVInt :: Integer }       |
+data LValRef = LVInt { _lVInt :: Integer }    |
                LVFloat { _lVFloat :: Double } |
-               LRef { _lRIdent :: LIdent }
+               LRef { _lRIdent :: LIdent }    |
+               LNull
     deriving (Eq, Ord, Show, Read)
 
 data LTValRef = LTValRef { _lTType :: LType, _lTVRef :: LValRef }
     deriving (Eq, Ord, Show, Read)
 
 data LFunRef = LFunRef {
-    _lFrIdent :: LIdent, _lFrArgRef :: LTValRef }
+    _lFrIdent :: LIdent, _lFrArgs :: LTValRefs }
     deriving (Eq, Ord, Show, Read)
 
 -- TODO: Name the expressions
@@ -86,7 +87,7 @@ data LInst = LLabel { _lLaIdent :: LLabelRef }                  |
 
 data LExpr = LLoad LTValRef                           |
              LAlloca LType                            |
-             LCall LFunRef                            |
+             LCall LType LFunRef                      |
              LBitcast LType LValRef LType             |
              LAdd LTValRef LValRef                    |
              LFAdd LTValRef LValRef                   |
@@ -112,7 +113,7 @@ type LTIndex = (LType, LIndex)
 type LConstGlobals = [LConstGlobal]
 type LFunDecls     = [LFunDecl]
 type LFunDefs      = [LFunDef]
-
-type LInsts  = [LInst]
-type LTypes  = [LType]
-type LArgs   = [LArg]
+type LTValRefs     = [LTValRef]
+type LInsts        = [LInst]
+type LTypes        = [LType]
+type LArgs         = [LArg]

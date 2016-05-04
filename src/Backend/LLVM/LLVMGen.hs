@@ -156,13 +156,13 @@ compileCondStmt stmt _then _cont = do
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
-    e@(EVar   _ i)    -> compileEVar e
+    EVar      a i     -> compileEVar a i
     ELitInt   _ v     -> compileLInt   sizeofInt   v
     ELitDoub  _ v     -> compileLFloat sizeofFloat v
     EString   _ v     -> compileCString v
     ELitTrue  _       -> compileLInt   sizeofBool  1
     ELitFalse _       -> compileLInt   sizeofBool  0
-    EApp      _ i es  -> u
+    EApp      a i es  -> compileApp a i es
     Neg       _ e     -> u
     Not       _ e     -> u
     EMul      _ l o r -> u
@@ -171,14 +171,26 @@ compileExpr = \case
     EAnd      _ l   r -> u
     EOr       _ l   r -> u
 
-compileEVar :: ExprA -> LComp LTValRef
-compileEVar e = do
+compileEVar :: ASTAnots -> Ident -> LComp LTValRef
+compileEVar anots name = do
+    let typ = compileAnotType anots
+    assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ _ident name)
+
+compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
+compileApp anots name es = do
+    fr <- LFunRef (_ident name) <$> mapM compileExpr es
+    case compileAnotType anots of
+        LVoid -> pushInst (LVCall fr) >> return (LTValRef LVoid LNull)
+        rtyp  -> assignTemp rtyp $ LCall rtyp fr
+
+assignTemp :: LType -> LExpr -> LComp LTValRef
+assignTemp rtyp expr = do
     temp <- newTemp
-    let AType typ = extract e ! AKType
-    let typ' = compileType typ
-    let name = _ident $ _eIdent e
-    pushInst $ LAssign temp  $ LLoad $ LTValRef (LPtr typ') (LRef name)
-    return   $ LTValRef typ' $ LRef temp
+    pushInst $ LAssign temp expr
+    return   $ LTValRef rtyp $ LRef temp
+
+compileAnotType :: ASTAnots -> LType
+compileAnotType anots = let AType typ = anots ! AKType in compileType typ
 
 compileCString :: String -> LComp LTValRef
 compileCString v = do
