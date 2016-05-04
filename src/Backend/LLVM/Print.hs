@@ -50,17 +50,17 @@ printLLVMAst (LLVMAst g c d) = unlines [unlineFun printConstGlobal g,
 
 printConstGlobal :: LConstGlobal -> LLVMCode
 printConstGlobal (LConstGlobal i t v) =
-    unwords [printIdentFun i, "=", "global", printType t, printValue v] ++ "\n"
+    unwords [printIdentFun i, "=", "global", printType t, printValue v]
 
 printFunDecl :: LFunDecl ->  LLVMCode
 printFunDecl (LFunDecl t i ts) =
     concat ["declare ", printType t, " ", printIdentFun i,
-            "(", printTypes ts, ")\n"]
+            "(", printTypes ts, ")"]
 
 printFunDef :: LFunDef ->  LLVMCode
 printFunDef (LFunDef t i as is) =
-    concat ["\ndefine ", printType t, " ", printIdentFun i,
-            "(", printArgs as, ") {\n", printInsts is, "\n}\n"]
+    concat ["define ", printType t, " ", printIdentFun i,
+            "(", printArgs as, ") {\n", printInsts is, "}\n"]
 
 printType :: LType -> LLVMCode
 printType = \case
@@ -68,7 +68,7 @@ printType = \case
     LInt i     -> "i" ++ show i
     LFloat f   -> "f" ++ show f
     LPtr t     -> printType t ++ "*"
-    LArray d t -> concat ["[",show d, " x ", printType t, "]*"]
+    LArray d t -> concat ["[",show d, " x ", printType t, "]"]
 
 printTypes :: LTypes -> LLVMCode
 printTypes t = joinComma $ printType <$> t
@@ -80,7 +80,7 @@ printArgs :: LArgs -> LLVMCode
 printArgs a = joinComma $ printArg <$> a
 
 printLabel :: LIdent -> LLVMCode
-printLabel i = "label " ++ printIdent i
+printLabel i = "label %" ++ printIdent i
 
 printOp :: LOp -> LLVMCode
 printOp = \case
@@ -101,14 +101,18 @@ printTValRef :: LTValRef -> LLVMCode
 printTValRef (LTValRef t r) = printType t ++ " " ++ printValRef r
 
 printFunRef :: LFunRef -> LLVMCode
-printFunRef (LFunRef i r) = printIdentFun i ++ " (" ++ printTValRef r ++ ")"
+printFunRef (LFunRef i (LTValRef t v)) =
+    printType t ++ " " ++ printIdentFun i ++ "(" ++ printValRef v ++ ")"
+
+printFunRefVoid :: LFunRef -> LLVMCode
+printFunRefVoid (LFunRef i r) =
+    printIdentFun i ++ "(" ++ printTValRef r ++ ")"
 
 printInst :: LInst -> LLVMCode
 printInst = \case
-    LLabel i     -> printIdent i ++ ":"
     LAssign i e  -> printIdentVar i ++ " = " ++ printExpr e
     LIExpr e     -> printExpr e
-    LVCall fr    -> "call void " ++ printFunRef fr
+    LVCall fr    -> "call void " ++ printFunRefVoid fr
     LABr i       -> "br " ++ printLabel i
     LCBr r i1 i2 -> "br " ++ joinComma [printTValRef r, printLabel i1,
                                         printLabel i2]
@@ -117,7 +121,9 @@ printInst = \case
     LUnreachable -> "unreachable"
 
 printInstIndent :: LInst -> LLVMCode
-printInstIndent i = "\n\t" ++  printInst i
+printInstIndent = \case
+    LLabel l -> printIdent l ++ ":"
+    i        -> "  " ++ printInst i
 
 printInsts :: LInsts -> LLVMCode
 printInsts = unlineFun printInstIndent
@@ -126,7 +132,7 @@ printExpr :: LExpr -> LLVMCode
 printExpr = \case
     LLoad r           -> unwords ["load", printTValRef r]
     LAlloca t         -> unwords ["alloca", printType t]
-    LCall f           -> unwords ["load", printFunRef f]
+    LCall f           -> unwords ["call", printFunRef f]
     LBitcast t1 r t2  -> printToOp "bitcast" t1 r t2
     LAdd r1 r2        -> printMathOp "add" r1 r2
     LFAdd r1 r2       -> printMathOp "fadd" r1 r2
@@ -142,27 +148,28 @@ printExpr = \case
     LPtrToInt t1 r t2 -> printToOp "ptrtoint" t1 r t2
 
 printMathOp :: LLVMCode -> LTValRef -> LValRef -> LLVMCode
-printMathOp c r1 r2 = unwords [c, printTValRef r1, printValRef r2]
+printMathOp c r1 r2 = unwords [c, printTValRef r1 ++ ",", printValRef r2]
 
 printCmp :: LLVMCode -> LOp -> LTValRef -> LValRef -> LLVMCode
-printCmp c o r1 r2 = unwords [c, printOp o, printTValRef r1, printValRef r2]
+printCmp c o r1 r2 = unwords [c, printOp o, printTValRef r1 ++ ",",
+                              printValRef r2]
 
 printToOp :: LLVMCode -> LType -> LValRef -> LType -> LLVMCode
 printToOp c t1 r t2 = unwords [c, printType t1, printValRef r, "to",
                                  printType t2]
 
 printGetPtr :: LLVMCode -> LType -> LIdent -> LTIndex -> [LTIndex] -> LLVMCode
-printGetPtr c t i x y = unwords [c, printType t, printIdentFun i,
-                                   printTIndex x, printTIndexes y]
+printGetPtr c t i x y = unwords [c, printType t, printIdentFun i ++ ",",
+                                 printTIndex x ++ ",", printTIndexes y]
 
 printIdent :: LIdent -> LLVMCode
-printIdent = show
+printIdent = id
 
 printIdentVar :: LIdent -> LLVMCode
-printIdentVar i = "%" ++ show i
+printIdentVar i = "%" ++ i
 
 printIdentFun :: LIdent -> LLVMCode
-printIdentFun i = "@" ++ show i
+printIdentFun i = "@" ++ i
 
 printIndex :: LIndex -> LLVMCode
 printIndex = show
@@ -174,4 +181,4 @@ printTIndexes :: [LTIndex] -> LLVMCode
 printTIndexes t = joinComma $ printTIndex <$> t
 
 printValue :: LValue -> LLVMCode
-printValue str = "c\"" ++ show str ++ "\00"
+printValue str = "c\"" ++  str ++ "\\00\""
