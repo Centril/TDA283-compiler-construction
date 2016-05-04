@@ -33,7 +33,7 @@ module Common.AST where
 
 import Data.Data
 
-import Control.Lens hiding (Empty)
+import Control.Lens hiding (Empty, op)
 
 import Utils.Monad
 
@@ -216,8 +216,8 @@ instance Functor RelOp where fmap = over rAnot
 --------------------------------------------------------------------------------
 
 convert :: J.Program a -> Program a
-convert (J.Program a fns) = Program a $ cf <$> fns
-    where cf  (J.FnDef a r i ps b) = FnDef     a (ct r) (ci i) (ca <$> ps) (cb b)
+convert (J.Program anot fns)       = Program anot $ cf <$> fns
+    where cf  (J.FnDef a r i p b)  = FnDef     a (ct r) (ci i) (ca <$> p) (cb b)
           ca  (J.Arg      a t i)   = Arg       a (ct t) (ci i)
           ct  (J.Int      a)       = Int       a
           ct  (J.Doub     a)       = Doub      a

@@ -34,13 +34,16 @@ module Frontend.TypeFunSig (
 
 import Control.Monad
 
+import Control.Lens
+
+import Utils.Monad
+
+import Common.AST
+
 import Frontend.Computation
-import Frontend.Query
 import Frontend.Error
 import Frontend.Common
 import Frontend.TypeInfer
-
-import Common.AST
 
 --------------------------------------------------------------------------------
 -- Checking for int main(void):
@@ -58,21 +61,16 @@ mainCorrect = lookupFunE mainId >>=
 --------------------------------------------------------------------------------
 
 allFunctions :: ProgramA -> Eval ProgramA
-allFunctions (Program a funs) = do
-    funs' <- mapM checkFunSignature funs
-    collectFuns $ predefFuns ++ fmap toFnSigId funs'
-    return $ Program a funs'
+allFunctions = pTopDefs %%~ (<<= collectFuns . (predefFuns ++) . fmap toFnSigId)
+                            . mapM checkFunSignature
 
 checkFunSignature :: TopDef ASTAnots -> Eval TopDefA
-checkFunSignature (FnDef a ret ident args block) = do
-    args'      <- mapM checkArgTypes args
-    (ret',  _) <- inferType ret
-    return $ FnDef a ret' ident args' block
+checkFunSignature fun = do args'      <- mapM checkArgTypes $ _fArgs fun
+                           (ret',  _) <- inferType $ _fRetTyp fun
+                           return $ fun { _fRetTyp = ret', _fArgs = args' } 
 
 checkArgTypes :: Arg ASTAnots -> Eval ArgA
-checkArgTypes (Arg a atyp ident) = do
-    (atyp', _) <- inferType atyp
-    return $ Arg a atyp' ident
+checkArgTypes = aTyp %%~ (fmap fst . inferType)
 
 collectFuns :: [FunId] -> Eval ()
 collectFuns = mapM_ $ extendFun' funAlreadyDef
@@ -86,5 +84,4 @@ predefFuns = map toFunId
      ("readDouble",  ([        ], doub))]
 
 toFnSigId :: TopDefA -> FunId
-toFnSigId (FnDef _ ret ident args _) =
-    FunId ident $ FunSig (argType <$> args) ret
+toFnSigId (FnDef _ ret name args _) = FunId name $ FunSig (_aTyp <$> args) ret

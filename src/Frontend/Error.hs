@@ -30,7 +30,6 @@ Error messsages in Frontend of Javalette compiler.
 module Frontend.Error where
 
 import Frontend.Computation
-import Frontend.Query
 
 import Common.AST
 
@@ -41,10 +40,10 @@ terr' :: [String] -> Eval a
 terr' = err' TypeChecker
 
 xAlreadyDef :: String -> Ident -> Eval a
-xAlreadyDef what x = terr' ["The", what, identStr x, "is already defined"]
+xAlreadyDef what x = terr' ["The", what, _ident x, "is already defined"]
 
 xNotDef :: String -> Ident -> Eval a
-xNotDef what x = terr' ["The", what, identStr x, " is not defined."]
+xNotDef what x = terr' ["The", what, _ident x, " is not defined."]
 
 wrongMainSig :: Eval a
 wrongMainSig = terr "The function: main has the wrong signature"
@@ -61,7 +60,7 @@ varAlreadyDef = xAlreadyDef "variable"
 wrongRetTyp :: Show b => Type b -> Type b -> Eval a
 wrongRetTyp texpected tactual =
     terr' ["The current function expected return type:", show texpected,
-                                           ", actual:", show tactual]
+                                            ", actual:", show tactual]
 
 wrongExpTyp :: Show b =>  Expr b -> Type b -> Type b -> Eval a
 wrongExpTyp expr texpected tactual =
@@ -70,8 +69,8 @@ wrongExpTyp expr texpected tactual =
                 "actual type:", show tactual]
 
 wrongIdentTyp :: Show b => Ident -> [Type b] -> Type b -> Eval a
-wrongIdentTyp ident types tactual =
-    terr' ["The expression", identStr ident,
+wrongIdentTyp expr types tactual =
+    terr' ["The expression", _ident expr,
           "expected one of the types:", show types, ",",
                         "actual type:", show tactual]
 
@@ -88,11 +87,10 @@ wrongBinExp exprl exprr typl typr =
            "(", show exprr, ",", show typr, ")"]
 
 wrongArgsTyp :: Show b =>  Ident -> [Type b] -> [Type b] -> Eval a
-wrongArgsTyp ident texpected tactual =
-    terr' ["The function ", identStr ident,
+wrongArgsTyp fun texpected tactual =
+    terr' ["The function ", _ident fun,
           "expected the types:", show texpected, ",",
           "but was applied with actual types:", show tactual]
 
 insufficientFunRet :: Ident -> Eval a
-insufficientFunRet fun =
-    terr' ["The function", identStr fun, "might not return"]
+insufficientFunRet fun = terr' ["The function", _ident fun, "might not return"]

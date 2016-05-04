@@ -51,17 +51,16 @@ import Frontend.Error
 import Common.AST
 
 returnCheck :: ProgramA -> Eval ProgramA
-returnCheck (Program a funs) = Program a <$> mapM checkFunRet funs
+returnCheck = pTopDefs %%~ mapM checkFunRet
 
 checkFunRet :: TopDefA -> Eval TopDefA
-checkFunRet fun@(FnDef a rtype ident args block)
-    | rtype == tvoid = return fun
-    | otherwise      = FnDef a rtype ident args <<$> checkBlockTop ident block
+checkFunRet fun
+    | _fRetTyp fun == tvoid = return fun
+    | otherwise             = fBlock %%~ checkBlockTop (_fIdent fun) $ fun
 
-checkBlockTop :: Ident -> BlockA -> Eval (BlockA, Bool)
-checkBlockTop fid block = do
-    r@(_, hasRet) <- checkBlock fid block
-    if hasRet then return r else insufficientFunRet fid
+checkBlockTop :: Ident -> BlockA -> Eval BlockA
+checkBlockTop fid block = fst <$> unless' (checkBlock fid block) snd
+                                          (const $ insufficientFunRet fid)
 
 checkBlock :: Ident -> BlockA -> Eval (BlockA, Bool)
 checkBlock fid (Block a stmts) =

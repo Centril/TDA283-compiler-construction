@@ -45,11 +45,11 @@ import Control.Monad.State
 
 import Control.Lens hiding (from, to)
 
+import Utils.Monad
 import Utils.List
 import Utils.Pointless
 
 import Common.StateOps
-import Common.Uniplate()
 import Common.AST
 
 import Frontend.Annotations
@@ -68,7 +68,10 @@ makeLenses ''AREnv
 
 -- | 'alphaRename': alpha renames a 'ProgramA'.
 alphaRename :: ProgramA -> ProgramA
-alphaRename = flip evalState (AREnv [] 0) . arProg
+alphaRename = flip evalState (AREnv [] 0) . (pTopDefs %%~ mapM arFun)
+    where arFun f = sPushM substs >> arF f <* (nameCount .= 0)
+          arF     = fArgs %%~ mapM arArg >=> fBlock %%~ arBlock
+          arArg   = aIdent %%~ newSubst
 
 --------------------------------------------------------------------------------
 -- Alpha Renaming:
@@ -81,42 +84,32 @@ arRef :: Ident -> ARComp Ident
 arRef i = uses substs $ fromJust .| ctxFirst $ i
 
 newSubst :: Ident -> ARComp Ident
-newSubst from = do to <- Ident <$> freshOf "v" nameCount
-                   substs %= modifyf (insert from to)
-                   return to
-
-arProg :: ProgramA -> ARComp ProgramA
-arProg (Program a funs) = Program a <$> mapM arFun funs
-
-arFun :: TopDefA -> ARComp TopDefA
-arFun (FnDef a r i p b) = sPushM substs >>
-                          liftM2 (FnDef a r i) (mapM arArg p) (arBlock b) <*
-                          (nameCount .= 0)
-
-arArg :: ArgA -> ARComp ArgA
-arArg (Arg a t i) = Arg a t <$> newSubst i
+newSubst from = (Ident <$> freshOf "v" nameCount) <<=
+                (substs %=) . modifyf . insert from
 
 arBlock :: BlockA -> ARComp BlockA
-arBlock (Block a block) = Block a <$> mapM arStmt block <* sPopM substs
+arBlock b = (bStmts %%~ mapM arStmt) b <* sPopM substs
 
 arStmt :: StmtA -> ARComp StmtA
 arStmt stmt = case stmt of
-    BStmt    a b       -> sPushM substs >> BStmt a <$> arBlock b
-    Decl     a t is    -> Decl a t <$> mapM arItem is
-    Ass      a i e     -> liftM2 (Ass a) (arRef i) (arExpr e)
-    Incr     a i       -> Incr a <$> arRef i
-    Decr     a i       -> Decr a <$> arRef i
-    SExp     a e       -> SExp a <$> arExpr e
-    Ret      a e       -> Ret  a <$> arExpr e
-    While    a e s     -> arC (While    a) e s
-    Cond     a e s     -> arC (Cond     a) e s
-    CondElse a e si se -> arC (CondElse a) e si <*> arStmt se
-    _                  -> return stmt
-    where arC ctor e s = ctor <$> arExpr e <*> arStmt s
+    BStmt    {} -> sPushM substs >> (sBlock %%~ arBlock $ stmt)
+    Decl     {} -> sDItems %%~ mapM arItem $ stmt
+    Ass      {} -> arI >=> arE $ stmt
+    Incr     {} -> arI stmt
+    Decr     {} -> arI stmt
+    SExp     {} -> arE stmt
+    Ret      {} -> arE stmt
+    While    {} -> arC stmt
+    Cond     {} -> arC stmt
+    CondElse {} -> arC >=> sSe %%~ arStmt $ stmt
+    _           -> return stmt
+    where arC = arE >=> sSi %%~ arStmt
+          arE = sExpr %%~ arExpr
+          arI = sIdent %%~ arRef
 
 arItem :: ItemA -> ARComp ItemA
-arItem (Init   a i e) = liftM2 (flip (Init a)) (arExpr e) (newSubst i)
-arItem (NoInit a i  ) = NoInit a <$> newSubst i
+arItem i = (case i of Init {} -> iExpr %%~ arExpr $ i; _ -> return i) >>=
+           (iIdent %%~ newSubst)
 
 arExpr :: ExprA -> ARComp ExprA
 arExpr = U.transformM $ \case EVar a i -> EVar a <$> arRef i
