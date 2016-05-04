@@ -29,8 +29,14 @@ General monadic, applicative, functor utility functions.
 -}
 module Utils.Monad (
     -- * Operations
-    (<!>), (<:>), (<<$>), (<>$>), maybeErr, (<$$>)
+    (<<=), (<!>), (<:>), (<<$>), (<>$>), maybeErr, (<$$>), unless'
 ) where
+
+-- | '<<=': sequentially compose two actions, passing value produced by first as
+-- an argument to the second, but returning the value of produced by first.
+(<<=) :: Monad m => m a -> (a -> m b) -> m a
+(<<=) m f = m >>= \x -> f x >> return x
+infixl 5 <<=
 
 -- | '<!>': sequential application of a non-applicative value
 -- lifted into the same 'Applicative' of as the function applied.
@@ -62,3 +68,10 @@ maybeErr whenNothing = maybe whenNothing return
 -- | '<$$>': alias for composition of fmap with itself.
 (<$$>) :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
 (<$$>) = (<$>) . (<$>)
+
+-- | 'unless'': sequentially composes first argument with a check where the
+-- value is given to a predicate (in second argument). If the predicate holds,
+-- then its given value is returned, else the function in the third argument is
+-- given the value and is the result of the computation.
+unless' :: Monad m => m a -> (a -> Bool) -> (a -> m a) -> m a
+unless' m p e = m >>= \x -> if p x then return x else e x
