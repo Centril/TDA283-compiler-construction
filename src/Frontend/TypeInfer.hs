@@ -36,13 +36,11 @@ module Frontend.TypeInfer (
 
 import Control.Monad
 
-import Utils.Function
+import Common.AST
 
 import Frontend.Computation
 import Frontend.Error
 import Frontend.Common
-
-import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Kind inference:
@@ -58,20 +56,21 @@ inferType typ = return $ addKind typ KConcrete
 
 inferExp :: ExprA -> Eval (ExprA, TypeA)
 inferExp expr = case expr of
-    EVar _ ident   -> addTyp  expr <$> lookupVarE ident
-    EString   {}   -> addTyp' expr conststr
-    ELitInt   {}   -> addTyp' expr int
-    ELitDoub  {}   -> addTyp' expr doub
-    ELitTrue  _    -> addTyp' expr bool
-    ELitFalse _    -> addTyp' expr bool
-    EApp a ident e -> inferFun a ident e
-    Neg a e        -> inferUnary Neg a e [int, doub]
-    Not a e        -> inferUnary Not a e [bool]
-    EMul a l op r  -> inferBin a l r (mulOp op)  (flip3 EMul op) id
-    EAdd a l op r  -> inferBin a l r [int, doub] (flip3 EAdd op) id
-    ERel a l op r  -> inferBin a l r (relOp op)  (flip3 ERel op) (const bool)
-    EAnd a l r     -> inferBin a l r [bool]             EAnd     id
-    EOr  a l r     -> inferBin a l r [bool]             EOr      id
+    EVar _ name -> addTyp  expr <$> lookupVarE name
+    EString   {} -> addTyp' expr conststr
+    ELitInt   {} -> addTyp' expr int
+    ELitDoub  {} -> addTyp' expr doub
+    ELitTrue  _  -> addTyp' expr bool
+    ELitFalse _  -> addTyp' expr bool
+    EApp      {} -> inferFun expr
+    Neg       {} -> inferUnary expr [int, doub]
+    Not       {} -> inferUnary expr [bool]
+    EMul      {} -> ib (mulOp $ _eMOp expr)
+    EAdd      {} -> ib [int, doub]
+    ERel      {} -> inferBin (const bool) expr (relOp $ _eROp expr) 
+    EAnd      {} -> ib [bool]
+    EOr       {} -> ib [bool]
+    where ib = inferBin id expr
 
 relOp :: RelOpA -> [TypeA]
 relOp oper | oper `elem` applyEA [NE, EQU] = [int, doub, bool]
@@ -81,29 +80,25 @@ mulOp :: MulOpA -> [TypeA]
 mulOp oper | oper == Mod emptyAnot = [int]
            | otherwise             = [int, doub]
 
-inferBin :: ASTAnots -> ExprA -> ExprA -> [TypeA]
-         -> (ASTAnots -> ExprA -> ExprA -> ExprA) -> (TypeA -> TypeA)
-         -> Eval (ExprA, TypeA)
-inferBin a exprl exprr accept ctor mTyp = do
-    (exprl', typl) <- inferExp exprl
-    (exprr', typr) <- inferExp exprr
+inferBin :: (TypeA -> TypeA) -> ExprA -> [TypeA] -> Eval (ExprA, TypeA)
+inferBin mTyp expr accept = do
+    (exprl', typl) <- inferExp $ _eLExpr expr
+    (exprr', typr) <- inferExp $ _eRExpr expr
     if typl == typr && typl `elem` accept
-        then addTyp' (ctor a exprl' exprr') (mTyp typl)
-        else wrongBinExp exprl exprr typl typr
+        then addTyp' (expr { _eLExpr = exprl', _eRExpr = exprr'}) (mTyp typl)
+        else wrongBinExp (_eLExpr expr) (_eRExpr expr) typl typr
 
-inferUnary :: (ASTAnots -> ExprA -> ExprA)
-           -> ASTAnots -> ExprA -> [TypeA]
-           -> Eval (ExprA, TypeA)
-inferUnary ctor a expr accept = do
-    (expr', etyp) <- inferExp expr
+inferUnary :: ExprA -> [TypeA] -> Eval (ExprA, TypeA)
+inferUnary expr accept = do
+    (expr', etyp) <- inferExp $ _eExpr expr
     if etyp `elem` accept
-        then addTyp' (ctor a expr') etyp
+        then addTyp' (expr {_eExpr = expr'}) etyp
         else wrongUnaryExp expr accept etyp
 
-inferFun :: ASTAnots -> Ident -> [ExprA] -> Eval (ExprA, TypeA)
-inferFun a ident exprs = do
-    FunSig texpected rtype <- lookupFunE ident
-    (exprs', tactual)      <- mapAndUnzipM inferExp exprs
+inferFun :: ExprA -> Eval (Expr [ASTAnot], TypeA)
+inferFun expr = do
+    FunSig texpected rtype <- lookupFunE $ _eIdent expr
+    (exprs', tactual)      <- mapAndUnzipM inferExp $ _eAppExprs expr
     if texpected == tactual
-        then addTyp' (EApp a ident exprs') rtype
-        else wrongArgsTyp ident texpected tactual
+        then addTyp' (expr { _eAppExprs = exprs' }) rtype
+        else wrongArgsTyp (_eIdent expr) texpected tactual

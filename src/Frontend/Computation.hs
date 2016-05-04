@@ -53,10 +53,9 @@ import Utils.Monad
 
 import Common.Computation
 import Common.StateOps
+import Common.AST
 
 import Frontend.Environment
-
-import Javalette.Abs
 
 --------------------------------------------------------------------------------
 -- Environment operations:
@@ -72,23 +71,23 @@ lookupVar' onErr var = uses contexts (ctxFirst var) >>= maybeErr (onErr var)
 lookupFun' :: (Ident -> Eval FunSig) -> Ident -> Eval FunSig
 lookupFun' onErr fun = uses functions (lookup fun) >>= maybeErr (onErr fun)
 
--- | 'extendVar': Extends the current scope with the given variable with ident
+-- | 'extendVar': Extends the current scope with the given variable with name
 -- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
 extendVar' :: (Ident -> Eval ()) -> Var -> Eval ()
-extendVar' onErr (Var ident typ) = do
+extendVar' onErr (Var name typ) = do
     (c : ctxs) <- use contexts
-    maybe (contexts .= insert ident typ c:ctxs)
-          (const $ onErr ident)
-          (lookup ident c)
+    maybe (contexts .= insert name typ c:ctxs)
+          (const $ onErr name)
+          (lookup name c)
 
 -- | 'extendVar': Extends the accumulated function signatures with the given
 -- signature as 'FnId'. If function exists, onError is used.
 extendFun' :: (Ident -> Eval ()) -> FunId -> Eval ()
-extendFun' onErr (FunId ident sig) = do
+extendFun' onErr (FunId name sig) = do
     funs <- use functions
-    maybe (functions .= insert ident sig funs)
-          (const $ onErr ident)
-          (lookup ident funs)
+    maybe (functions .= insert name sig funs)
+          (const $ onErr name)
+          (lookup name funs)
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:

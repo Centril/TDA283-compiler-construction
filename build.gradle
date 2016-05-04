@@ -48,15 +48,11 @@ project(':src') { p ->
         doFirst { bnfcClean.execute() }
         description "Runs BNFC on contrib/Javalette.cf"
         commandLine "bnfc", "-d", "--functor", "contrib/Javalette.cf"
-        finalizedBy alex, happy
+        doLast { alex.execute(); happy.execute(); fixBNFCErrM.execute(); }
+        inputs.file "contrib/Javalette.cf"
+        outputs.file file("Javalette")
     }
     [alex, happy].each { it.workingDir new File(p.projectDir, "Javalette") }
-/*
-	[bnfcClean, bnfc, alex, happy].each { 
-        it.inputs.file "contrib/Javalette.cf"
-        it.outputs.file file("Javalette")
-    }
-*/
 
     task fixBNFCErrM(type: Copy, overwrite: true) {
         def offending = "import Control.Applicative " +
@@ -75,7 +71,6 @@ project(':src') { p ->
 
         into("Javalette")
     }
-    p.tasks.cabalbuild.dependsOn fixBNFCErrM
 
     task build(type: Copy) {
         description "Builds compiler sources into jlc program."

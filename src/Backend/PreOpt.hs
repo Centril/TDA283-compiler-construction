@@ -43,9 +43,9 @@ import Control.Lens hiding (from, to, Empty)
 import Utils.Foldable
 import Utils.Function
 
-import Frontend.Annotations
+import Common.AST
 
-import Javalette.Abs
+import Frontend.Annotations
 
 --------------------------------------------------------------------------------
 -- API:

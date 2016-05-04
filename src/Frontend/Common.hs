@@ -35,7 +35,7 @@ module Frontend.Common (
 import Frontend.Computation
 import Frontend.Error
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- Lookups:

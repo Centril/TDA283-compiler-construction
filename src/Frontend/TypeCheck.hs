@@ -34,17 +34,18 @@ module Frontend.TypeCheck (
 
 import Control.Monad
 
+import Control.Lens hiding (contexts, Empty)
+
 import Utils.Monad
 
 import Frontend.Computation
-import Frontend.Query
 import Frontend.Error
 import Frontend.Common
 import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- API:
@@ -75,69 +76,63 @@ typeCheck prog0 = do
 --------------------------------------------------------------------------------
 
 checkProg :: ProgramA -> Eval ProgramA
-checkProg (Program a funs) = Program a <$> mapM checkFunType funs
+checkProg = pTopDefs %%~ mapM checkFunType
 
 checkFunType :: TopDefA -> Eval TopDefA
-checkFunType (FnDef a rtype ident args block) = do
-    sPushM contexts
-    collectArgVars args
-    FnDef a rtype ident args <$> checkBlock rtype block
+checkFunType fun = sPushM contexts >> collectArgVars (_fArgs fun) >>
+                   (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
 
 collectArgVars :: [ArgA] -> Eval ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
 checkBlock :: TypeA -> BlockA -> Eval BlockA
-checkBlock frtyp (Block a block) =
-    Block a <$> checkStms frtyp block <* sPopM contexts
-
-checkStms :: TypeA -> [StmtA] -> Eval [StmtA]
-checkStms = mapM . checkStm
+checkBlock rtyp = (<* sPopM contexts) . (bStmts %%~ mapM (checkStm rtyp))
 
 checkStm :: TypeA -> StmtA -> Eval StmtA
 checkStm typ stmt = case stmt of
-    Empty _               -> return stmt
-    BStmt a block         -> sPushM contexts >> BStmt a <$> checkBlock typ block
-    Decl a vtyp items     -> checkDecls a vtyp items
-    Ass a ident expr      -> Ass a ident <$> checkIdentExp ident expr
-    Incr a ident          -> Incr a <$> checkIdent [int, doub] ident
-    Decr a ident          -> Decr a <$> checkIdent [int, doub] ident
-    SExp a expr           -> SExp a <<$> inferExp expr
-    Ret a expr            -> Ret a <$> checkExp typ expr
-    VRet a                -> checkVoid typ >> return (VRet a)
-    While a expr st       -> checkC (While    a) expr st
-    Cond a expr st        -> checkC (Cond     a) expr st
-    CondElse a expr si se -> checkC (CondElse a) expr si <*> checkR se
-    where checkR = checkStm typ
-          checkC ctor expr st = ctor <$> checkExp bool expr <*> checkR st
+    Empty     _ -> return stmt
+    BStmt    {} -> sPushM contexts >> (sBlock %%~ checkBlock typ $ stmt)
+    Decl     {} -> checkDecls stmt
+    Ass a n e   -> Ass a n <$> checkIdentExp n e
+    Incr     {} -> checkInc
+    Decr     {} -> checkInc
+    SExp     {} -> sExpr %%~ fmap fst . inferExp $ stmt
+    Ret      {} -> sExpr %%~ checkExp typ $ stmt
+    VRet      _ -> checkVoid typ >> return stmt
+    While    {} -> checkC stmt
+    Cond     {} -> checkC stmt
+    CondElse {} -> checkC >=> checkS sSe $ stmt
+    where checkC   = sExpr %%~ checkExp bool >=> checkS sSi
+          checkS f = f %%~ checkStm typ
+          checkInc = sIdent %%~ checkIdent [int, doub] $ stmt
 
 checkVoid :: TypeA -> Eval ()
-checkVoid frtyp = unless (void frtyp == Void ()) $
-    wrongRetTyp (Void ()) $ void frtyp
+checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)
 
 checkIdentExp :: Ident -> ExprA -> Eval ExprA
-checkIdentExp ident expr = lookupVarE ident >>= flip checkExp expr
+checkIdentExp name expr = lookupVarE name >>= flip checkExp expr
 
-checkDecls :: ASTAnots -> TypeA -> [ItemA] -> Eval StmtA
-checkDecls a vtyp items = do
-    (vtyp', _) <- inferType vtyp
-    Decl a vtyp' <$> mapM (single vtyp') items
-    where single vtyp' item = checkDeclItem vtyp' item <*
-                        extendVar' varAlreadyDef (itemToVar vtyp' item)
+checkDecls :: StmtA -> Eval StmtA
+checkDecls decl = do
+    (vtyp', _) <- inferType $ _sDTyp decl
+    sDItems %%~ mapM (single vtyp') $ decl { _sDTyp = vtyp' }
+    where single vt item = checkDeclItem vt item <*
+                           extendVar' varAlreadyDef (itemToVar vt item)
 
 checkDeclItem :: TypeA -> ItemA -> Eval ItemA
-checkDeclItem vtyp (Init a ident expr) = Init a ident <$> checkExp vtyp expr
-checkDeclItem _    item@(NoInit _ _)   = return item
+checkDeclItem _    item@(NoInit _ _) = return item
+checkDeclItem vtyp item              = iExpr %%~ checkExp vtyp $ item
 
 checkExp :: TypeA -> ExprA -> Eval ExprA
-checkExp texpected expr = do
-    (expr', tactual) <- inferExp expr
-    if texpected == tactual
-        then return expr'
-        else wrongExpTyp expr texpected tactual
+checkExp texpected expr = fst <$> unless' (inferExp expr) ((texpected ==) . snd)
+                                  (wrongExpTyp expr texpected . snd)
 
 checkIdent :: [TypeA] -> Ident -> Eval Ident
-checkIdent types ident = do
-    vtyp <- lookupVarE ident
-    if vtyp `elem` types
-        then return ident
-        else wrongIdentTyp ident types vtyp
+checkIdent types name = name <$ unless' (lookupVarE name) (`elem` types)
+                                (wrongIdentTyp name types)
+
+argToVar :: ArgA -> Var
+argToVar a = Var (_aIdent a) (_aTyp a)
+
+itemToVar :: TypeA -> ItemA -> Var
+itemToVar typ = flip Var typ . _iIdent

@@ -47,7 +47,7 @@ import Control.Lens hiding (Context, contexts)
 
 import Frontend.Annotations
 
-import Javalette.Abs
+import Common.AST
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:
@@ -80,7 +80,7 @@ data FunId = FunId { fident :: Ident, fsig :: FunSig}
 type FnSigMap = Map Ident FunSig
 
 toFunId :: (String, ([TypeA], TypeA)) -> FunId
-toFunId (ident, sig) = FunId (Ident ident) $ uncurry FunSig sig
+toFunId (name, sig) = FunId (Ident name) $ uncurry FunSig sig
 
 --------------------------------------------------------------------------------
 -- Operating Environment:
