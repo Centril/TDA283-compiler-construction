@@ -80,7 +80,7 @@ printArgs :: LArgs -> LLVMCode
 printArgs a = joinComma $ printArg <$> a
 
 printLabel :: LIdent -> LLVMCode
-printLabel i = "label %" ++ printIdent i
+printLabel lr = "label " ++ printLabRef lr
 
 printOp :: LOp -> LLVMCode
 printOp = \case
@@ -141,10 +141,16 @@ printExpr = \case
     LDiv r1 r2        -> printMathOp "div" r1 r2
     LFDiv r1 r2       -> printMathOp "fdiv" r1 r2
     LXor  r1 r2       -> printMathOp "xor" r1 r2
+    LPhi  t rs        -> printPhi t rs
     LICmp o r1 r2     -> printCmp "icmp" o r1 r2
     LFCmp o r1 r2     -> printCmp "fcmp" o r1 r2
     LGElemPtr t i x y -> printGetPtr "getelementptr" t i x y
     LPtrToInt t1 r t2 -> printToOp "ptrtoint" t1 r t2
+
+printPhi :: LType -> LPhiRefs -> String
+printPhi t rs = unwords ["phi", printType t, joinComma $ printPR <$> rs]
+    where printPR (LPhiRef vr lr) =
+            unwords ["[", printValRef vr, ",", printLabRef lr, "]"]
 
 printMathOp :: LLVMCode -> LTValRef -> LValRef -> LLVMCode
 printMathOp c r1 r2 = unwords [c, printTValRef r1 ++ ",", printValRef r2]
@@ -166,6 +172,9 @@ printIdent = id
 
 printIdentVar :: LIdent -> LLVMCode
 printIdentVar i = "%" ++ i
+
+printLabRef :: LLabelRef -> LLVMCode
+printLabRef lr = "%" ++ lr
 
 printIdentFun :: LIdent -> LLVMCode
 printIdentFun i = "@" ++ i

@@ -102,23 +102,28 @@ data LExpr
     | LDiv LTValRef LValRef
     | LFDiv LTValRef LValRef
     | LXor LTValRef LValRef
+    | LPhi LType LPhiRefs
     | LICmp LOp LTValRef LValRef
     | LFCmp LOp LTValRef LValRef
     | LGElemPtr LType LIdent LTIndex [LTIndex]
     | LPtrToInt LType LValRef LType
     deriving (Eq, Ord, Show, Read)
 
+data LPhiRef = LPhiRef LValRef LLabelRef
+    deriving (Eq, Ord, Show, Read)
+
 type LLabelRef = LIdent
 
-type LValue = String
-type LIdent = String
-type LIndex = Int
+type LValue  = String
+type LIdent  = String
+type LIndex  = Int
 type LTIndex = (LType, LIndex)
 
 type LConstGlobals = [LConstGlobal]
 type LFunDecls     = [LFunDecl]
 type LFunDefs      = [LFunDef]
 type LTValRefs     = [LTValRef]
+type LPhiRefs      = [LPhiRef]
 type LInsts        = [LInst]
 type LTypes        = [LType]
 type LArgs         = [LArg]
