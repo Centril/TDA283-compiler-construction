@@ -161,6 +161,8 @@ printExpr = \case
     LFMul r1 r2       -> printMathOp "fmul" r1 r2
     LDiv r1 r2        -> printMathOp "div" r1 r2
     LFDiv r1 r2       -> printMathOp "fdiv" r1 r2
+    LSRem r1 r2       -> printMathOp "srem" r1 r2
+    LFRem r1 r2       -> printMathOp "frem" r1 r2
     LXor  r1 r2       -> printMathOp "xor" r1 r2
     LPhi  t rs        -> printPhi t rs
     LICmp o r1 r2     -> printCmp "icmp" (printIcmpOp o) r1 r2

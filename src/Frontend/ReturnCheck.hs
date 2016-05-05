@@ -162,7 +162,7 @@ evalAdd a l op r = evalArith EAdd a l op r (handle _LitInt) (handle _LitDouble)
 
 evalMul :: ASTAnots -> ExprA -> MulOpA -> ExprA -> (ExprA, ML)
 evalMul a l o r = evalArith EMul a l o r hint hdoub
-    where hint  v er = mulFn (Just mod) div o <!> v <*> mulFetchR o er _LitInt
+    where hint  v er = mulFn (Just rem) div o <!> v <*> mulFetchR o er _LitInt
           hdoub v er = mulFn Nothing (/) o <!> v <*> mulFetchR o er _LitDouble
 
 evalArith :: (ASTAnots -> ExprA -> t1 -> ExprA -> ExprA)

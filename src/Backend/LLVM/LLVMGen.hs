@@ -161,13 +161,62 @@ compileExpr = \case
     ELitTrue  _       -> compileLInt   sizeofBool  1
     ELitFalse _       -> compileLInt   sizeofBool  0
     EApp      a i es  -> compileApp a i es
-    Neg       _ e     -> u
+    Neg       _ e     -> compileNeg e
     Not       _ e     -> compileNot e
-    EMul      _ l o r -> u
-    EAdd      _ l o r -> u
+    EMul      _ l o r -> compileMul o l r
+    EAdd      _ l o r -> compileAdd o l r
     ERel      _ l o r -> compileLRel l r o
     EAnd      _ l   r -> compileLBin l r 0 "land"
     EOr       _ l   r -> compileLBin l r 1 "lor"
+
+switchType :: t -> t -> LType -> t
+switchType onI onF = \case
+    LInt   _  -> onI
+    LFloat _  -> onF
+    _         -> error "switchType got wrong type."
+
+compileNeg :: ExprA -> LComp LTValRef
+compileNeg e = do
+    LTValRef t e'  <- compileExpr e
+    let (ctor, tvr) = switchType (LSub,  flip LTValRef $ LVInt   0)
+                                 (LFSub, flip LTValRef $ LVFloat 0) t
+    assignTemp t $ ctor (tvr t) e'
+
+compileBArith :: (LType -> LTValRef -> LValRef -> LExpr) -> ExprA -> ExprA
+              -> LComp LTValRef
+compileBArith gf l r = do
+    l'            <- compileExpr l
+    LTValRef t r' <- compileExpr r
+    assignTemp t $ gf t l' r'
+
+compileAdd :: AddOpA -> ExprA -> ExprA -> LComp LTValRef
+compileAdd op = compileBArith $ switchType (compileIAddOp op) (compileFAddOp op)
+
+compileMul :: MulOpA -> ExprA -> ExprA -> LComp LTValRef
+compileMul op = compileBArith $ switchType (compileIMulOp op) (compileFMulOp op)
+
+compileIAddOp :: AddOpA -> LTValRef -> LValRef -> LExpr
+compileIAddOp = \case
+    Plus  _ -> LAdd
+    Minus _ -> LSub
+
+compileFAddOp :: AddOpA -> LTValRef -> LValRef -> LExpr
+compileFAddOp = \case
+    Plus  _ -> LFAdd
+    Minus _ -> LFSub
+
+compileIMulOp :: MulOpA -> LTValRef -> LValRef -> LExpr
+compileIMulOp = \case
+    Times _ -> LMul
+    Div   _ -> LDiv
+    -- C++ (ISO 2011), https://en.wikipedia.org/wiki/Modulo_operation
+    Mod   _ -> LSRem
+
+compileFMulOp :: MulOpA -> LTValRef -> LValRef -> LExpr
+compileFMulOp = \case
+    Times _ -> LFMul
+    Div   _ -> LFDiv
+    Mod   _ -> LFRem -- will never happen, but added for completeness.
 
 compileLRel :: ExprA -> ExprA -> RelOpA -> LComp LTValRef
 compileLRel l r op = do
@@ -227,8 +276,11 @@ assignTemp rtyp expr = do
     pushInst $ LAssign temp expr
     return   $ LTValRef rtyp $ LRef temp
 
+getType :: ASTAnots -> TypeA
+getType anots = let AType typ = anots ! AKType in typ
+
 compileAnotType :: ASTAnots -> LType
-compileAnotType anots = let AType typ = anots ! AKType in compileType typ
+compileAnotType = compileType . getType
 
 compileCString :: String -> LComp LTValRef
 compileCString v = do

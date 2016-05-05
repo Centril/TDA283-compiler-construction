@@ -109,6 +109,8 @@ data LExpr
     | LFMul LTValRef LValRef
     | LDiv LTValRef LValRef
     | LFDiv LTValRef LValRef
+    | LSRem LTValRef LValRef
+    | LFRem LTValRef LValRef
     | LXor LTValRef LValRef
     | LPhi LType LPhiRefs
     | LICmp LICmpOp LTValRef LValRef
