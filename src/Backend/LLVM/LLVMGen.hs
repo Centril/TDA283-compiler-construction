@@ -171,8 +171,8 @@ compileExpr = \case
 
 compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do
-    [lLhs, lRhs, lEnd] <- newLabels prefix ["lhs", "rhs", "end"]
-    compileLabelJmp lLhs
+    lLhs         <- lastLabel
+    [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
     compileCondExpr l lRhs lEnd
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
     compileLabel lEnd

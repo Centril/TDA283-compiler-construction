@@ -27,7 +27,11 @@ Portability : ALL
 
 The LLVM AST in the LLVM backend of the Javalette compiler.
 -}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Backend.LLVM.LLVMAst where
+
+import Control.Lens
 
 data LLVMAst = LLVMAst {
     _lGConsts :: LConstGlobals, _lFDecls :: LFunDecls, _lFDefs :: LFunDefs }
@@ -127,3 +131,5 @@ type LPhiRefs      = [LPhiRef]
 type LInsts        = [LInst]
 type LTypes        = [LType]
 type LArgs         = [LArg]
+
+makePrisms ''LInst

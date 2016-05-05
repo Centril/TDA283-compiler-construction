@@ -35,11 +35,12 @@ module Backend.LLVM.Environment (
 
     -- * Operations
     initialLEnv,
-    newTemp, newLabel, newLabels,
+    newTemp, newLabel, newLabels, getLabels, lastLabel,
     newConstRef, pushConst,
     pushInst, clearInsts, getInsts
 ) where
 
+import Data.Maybe
 import Data.Map ((!))
 
 import Control.Lens hiding (Context, contexts)
@@ -61,12 +62,12 @@ import Backend.LLVM.LLVMAst
 -- TODO: Move FnSigMap to Common
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
-    _constants  :: LConstGlobals, -- ^ Accumulated list of constants.
-    _constCount :: Int,           -- ^ Counter for constants.
-    _tempCount  :: Int,           -- ^ Counter for temporary SSA in LLVM.
-    _labelCount :: Int,           -- ^ Counter for labels.
-    _insts      :: LInsts,        -- ^ Accumulated instructions.
-    _lfunctions :: FnSigMap }     -- ^ Map of ident -> function signatures.
+    _constants  :: LConstGlobals,   -- ^ Accumulated list of constants.
+    _constCount :: Int,             -- ^ Counter for constants.
+    _tempCount  :: Int,             -- ^ Counter for temporary SSA in LLVM.
+    _labelCount :: Int,             -- ^ Counter for labels.
+    _insts      :: LInsts,          -- ^ Accumulated instructions.
+    _lfunctions :: FnSigMap }       -- ^ Map of ident -> function signatures.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
@@ -107,3 +108,9 @@ clearInsts = insts .= []
 
 getInsts :: LComp LInsts
 getInsts = use insts
+
+getLabels :: LComp [LLabelRef]
+getLabels = mapMaybe (^? _LLabel) <$> getInsts
+
+lastLabel :: LComp LLabelRef
+lastLabel = head <$> getLabels
