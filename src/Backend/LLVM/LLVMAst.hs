@@ -61,7 +61,11 @@ data LType
 data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }
     deriving (Eq, Ord, Show, Read)
 
-data LOp = LEq | LNe | LUlt | LSgt | LUle | LSge
+data LICmpOp = LEq | LNe | LUgt | LUge | LUlt | LUle | LSlt | LSgt | LSle | LSge
+    deriving (Eq, Ord, Show, Read, Enum)
+
+data LFCmpOp = LFOeq | LFOgt | LFOge | LFOlt | LFOle | LFOne | LFOrd
+             | LFUeq | LFUgt | LFUge | LFUlt | LFUle | LFUne | LFUno
     deriving (Eq, Ord, Show, Read, Enum)
 
 data LValRef
@@ -107,8 +111,8 @@ data LExpr
     | LFDiv LTValRef LValRef
     | LXor LTValRef LValRef
     | LPhi LType LPhiRefs
-    | LICmp LOp LTValRef LValRef
-    | LFCmp LOp LTValRef LValRef
+    | LICmp LICmpOp LTValRef LValRef
+    | LFCmp LFCmpOp LTValRef LValRef
     | LGElemPtr LType LIdent LTIndex [LTIndex]
     | LPtrToInt LType LValRef LType
     deriving (Eq, Ord, Show, Read)

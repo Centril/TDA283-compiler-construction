@@ -165,9 +165,36 @@ compileExpr = \case
     Not       _ e     -> compileNot e
     EMul      _ l o r -> u
     EAdd      _ l o r -> u
-    ERel      _ l o r -> u
+    ERel      _ l o r -> compileLRel l r o
     EAnd      _ l   r -> compileLBin l r 0 "land"
     EOr       _ l   r -> compileLBin l r 1 "lor"
+
+compileLRel :: ExprA -> ExprA -> RelOpA -> LComp LTValRef
+compileLRel l r op = do
+    l'            <- compileExpr l
+    LTValRef t r' <- compileExpr r
+    assignTemp boolType $ case t of
+        LInt   _  -> LICmp (compileRelOpI op) l' r'
+        LFloat _  -> LFCmp (compileRelOpF op) l' r'
+        _         -> error "compileLRel got wrong type."
+
+compileRelOpI :: RelOpA -> LICmpOp
+compileRelOpI = \case
+    LTH _ -> LSlt
+    LE  _ -> LSle
+    GTH _ -> LSgt
+    GE  _ -> LSge
+    EQU _ -> LEq
+    NE  _ -> LNe
+
+compileRelOpF :: RelOpA -> LFCmpOp
+compileRelOpF = \case
+    LTH _ -> LFOlt
+    LE  _ -> LFOle
+    GTH _ -> LFOgt
+    GE  _ -> LFOge
+    EQU _ -> LFOeq
+    NE  _ -> LFOne
 
 compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do

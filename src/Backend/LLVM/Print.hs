@@ -82,14 +82,35 @@ printArgs a = joinComma $ printArg <$> a
 printLabel :: LIdent -> LLVMCode
 printLabel lr = "label " ++ printLabRef lr
 
-printOp :: LOp -> LLVMCode
-printOp = \case
+printIcmpOp :: LICmpOp -> LLVMCode
+printIcmpOp = \case
     LEq  -> "eq"
     LNe  -> "ne"
+    LUgt -> "ugt"
+    LUge -> "uge"
     LUlt -> "ult"
-    LSgt -> "sgt"
     LUle -> "ule"
+    LSlt -> "slt"
+    LSgt -> "sgt"
+    LSle -> "sle"
     LSge -> "sge"
+
+printFcmpOp :: LFCmpOp -> LLVMCode
+printFcmpOp = \case
+    LFOeq -> "oeq"
+    LFOgt -> "ogt"
+    LFOge -> "oge"
+    LFOlt -> "olt"
+    LFOle -> "ole"
+    LFOne -> "one"
+    LFOrd -> "ord"
+    LFUeq -> "ueq"
+    LFUgt -> "ugt"
+    LFUge -> "uge"
+    LFUlt -> "ult"
+    LFUle -> "ule"
+    LFUne -> "une"
+    LFUno -> "uno"
 
 printValRef :: LValRef -> LLVMCode
 printValRef = \case
@@ -142,8 +163,8 @@ printExpr = \case
     LFDiv r1 r2       -> printMathOp "fdiv" r1 r2
     LXor  r1 r2       -> printMathOp "xor" r1 r2
     LPhi  t rs        -> printPhi t rs
-    LICmp o r1 r2     -> printCmp "icmp" o r1 r2
-    LFCmp o r1 r2     -> printCmp "fcmp" o r1 r2
+    LICmp o r1 r2     -> printCmp "icmp" (printIcmpOp o) r1 r2
+    LFCmp o r1 r2     -> printCmp "fcmp" (printFcmpOp o) r1 r2
     LGElemPtr t i x y -> printGetPtr "getelementptr" t i x y
     LPtrToInt t1 r t2 -> printToOp "ptrtoint" t1 r t2
 
@@ -155,9 +176,8 @@ printPhi t rs = unwords ["phi", printType t, joinComma $ printPR <$> rs]
 printMathOp :: LLVMCode -> LTValRef -> LValRef -> LLVMCode
 printMathOp c r1 r2 = unwords [c, printTValRef r1 ++ ",", printValRef r2]
 
-printCmp :: LLVMCode -> LOp -> LTValRef -> LValRef -> LLVMCode
-printCmp c o r1 r2 = unwords [c, printOp o, printTValRef r1 ++ ",",
-                              printValRef r2]
+printCmp :: LLVMCode -> LLVMCode -> LTValRef -> LValRef -> LLVMCode
+printCmp c o r1 r2 = unwords [c, o, printTValRef r1 ++ ",", printValRef r2]
 
 printToOp :: LLVMCode -> LType -> LValRef -> LType -> LLVMCode
 printToOp c t1 r t2 = unwords [c, printType t1, printValRef r, "to",
