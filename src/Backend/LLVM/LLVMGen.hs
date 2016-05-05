@@ -52,7 +52,15 @@ u = undefined
 compileLLVM :: ProgramA -> LComp LLVMAst
 compileLLVM prog = do
     let tds = _pTopDefs prog
-    LLVMAst [] [] <$> mapM compileFun tds
+    LLVMAst [] predefDecls <$> mapM compileFun tds
+
+predefDecls :: LFunDecls
+predefDecls =
+    [LFunDecl LVoid    "printInt"    [intType],
+     LFunDecl LVoid    "printDouble" [doubType],
+     LFunDecl LVoid    "printString" [strType],
+     LFunDecl intType  "readInt"     [],
+     LFunDecl doubType "readDouble"  []]
 
 compileFun :: TopDefA -> LComp LFunDef
 compileFun (FnDef _ rtyp name args block) = do
@@ -304,15 +312,17 @@ compileCString v = do
 
 compileType :: TypeA -> LType
 compileType = \case
-    Int      _ -> LInt   sizeofInt
-    Doub     _ -> LFloat sizeofFloat
-    Bool     _ -> LInt   sizeofBool
+    Int      _ -> intType
+    Doub     _ -> doubType
+    Bool     _ -> boolType
     Void     _ -> LVoid
     ConstStr _ -> strType
     Fun      _ rtyp argst -> u
 
 boolType, charType, strType :: LType
 boolType = LInt sizeofBool
+intType  = LInt sizeofInt
+doubType = LFloat sizeofFloat
 charType = LInt sizeofChar
 strType  = LPtr charType
 
