@@ -18,18 +18,18 @@
 
 {-|
 Module      : Utils.Foldable
-Description : General utility functions for Foldable:s.
+Description : General utility functions on Foldable:s, Lists, Monoids.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
 License     : GPL-2+
 Stability   : experimental
 Portability : ALL
 
-General utility functions for Foldable:s.
+General utility functions on Foldable:s, Lists, Monoids.
 -}
 module Utils.Foldable (
     -- * Operations
-    mfind, maybePred
+    mfind, maybePred, modifyf, addSuffixes
 ) where
 
 import Data.Monoid
@@ -45,3 +45,14 @@ maybePred p = isJust . p
 -- the leftmost element mapped, or 'Nothing' if all elements were rejected.
 mfind :: Foldable t => (a -> Maybe b) -> t a -> Maybe b
 mfind p = getFirst . foldMap (First . p)
+
+-- | 'modifyf': modifies the first element of a list.
+modifyf :: (t -> t) -> [t] -> [t]
+modifyf _ []       = []
+modifyf f (x : xs) = f x : xs
+
+-- | 'addSuffixes': given a structure with suffixes, prepends a prefix and a
+-- separator. The prepending is done with the semantics of a monoid.
+addSuffixes :: (Functor f, Monoid a) => f a -> a -> a -> f a
+addSuffixes ss j pre = (pre' `mappend`) <$> ss
+    where pre' = pre `mappend` j

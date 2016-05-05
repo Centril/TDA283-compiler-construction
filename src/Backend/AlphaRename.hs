@@ -46,7 +46,7 @@ import Control.Monad.State
 import Control.Lens hiding (from, to)
 
 import Utils.Monad
-import Utils.List
+import Utils.Foldable
 import Utils.Pointless
 
 import Common.StateOps
