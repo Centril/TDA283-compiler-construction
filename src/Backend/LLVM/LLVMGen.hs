@@ -77,6 +77,12 @@ compileFBlock block = compileFBlock' block >> getInsts <* clearInsts
 compileLabel :: LLabelRef -> LComp ()
 compileLabel l = pushInst $ LLabel l
 
+compileLabelJmp :: LLabelRef -> LComp ()
+compileLabelJmp l = pushInst (LABr l) >> compileLabel l
+
+xInLabel :: LLabelRef -> LLabelRef -> LComp b -> LComp b
+xInLabel _lab _cont x = compileLabel _lab >> x <* pushInst (LABr _cont)
+
 compileFBlock' :: BlockA -> LComp ()
 compileFBlock' = (compileLabel "entry" >>) . compileBlock
 
@@ -117,17 +123,14 @@ compileRet e = LRet <$> compileExpr e >>= pushInst
 
 compileCond :: ExprA -> StmtA -> LComp ()
 compileCond c si = do
-    _then <- newLabel "then"
-    _cont <- newLabel "cont"
+    [_then, _cont] <- newLabels "if" ["then", "cont"]
     compileCondExpr c  _then _cont
     compileCondStmt si _then _cont
     compileLabel             _cont
 
 compileCondElse :: ExprA -> StmtA -> StmtA -> LComp ()
 compileCondElse c si se = do
-    _then <- newLabel "then"
-    _else <- newLabel "else"
-    _cont <- newLabel "cont"
+    [_then, _else, _cont] <- newLabels "ifelse" ["then", "else", "cont"]
     compileCondExpr c  _then _else
     compileCondStmt si _then _cont
     compileCondStmt se _else _cont
@@ -135,12 +138,10 @@ compileCondElse c si se = do
 
 compileWhile :: ExprA -> StmtA -> LComp ()
 compileWhile c sw = do
-    _while <- newLabel "while"
-    _then  <- newLabel "then"
-    _cont  <- newLabel "cont"
-    compileLabel             _while
+    [_check, _then, _cont] <- newLabels "while" ["check", "then", "cont"]
+    compileLabelJmp          _check
     compileCondExpr c  _then _cont
-    compileCondStmt sw _then _while
+    compileCondStmt sw _then _check
     compileLabel             _cont
 
 compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
@@ -149,10 +150,7 @@ compileCondExpr c _then _else = do
     pushInst $ LCBr c' _then _else
 
 compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
-compileCondStmt stmt _then _cont = do
-    compileLabel _then
-    compileStmt stmt
-    pushInst $ LABr _cont
+compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
@@ -168,8 +166,18 @@ compileExpr = \case
     EMul      _ l o r -> u
     EAdd      _ l o r -> u
     ERel      _ l o r -> u
-    EAnd      _ l   r -> u
-    EOr       _ l   r -> u
+    EAnd      _ l   r -> compileLBin l r 0 "land"
+    EOr       _ l   r -> compileLBin l r 1 "lor"
+
+compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
+compileLBin l r onLHS prefix = do
+    [lLhs, lRhs, lEnd] <- newLabels prefix ["lhs", "rhs", "end"]
+    compileLabelJmp lLhs
+    compileCondExpr l lRhs lEnd
+    LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
+    compileLabel lEnd
+    assignTemp boolType $
+        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs]
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do

@@ -35,7 +35,7 @@ module Backend.LLVM.Environment (
 
     -- * Operations
     initialLEnv,
-    newTemp, newLabel,
+    newTemp, newLabel, newLabels,
     newConstRef, pushConst,
     pushInst, clearInsts, getInsts
 ) where
@@ -43,6 +43,8 @@ module Backend.LLVM.Environment (
 import Data.Map ((!))
 
 import Control.Lens hiding (Context, contexts)
+
+import Utils.Foldable
 
 import Common.AST
 import Common.Computation
@@ -87,6 +89,9 @@ newTemp = freshOf "t" tempCount
 
 newLabel :: String -> LComp LLabelRef
 newLabel = flip freshOf labelCount
+
+newLabels :: Functor f => String -> f String -> LComp (f LLabelRef)
+newLabels pre ss = addSuffixes ss "." <$> newLabel pre
 
 newConstRef :: String -> LComp LIdent
 newConstRef = flip freshOf constCount
