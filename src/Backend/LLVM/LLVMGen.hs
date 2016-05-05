@@ -164,7 +164,7 @@ compileExpr = \case
     ELitFalse _       -> compileLInt   sizeofBool  0
     EApp      a i es  -> compileApp a i es
     Neg       _ e     -> u
-    Not       _ e     -> u
+    Not       _ e     -> compileNot e
     EMul      _ l o r -> u
     EAdd      _ l o r -> u
     ERel      _ l o r -> u
@@ -175,6 +175,9 @@ compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
     let typ = compileAnotType anots
     assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ _ident name)
+
+compileNot :: ExprA -> LComp LTValRef
+compileNot e = compileExpr e >>= assignTemp boolType . flip LXor (LVInt 1)
 
 compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
 compileApp anots name es = do
@@ -210,7 +213,8 @@ compileType = \case
     ConstStr _ -> strType
     Fun      _ rtyp argst -> u
 
-charType, strType :: LType
+boolType, charType, strType :: LType
+boolType = LInt sizeofBool
 charType = LInt sizeofChar
 strType  = LPtr charType
 
