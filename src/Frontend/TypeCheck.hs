@@ -104,7 +104,7 @@ checkStm typ stmt = case stmt of
     CondElse {} -> checkC >=> checkS sSe $ stmt
     where checkC   = sExpr %%~ checkExp bool >=> checkS sSi
           checkS f = f %%~ checkStm typ
-          checkInc = sIdent %%~ checkIdent [int, doub] $ stmt
+          checkInc = checkIdent [int, doub] stmt
 
 checkVoid :: TypeA -> Eval ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)
@@ -127,9 +127,11 @@ checkExp :: TypeA -> ExprA -> Eval ExprA
 checkExp texpected expr = fst <$> unless' (inferExp expr) ((texpected ==) . snd)
                                   (wrongExpTyp expr texpected . snd)
 
-checkIdent :: [TypeA] -> Ident -> Eval Ident
-checkIdent types name = name <$ unless' (lookupVarE name) (`elem` types)
-                                (wrongIdentTyp name types)
+checkIdent :: [TypeA] -> StmtA -> Eval StmtA
+checkIdent types stmt = do
+    let name = _sIdent stmt
+    fst . addTyp stmt <$> unless' (lookupVarE name) (`elem` types)
+                                  (wrongIdentTyp name types)
 
 argToVar :: ArgA -> Var
 argToVar a = Var (_aIdent a) (_aTyp a)

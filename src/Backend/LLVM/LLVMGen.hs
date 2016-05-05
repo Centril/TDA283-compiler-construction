@@ -95,14 +95,25 @@ compileStmt = \case
     BStmt    _ b       -> compileBlock b
     Decl     _ t is    -> forM_ is $ compileDecl t
     Ass      _ i e     -> compileAss i e
-    Incr     _ i       -> u
-    Decr     _ i       -> u
+    Incr     a i       -> compileIncr a i 1 1
+    Decr     a i       -> compileIncr a i (-1) (-1)
     Ret      _ e       -> compileRet e
     VRet     _         -> pushInst LVRet
     Cond     _ c si    -> compileCond     c si
     CondElse _ c si se -> compileCondElse c si se
     While    _ c sw    -> compileWhile    c sw
     SExp     _ e       -> void $ compileExpr e
+
+compileIncr :: ASTAnots -> Ident -> Integer -> Double -> LComp ()
+compileIncr anots name vi vd = do
+    {--load --} x@(LTValRef t _) <- compileEVar anots name
+    {-- add --} temp <- assignTemp t $ switchAdd (Plus emptyAnot) t x
+                           (switchType (LVInt vi) (LVFloat vd) t)
+    {--store -} compileStore name temp
+
+compileStore :: Ident -> LTValRef -> LComp ()
+compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
+                                                           (LRef $ _ident name)
 
 compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
@@ -113,10 +124,7 @@ compileDecl typ item = do
         Init   _ i e -> compileAss name e
 
 compileAss :: Ident -> ExprA -> LComp ()
-compileAss name e = do
-    e' <- compileExpr e
-    pushInst $ LStore e' $
-               LTValRef (LPtr $ _lTType e') (LRef $ _ident name)
+compileAss name = compileExpr >=> compileStore name
 
 compileRet :: ExprA -> LComp ()
 compileRet e = LRet <$> compileExpr e >>= pushInst
@@ -190,7 +198,10 @@ compileBArith gf l r = do
     assignTemp t $ gf t l' r'
 
 compileAdd :: AddOpA -> ExprA -> ExprA -> LComp LTValRef
-compileAdd op = compileBArith $ switchType (compileIAddOp op) (compileFAddOp op)
+compileAdd = compileBArith . switchAdd
+
+switchAdd :: AddOpA -> LType -> LTValRef -> LValRef -> LExpr
+switchAdd op = switchType (compileIAddOp op) (compileFAddOp op)
 
 compileMul :: MulOpA -> ExprA -> ExprA -> LComp LTValRef
 compileMul op = compileBArith $ switchType (compileIMulOp op) (compileFMulOp op)
