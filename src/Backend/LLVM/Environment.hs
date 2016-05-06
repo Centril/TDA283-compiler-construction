@@ -39,7 +39,8 @@ module Backend.LLVM.Environment (
 
     -- * Operations
     initialLEnv,
-    newTemp, newLabel, newLabels, getLabels, lastLabel,
+    resetTemp, newTemp,
+    newLabel, newLabels, getLabels, lastLabel,
     newConstRef, pushConst,
     pushInst, clearInsts, getInsts
 ) where
@@ -84,6 +85,9 @@ type LComp a = Comp LEnv a
 
 -- | 'LResult': result of an 'LComp' computation.
 type LResult a = CompResult LEnv a
+
+resetTemp :: LComp ()
+resetTemp = tempCount .= 0
 
 newTemp :: LComp LIdent
 newTemp = freshOf "t" tempCount

@@ -85,7 +85,8 @@ compileFArg :: ArgA -> LArg
 compileFArg arg = LArg (compileType $ _aTyp arg) (_ident $ _aIdent arg)
 
 compileFBlock :: BlockA -> LComp LInsts
-compileFBlock block = compileFBlock' block >> getInsts <* clearInsts
+compileFBlock block = compileLabel "entry" >> compileBlock block >>
+                      getInsts <* clearInsts <* resetTemp
 
 compileLabel :: LLabelRef -> LComp ()
 compileLabel l = pushInst $ LLabel l
@@ -95,9 +96,6 @@ compileLabelJmp l = pushInst (LABr l) >> compileLabel l
 
 xInLabel :: LLabelRef -> LLabelRef -> LComp b -> LComp b
 xInLabel _lab _cont x = compileLabel _lab >> x <* pushInst (LABr _cont)
-
-compileFBlock' :: BlockA -> LComp ()
-compileFBlock' = (compileLabel "entry" >>) . compileBlock
 
 compileBlock :: BlockA -> LComp ()
 compileBlock = mapM_ compileStmt . _bStmts
@@ -126,7 +124,7 @@ compileIncr anots name vi vd = do
 
 compileStore :: Ident -> LTValRef -> LComp ()
 compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
-                                                           (LRef $ _ident name)
+                                                         (LRef $ _ident name)
 
 compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
