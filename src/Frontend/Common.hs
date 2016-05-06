@@ -41,8 +41,8 @@ import Common.AST
 -- Lookups:
 --------------------------------------------------------------------------------
 
-lookupFunE :: Ident -> Eval FunSig
+lookupFunE :: Ident -> TCComp FunSig
 lookupFunE = lookupFun' funNotDef
 
-lookupVarE :: Ident -> Eval TypeA
+lookupVarE :: Ident -> TCComp TypeA
 lookupVarE = lookupVar' varNotDef

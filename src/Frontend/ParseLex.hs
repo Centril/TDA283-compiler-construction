@@ -40,7 +40,7 @@ import Javalette.Par
 import Javalette.ErrM
 
 -- | 'parseProgram': statefully parses a Javalette program into AST.
-parseProgram :: String -> Eval (Program ())
+parseProgram :: String -> TCComp (Program ())
 parseProgram code = do
     infoln Parser ["Attempting to parse with:", code]
     convert <$> case pProgram $ myLexer code of

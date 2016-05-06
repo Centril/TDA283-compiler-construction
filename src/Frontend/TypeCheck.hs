@@ -54,7 +54,7 @@ import Common.AST
 -- API:
 --------------------------------------------------------------------------------
 
-typeCheck :: Program () -> Eval ProgramA
+typeCheck :: Program () -> TCComp ProgramA
 typeCheck prog0 = do
     let prog1 = fmap (const emptyAnot) prog0
     -- P1: collect functions:
@@ -78,20 +78,20 @@ typeCheck prog0 = do
 -- Type checking:
 --------------------------------------------------------------------------------
 
-checkProg :: ProgramA -> Eval ProgramA
+checkProg :: ProgramA -> TCComp ProgramA
 checkProg = pTopDefs %%~ mapM checkFunType
 
-checkFunType :: TopDefA -> Eval TopDefA
+checkFunType :: TopDefA -> TCComp TopDefA
 checkFunType fun = sPushM contexts >> collectArgVars (_fArgs fun) >>
                    (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
 
-collectArgVars :: [ArgA] -> Eval ()
+collectArgVars :: [ArgA] -> TCComp ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
-checkBlock :: TypeA -> BlockA -> Eval BlockA
+checkBlock :: TypeA -> BlockA -> TCComp BlockA
 checkBlock rtyp = (<* sPopM contexts) . (bStmts %%~ mapM (checkStm rtyp))
 
-checkStm :: TypeA -> StmtA -> Eval StmtA
+checkStm :: TypeA -> StmtA -> TCComp StmtA
 checkStm typ stmt = case stmt of
     Empty     _ -> return stmt
     BStmt    {} -> sPushM contexts >> (sBlock %%~ checkBlock typ $ stmt)
@@ -109,28 +109,28 @@ checkStm typ stmt = case stmt of
           checkS f = f %%~ checkStm typ
           checkInc = checkIdent [int, doub] stmt
 
-checkVoid :: TypeA -> Eval ()
+checkVoid :: TypeA -> TCComp ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)
 
-checkIdentExp :: Ident -> ExprA -> Eval ExprA
+checkIdentExp :: Ident -> ExprA -> TCComp ExprA
 checkIdentExp name expr = lookupVarE name >>= flip checkExp expr
 
-checkDecls :: StmtA -> Eval StmtA
+checkDecls :: StmtA -> TCComp StmtA
 checkDecls decl = do
     (vtyp', _) <- inferType $ _sDTyp decl
     sDItems %%~ mapM (single vtyp') $ decl { _sDTyp = vtyp' }
     where single vt item = checkDeclItem vt item <*
                            extendVar' varAlreadyDef (itemToVar vt item)
 
-checkDeclItem :: TypeA -> ItemA -> Eval ItemA
+checkDeclItem :: TypeA -> ItemA -> TCComp ItemA
 checkDeclItem _    item@(NoInit _ _) = return item
 checkDeclItem vtyp item              = iExpr %%~ checkExp vtyp $ item
 
-checkExp :: TypeA -> ExprA -> Eval ExprA
+checkExp :: TypeA -> ExprA -> TCComp ExprA
 checkExp texpected expr = fst <$> unless' (inferExp expr) ((texpected ==) . snd)
                                   (wrongExpTyp expr texpected . snd)
 
-checkIdent :: [TypeA] -> StmtA -> Eval StmtA
+checkIdent :: [TypeA] -> StmtA -> TCComp StmtA
 checkIdent types stmt = do
     let name = _sIdent stmt
     fst . addTyp stmt <$> unless' (lookupVarE name) (`elem` types)

@@ -50,26 +50,26 @@ import Frontend.Error
 
 import Common.AST
 
-returnCheck :: ProgramA -> Eval ProgramA
+returnCheck :: ProgramA -> TCComp ProgramA
 returnCheck = pTopDefs %%~ mapM checkFunRet
 
-checkFunRet :: TopDefA -> Eval TopDefA
+checkFunRet :: TopDefA -> TCComp TopDefA
 checkFunRet fun
     | _fRetTyp fun == tvoid = return fun
     | otherwise             = fBlock %%~ checkBlockTop (_fIdent fun) $ fun
 
-checkBlockTop :: Ident -> BlockA -> Eval BlockA
+checkBlockTop :: Ident -> BlockA -> TCComp BlockA
 checkBlockTop fid block = fst <$> unless' (checkBlock fid block) snd
                                           (const $ insufficientFunRet fid)
 
-checkBlock :: Ident -> BlockA -> Eval (BlockA, Bool)
+checkBlock :: Ident -> BlockA -> TCComp (BlockA, Bool)
 checkBlock fid (Block a stmts) =
     (Block a *** or) <$> mapAndUnzipM (checkHasRet fid) stmts
 
-checkBStmt :: ASTAnots -> BlockA -> Ident -> Eval (StmtA, Bool)
+checkBStmt :: ASTAnots -> BlockA -> Ident -> TCComp (StmtA, Bool)
 checkBStmt a block fid = first (always . BStmt a) <$> checkBlock fid block
 
-checkHasRet :: Ident -> StmtA -> Eval (StmtA, Bool)
+checkHasRet :: Ident -> StmtA -> TCComp (StmtA, Bool)
 checkHasRet fid stmt = case stmt of
     While    a expr st    -> checkCond While a expr st    fid
     Cond     a expr st    -> checkCond Cond  a expr st    fid
@@ -81,7 +81,7 @@ checkHasRet fid stmt = case stmt of
 
 checkCond :: (ASTAnots -> ExprA -> StmtA -> StmtA)
           ->  ASTAnots -> ExprA -> StmtA -> Ident
-          -> Eval (StmtA, Bool)
+          -> TCComp (StmtA, Bool)
 checkCond ctor a expr stmt fid = first always <$> case we of
     Always -> checkRetWrap fid stmt' $ ctor a expr'
     _      -> return (ctor a expr' stmt', False)
@@ -89,7 +89,7 @@ checkCond ctor a expr stmt fid = first always <$> case we of
           stmt'       = addWE we stmt
 
 checkCondElse :: ASTAnots -> ExprA -> StmtA -> StmtA -> Ident
-              -> Eval (StmtA, Bool)
+              -> TCComp (StmtA, Bool)
 checkCondElse a expr si se fid = first always <$> case we of
     Always  -> checkRetWrap fid si' $ flip (CondElse a expr') se'
     Never   -> checkRetWrap fid se' $ CondElse a expr' si'
@@ -107,7 +107,7 @@ weOpposite Unknown = Unknown
 condExpr :: ExprA -> (ExprA, WillExecute)
 condExpr = second (toWillExecute . (>>= (^? _LitBool))) . evalConstExpr
 
-checkRetWrap :: Ident -> StmtA -> (StmtA -> StmtA) -> Eval (StmtA, Bool)
+checkRetWrap :: Ident -> StmtA -> (StmtA -> StmtA) -> TCComp (StmtA, Bool)
 checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
 
 evalConstExpr :: ExprA -> (ExprA, ML)

@@ -34,7 +34,7 @@ module Frontend.Environment (
     module X,
 
     -- * Types
-    Eval, EvalResult,
+    TCComp, TCResult,
     TCEnv(..), Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,
 
@@ -97,7 +97,7 @@ toFunId (name, sig) = FunId (Ident name) $ uncurry FunSig sig
 -- Operating Environment:
 --------------------------------------------------------------------------------
 
--- | 'TCEnv': The operating environment of an 'Eval' computation.
+-- | 'TCEnv': The operating environment of an 'TCComp' computation.
 data TCEnv = TCEnv {
     _functions :: FnSigMap,  -- ^ Map of ident -> function signatures.
     _contexts  :: Contexts } -- ^ Stack of contexts.
@@ -113,11 +113,11 @@ initialTCEnv = TCEnv empty [empty]
 -- Computations in compiler:
 --------------------------------------------------------------------------------
 
--- | 'Eval': A computation in typechecker using environment 'TCEnv'.
-type Eval a = Comp TCEnv a
+-- | 'TCComp': A computation in typechecker using environment 'TCEnv'.
+type TCComp a = Comp TCEnv a
 
--- | 'EvalResult': result of an 'Eval' computation.
-type EvalResult a = CompResult TCEnv a
+-- | 'TCResult': result of a 'TCComp' computation.
+type TCResult a = CompResult TCEnv a
 
 --------------------------------------------------------------------------------
 -- Environment operations:
@@ -125,17 +125,17 @@ type EvalResult a = CompResult TCEnv a
 
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
 -- the identifier is 'return':ed, otherwise onErr is given the (var = 'Ident').
-lookupVar' :: (Ident -> Eval TypeA) -> Ident -> Eval TypeA
+lookupVar' :: (Ident -> TCComp TypeA) -> Ident -> TCComp TypeA
 lookupVar' onErr var = uses contexts (ctxFirst var) >>= maybeErr (onErr var)
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
 -- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
-lookupFun' :: (Ident -> Eval FunSig) -> Ident -> Eval FunSig
+lookupFun' :: (Ident -> TCComp FunSig) -> Ident -> TCComp FunSig
 lookupFun' onErr fun = uses functions (lookup fun) >>= maybeErr (onErr fun)
 
 -- | 'extendVar': Extends the current scope with the given variable with name
 -- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
-extendVar' :: (Ident -> Eval ()) -> Var -> Eval ()
+extendVar' :: (Ident -> TCComp ()) -> Var -> TCComp ()
 extendVar' onErr (Var name typ) = do
     (c : ctxs) <- use contexts
     maybe (contexts .= insert name typ c:ctxs)
@@ -144,7 +144,7 @@ extendVar' onErr (Var name typ) = do
 
 -- | 'extendVar': Extends the accumulated function signatures with the given
 -- signature as 'FnId'. If function exists, onError is used.
-extendFun' :: (Ident -> Eval ()) -> FunId -> Eval ()
+extendFun' :: (Ident -> TCComp ()) -> FunId -> TCComp ()
 extendFun' onErr (FunId name sig) = do
     funs <- use functions
     maybe (functions .= insert name sig funs)

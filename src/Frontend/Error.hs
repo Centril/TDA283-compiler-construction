@@ -33,64 +33,64 @@ import Frontend.Environment
 
 import Common.AST
 
-terr :: String -> Eval a
+terr :: String -> TCComp a
 terr = err TypeChecker
 
-terr' :: [String] -> Eval a
+terr' :: [String] -> TCComp a
 terr' = err' TypeChecker
 
-xAlreadyDef :: String -> Ident -> Eval a
+xAlreadyDef :: String -> Ident -> TCComp a
 xAlreadyDef what x = terr' ["The", what, _ident x, "is already defined"]
 
-xNotDef :: String -> Ident -> Eval a
+xNotDef :: String -> Ident -> TCComp a
 xNotDef what x = terr' ["The", what, _ident x, " is not defined."]
 
-wrongMainSig :: Eval a
+wrongMainSig :: TCComp a
 wrongMainSig = terr "The function: main has the wrong signature"
 
-funNotDef, varNotDef :: Ident -> Eval a
+funNotDef, varNotDef :: Ident -> TCComp a
 funNotDef = xNotDef "function"
 varNotDef = xNotDef "variable or parameter"
 
-funAlreadyDef, argAlreadyDef, varAlreadyDef :: Ident -> Eval a
+funAlreadyDef, argAlreadyDef, varAlreadyDef :: Ident -> TCComp a
 funAlreadyDef = xAlreadyDef "function"
 argAlreadyDef = xAlreadyDef "parameter"
 varAlreadyDef = xAlreadyDef "variable"
 
-wrongRetTyp :: Show b => Type b -> Type b -> Eval a
+wrongRetTyp :: Show b => Type b -> Type b -> TCComp a
 wrongRetTyp texpected tactual =
     terr' ["The current function expected return type:", show texpected,
                                             ", actual:", show tactual]
 
-wrongExpTyp :: Show b =>  Expr b -> Type b -> Type b -> Eval a
+wrongExpTyp :: Show b =>  Expr b -> Type b -> Type b -> TCComp a
 wrongExpTyp expr texpected tactual =
     terr' ["The expression", show expr,
           "expected the type:", show texpected, ",",
                 "actual type:", show tactual]
 
-wrongIdentTyp :: Show b => Ident -> [Type b] -> Type b -> Eval a
+wrongIdentTyp :: Show b => Ident -> [Type b] -> Type b -> TCComp a
 wrongIdentTyp expr types tactual =
     terr' ["The expression", _ident expr,
           "expected one of the types:", show types, ",",
                         "actual type:", show tactual]
 
-wrongUnaryExp :: Show b => Expr b -> [Type b] -> Type b -> Eval a
+wrongUnaryExp :: Show b => Expr b -> [Type b] -> Type b -> TCComp a
 wrongUnaryExp expr types tactual =
     terr' ["The unary expression", show expr,
              "expected one of the types:", show types, ",",
                            "actual type:", show tactual]
 
-wrongBinExp :: Show b => Expr b -> Expr b -> Type b -> Type b -> Eval a
+wrongBinExp :: Show b => Expr b -> Expr b -> Type b -> Type b -> TCComp a
 wrongBinExp exprl exprr typl typr =
      terr' ["The binary expression has different types for operands:",
            "(", show exprl, ",", show typl, ")",
            "(", show exprr, ",", show typr, ")"]
 
-wrongArgsTyp :: Show b =>  Ident -> [Type b] -> [Type b] -> Eval a
+wrongArgsTyp :: Show b =>  Ident -> [Type b] -> [Type b] -> TCComp a
 wrongArgsTyp fun texpected tactual =
     terr' ["The function ", _ident fun,
           "expected the types:", show texpected, ",",
           "but was applied with actual types:", show tactual]
 
-insufficientFunRet :: Ident -> Eval a
+insufficientFunRet :: Ident -> TCComp a
 insufficientFunRet fun = terr' ["The function", _ident fun, "might not return"]

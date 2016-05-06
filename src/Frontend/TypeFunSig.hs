@@ -52,7 +52,7 @@ import Frontend.TypeInfer
 mainId :: Ident
 mainId = Ident "main"
 
-mainCorrect :: Eval ()
+mainCorrect :: TCComp ()
 mainCorrect = lookupFunE mainId >>=
     flip unless wrongMainSig . (== FunSig [] int)
 
@@ -60,19 +60,19 @@ mainCorrect = lookupFunE mainId >>=
 -- Collecting function signatures:
 --------------------------------------------------------------------------------
 
-allFunctions :: ProgramA -> Eval ProgramA
+allFunctions :: ProgramA -> TCComp ProgramA
 allFunctions = pTopDefs %%~ (<<= collectFuns . (predefFuns ++) . fmap toFnSigId)
                             . mapM checkFunSignature
 
-checkFunSignature :: TopDef ASTAnots -> Eval TopDefA
+checkFunSignature :: TopDef ASTAnots -> TCComp TopDefA
 checkFunSignature fun = do args'      <- mapM checkArgTypes $ _fArgs fun
                            (ret',  _) <- inferType $ _fRetTyp fun
                            return $ fun { _fRetTyp = ret', _fArgs = args' } 
 
-checkArgTypes :: Arg ASTAnots -> Eval ArgA
+checkArgTypes :: Arg ASTAnots -> TCComp ArgA
 checkArgTypes = aTyp %%~ (fmap fst . inferType)
 
-collectFuns :: [FunId] -> Eval ()
+collectFuns :: [FunId] -> TCComp ()
 collectFuns = mapM_ $ extendFun' funAlreadyDef
 
 predefFuns :: [FunId]

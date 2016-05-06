@@ -65,7 +65,7 @@ compileUnitSuccess (val, env) logs = do
 runCompile :: String -> LResult LLVMCode
 runCompile code = runComp (compile code initialTCEnv) initialLEnv
 
-preCodeGen :: String -> Eval ProgramA
+preCodeGen :: String -> TCComp ProgramA
 preCodeGen code = do
     ast1 <- parseProgram code
     infoP Parser "AST after parse" ast1

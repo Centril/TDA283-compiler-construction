@@ -47,14 +47,14 @@ import Frontend.Common
 --------------------------------------------------------------------------------
 
 -- @TODO: For now, all types have a concrete kind, change this?
-inferType :: TypeA -> Eval (TypeA, Kind)
+inferType :: TypeA -> TCComp (TypeA, Kind)
 inferType typ = return $ addKind typ KConcrete
 
 --------------------------------------------------------------------------------
 -- Type inference:
 --------------------------------------------------------------------------------
 
-inferExp :: ExprA -> Eval (ExprA, TypeA)
+inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
     EVar _ name  -> addTyp  expr <$> lookupVarE name
     EString   {} -> addTyp' expr conststr
@@ -80,7 +80,7 @@ mulOp :: MulOpA -> [TypeA]
 mulOp oper | oper == Mod emptyAnot = [int]
            | otherwise             = [int, doub]
 
-inferBin :: (TypeA -> TypeA) -> ExprA -> [TypeA] -> Eval (ExprA, TypeA)
+inferBin :: (TypeA -> TypeA) -> ExprA -> [TypeA] -> TCComp (ExprA, TypeA)
 inferBin mTyp expr accept = do
     (exprl', typl) <- inferExp $ _eLExpr expr
     (exprr', typr) <- inferExp $ _eRExpr expr
@@ -88,14 +88,14 @@ inferBin mTyp expr accept = do
         then addTyp' (expr { _eLExpr = exprl', _eRExpr = exprr'}) (mTyp typl)
         else wrongBinExp (_eLExpr expr) (_eRExpr expr) typl typr
 
-inferUnary :: ExprA -> [TypeA] -> Eval (ExprA, TypeA)
+inferUnary :: ExprA -> [TypeA] -> TCComp (ExprA, TypeA)
 inferUnary expr accept = do
     (expr', etyp) <- inferExp $ _eExpr expr
     if etyp `elem` accept
         then addTyp' (expr {_eExpr = expr'}) etyp
         else wrongUnaryExp expr accept etyp
 
-inferFun :: ExprA -> Eval (ExprA, TypeA)
+inferFun :: ExprA -> TCComp (ExprA, TypeA)
 inferFun expr = do
     FunSig texpected rtype <- lookupFunE $ _eIdent expr
     (exprs', tactual)      <- mapAndUnzipM inferExp $ _eAppExprs expr
