@@ -29,21 +29,31 @@ Computation monad and operations in Javalette compiler.
 -}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
+{-# LANGUAGE FlexibleContexts #-}
+
 module Common.Computation (
     -- * Types
     Comp, CompResult,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
 
     -- * Operations
-    runComp, warn, warn', warnln, info, info', infoln, err, err', errln
+
+    -- ** Running computations
+    runComp, transST, changeST, ($:<<),
+
+    -- ** Logging and Error operations
+    warn, warn', warnln, info, info', infoln, err, err', errln
 ) where
 
+import Control.Arrow
 import Control.Monad()
 import Control.Applicative()
 import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
+
+import Control.Monad.Morph
 
 import Utils.Pointless
 
@@ -73,14 +83,37 @@ type SEW s e w a = SEWT s e w Identity a
 -- the form of the computation is: s -> (Either e (a, s), w)
 newtype SEWT s e w m a = SEWT {
     _runSEWT :: StateT s (ExceptT e (WriterT w m)) a }
-    deriving (Functor, Applicative, Monad,
+    deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadState s, MonadError e, MonadWriter w)
 
+-- 'runSEW': runs a 'SEW' computation given an initial state, specialization of
+-- 'runSEWT' for the 'Identity' base monad.
 runSEW :: SEWT s e w Identity a -> s -> (Either e (a, s), w)
 runSEW ev e = runIdentity $ runSEWT ev e
 
+-- | 'runSEWT': runs a 'SEWT' computation given an initial state.
 runSEWT :: SEWT s e w m a -> s -> m (Either e (a, s), w)
 runSEWT ev e = runWriterT $ runExceptT $ runStateT (_runSEWT ev) e
+
+-- | 'transST': transitions between one 'SEWT' computation with state x, to
+-- another with state y. The current state and result of the given computation
+-- is given to a mapping function that must produce the next computation.
+-- The initial state must also be passed as the last parameter.
+transST :: Functor m
+        => (((a, y), x) -> (a, y)) -> SEWT x e w m a -> x -> SEWT y e w m a
+transST f x_c x_i = SEWT $ StateT $ \y_i -> ExceptT . WriterT $
+    first ((\(a, x_f) -> f ((a, y_i), x_f)) <$>) <$> runSEWT x_c x_i
+
+-- | '$:<<': infix version 'transST'
+($:<<) :: Functor m
+       => (((a, y), x) -> (a, y)) -> SEWT x e w m a -> x -> SEWT y e w m a
+($:<<)  = transST
+
+-- 'changeST': specialization of 'transST', ignoring final state of the
+-- first computation directly using the initial of the second computation.
+changeST :: (Functor m)
+         => SEWT x e w m a -> x -> SEWT y e w m a
+changeST =  transST fst
 
 --------------------------------------------------------------------------------
 -- Errors, Logging:
@@ -115,6 +148,7 @@ errln, err' :: Phase -> [String] -> Comp s a
 errln = unlines2nd err
 err'  = unword2nd err
 
+-- | 'err': throws an error in a computation ignoring any continuations.
 err :: Phase -> String -> Comp s a
 err = throwError .| ErrMsg
 
@@ -128,6 +162,7 @@ warn'  = unword2nd  warn
 infoln = unlines2nd info
 warnln = unlines2nd warn
 
+-- | '_log': inserts a log item into a computation.
 _log :: LogLevel -> Phase -> String -> Comp s ()
 _log l p m = tell [LogItem l p m]
 
