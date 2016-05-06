@@ -30,8 +30,12 @@ Operating environment of LLVM Backend in Javalette compiler.
 {-# LANGUAGE TemplateHaskell #-}
 
 module Backend.LLVM.Environment (
+    -- * Modules
+    module Common.Computation,
+    module Backend.LLVM.LLVMAst,
+
     -- * Types
-    LEnv(..), LComp,
+    LEnv(..), LComp, LResult,
 
     -- * Operations
     initialLEnv,
@@ -41,17 +45,13 @@ module Backend.LLVM.Environment (
 ) where
 
 import Data.Maybe
-import Data.Map ((!))
 
-import Control.Lens hiding (Context, contexts)
+import Control.Lens hiding (Context, contexts, pre)
 
 import Utils.Foldable
 
-import Common.AST
 import Common.Computation
 import Common.StateOps
-
-import Frontend.Environment
 
 import Backend.LLVM.LLVMAst
 
@@ -66,24 +66,24 @@ data LEnv = LEnv {
     _constCount :: Int,             -- ^ Counter for constants.
     _tempCount  :: Int,             -- ^ Counter for temporary SSA in LLVM.
     _labelCount :: Int,             -- ^ Counter for labels.
-    _insts      :: LInsts,          -- ^ Accumulated instructions.
-    _lfunctions :: FnSigMap }       -- ^ Map of ident -> function signatures.
+    _insts      :: LInsts }         -- ^ Accumulated instructions.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
-initialLEnv :: FnSigMap -> LEnv
+initialLEnv :: LEnv
 initialLEnv = LEnv [] 0 0 0 []
 
 --------------------------------------------------------------------------------
 -- Environment operations:
 --------------------------------------------------------------------------------
 
+-- | 'LComp': A computation in LLVM code generation using environment 'LEnv'.
 type LComp a = Comp LEnv a
 
-lookupLFun :: Ident -> LComp FunSig
-lookupLFun = uses lfunctions . flip (!)
+-- | 'LResult': result of an 'LComp' computation.
+type LResult a = CompResult LEnv a
 
 newTemp :: LComp LIdent
 newTemp = freshOf "t" tempCount

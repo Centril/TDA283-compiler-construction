@@ -93,10 +93,7 @@ extendFun' onErr (FunId name sig) = do
 -- Computations in compiler:
 --------------------------------------------------------------------------------
 
--- | 'Eval': A computation given typechecker state environment 'TCEnv',
--- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.
--- Monadic stack: StateT -> ExceptT -> WriterT -> Identity
--- See 'EvalResult' for details.
+-- | 'Eval': A computation in typechecker using environment 'TCEnv'.
 type Eval a = Comp TCEnv a
 
 -- | 'EvalResult': result of an 'Eval' computation.

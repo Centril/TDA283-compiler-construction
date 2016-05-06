@@ -29,7 +29,14 @@ LLVM code generator in the LLVM backend of the Javalette compiler.
 -}
 {-# LANGUAGE LambdaCase #-}
 
-module Backend.LLVM.LLVMGen where
+module Backend.LLVM.LLVMGen (
+    -- * Modules
+    module Backend.LLVM.Environment,
+    module Backend.LLVM.Print,
+
+    -- * Operations
+    compileLLVM
+) where
 
 import Data.Map ((!))
 
@@ -37,22 +44,20 @@ import Control.Monad
 
 import Control.Lens hiding (Empty, op)
 
-import Utils.Shallow
+import Utils.Monad
 
 import Common.AST
 
 import Frontend.Annotations
 
 import Backend.LLVM.Environment
-import Backend.LLVM.LLVMAst
 import Backend.LLVM.Print
 
-u = undefined
+compileLLVM :: ProgramA -> LComp LLVMCode
+compileLLVM = compileLLVMAst >$> printLLVMAst
 
-compileLLVM :: ProgramA -> LComp LLVMAst
-compileLLVM prog = do
-    let tds = _pTopDefs prog
-    LLVMAst [] predefDecls <$> mapM compileFun tds
+compileLLVMAst :: ProgramA -> LComp LLVMAst
+compileLLVMAst = mapM compileFun . _pTopDefs >$> LLVMAst [] predefDecls
 
 predefDecls :: LFunDecls
 predefDecls =
@@ -127,9 +132,7 @@ compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
     let name = _iIdent item
     pushInst $ LAssign (_ident name) $ LAlloca (compileType typ)
-    case item of
-        NoInit _ i   -> return ()
-        Init   _ i e -> compileAss name e
+    maybe (return ()) (compileAss name) (item ^? iExpr)
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss name = compileExpr >=> compileStore name
@@ -241,10 +244,8 @@ compileLRel :: ExprA -> ExprA -> RelOpA -> LComp LTValRef
 compileLRel l r op = do
     l'            <- compileExpr l
     LTValRef t r' <- compileExpr r
-    assignTemp boolType $ case t of
-        LInt   _  -> LICmp (compileRelOpI op) l' r'
-        LFloat _  -> LFCmp (compileRelOpF op) l' r'
-        _         -> error "compileLRel got wrong type."
+    assignTemp boolType $
+        switchType (LICmp . compileRelOpI) (LFCmp . compileRelOpF) t op l' r'
 
 compileRelOpI :: RelOpA -> LICmpOp
 compileRelOpI = \case
@@ -280,7 +281,7 @@ compileEVar anots name = do
     assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ _ident name)
 
 compileNot :: ExprA -> LComp LTValRef
-compileNot e = compileExpr e >>= assignTemp boolType . flip LXor (LVInt 1)
+compileNot = compileExpr >=> assignTemp boolType . flip LXor (LVInt 1)
 
 compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
 compileApp anots name es = do
@@ -290,10 +291,8 @@ compileApp anots name es = do
         rtyp  -> assignTemp rtyp $ LCall rtyp fr
 
 assignTemp :: LType -> LExpr -> LComp LTValRef
-assignTemp rtyp expr = do
-    temp <- newTemp
-    pushInst $ LAssign temp expr
-    return   $ LTValRef rtyp $ LRef temp
+assignTemp rtyp expr =
+    LTValRef rtyp . LRef <$> newTemp <<= pushInst . flip LAssign expr
 
 getType :: ASTAnots -> TypeA
 getType anots = let AType typ = anots ! AKType in typ
@@ -317,9 +316,9 @@ compileType = \case
     Bool     _ -> boolType
     Void     _ -> LVoid
     ConstStr _ -> strType
-    Fun      _ rtyp argst -> u
+    Fun     {} -> error "NOT IMPLEMENTED YET"
 
-boolType, charType, strType :: LType
+boolType, intType, doubType, charType, strType :: LType
 boolType = LInt sizeofBool
 intType  = LInt sizeofInt
 doubType = LFloat sizeofFloat

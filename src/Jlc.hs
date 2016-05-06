@@ -20,18 +20,19 @@ module Main where
 import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
+import Utils.Monad
+import Utils.Terminal
+
 import Common.Computation
 
 import Frontend.ParseLex
-import Frontend.Annotations
-import Frontend.Environment
 import Frontend.Computation
 import Frontend.TypeCheck
 
 import Backend.AlphaRename
 import Backend.PreOptimize
 
-import Utils.Terminal
+import Backend.LLVM.LLVMGen
 
 --------------------------------------------------------------------------------
 -- main:
@@ -46,7 +47,7 @@ main = getArgs >>= handleArgs >>= compileUnit
 
 compileUnit :: String -> IO ()
 compileUnit = uncurry (either compileUnitFailure compileUnitSuccess)
-            . runPreCodeGen
+            . runCompile
 
 compileUnitFailure :: ErrMsg -> InfoLog -> IO ()
 compileUnitFailure eMsg logs = do
@@ -54,7 +55,7 @@ compileUnitFailure eMsg logs = do
     printError eMsg >> printLogs logs
     exitFailure
 
-compileUnitSuccess :: (ProgramA, TCEnv) -> InfoLog -> IO ()
+compileUnitSuccess :: (LLVMCode, LEnv) -> InfoLog -> IO ()
 compileUnitSuccess (val, env) logs = do
     putStrLn "COMPILATION SUCCESS!"
     putStrLn "Accumulated logs:"        >> printLogs logs
@@ -62,8 +63,8 @@ compileUnitSuccess (val, env) logs = do
     putStrLn "Final environment value:" >> poutput env
     errLn "OK"
 
-runPreCodeGen :: String -> EvalResult ProgramA
-runPreCodeGen code = runComp (preCodeGen code) initialTCEnv
+runCompile :: String -> LResult LLVMCode
+runCompile code = runComp (compile code initialTCEnv) initialLEnv
 
 preCodeGen :: String -> Eval ProgramA
 preCodeGen code = do
@@ -76,6 +77,9 @@ preCodeGen code = do
     let ast4 = preOptimize ast3
     infoP PreOptimizer "AST after pre optimizing" ast4
     return ast4
+
+compile :: String -> TCEnv -> LComp LLVMCode
+compile = changeST . preCodeGen >?=> compileLLVM
 
 --------------------------------------------------------------------------------
 -- Helpers:

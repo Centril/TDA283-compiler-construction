@@ -29,19 +29,28 @@ Print module for the LLVM AST of the Javalette compiler.
 -}
 {-# LANGUAGE LambdaCase #-}
 
-module Backend.LLVM.Print where
+module Backend.LLVM.Print (
+    -- * Operations
+    printLLVMAst
+) where
 
 import Data.List
 
-import Backend.LLVM.LLVMAst
+import Utils.Pointless
 
-type LLVMCode = String
+import Backend.LLVM.LLVMAst
 
 joinComma :: [String] -> String
 joinComma = intercalate ", "
 
+parens, block, bracket, ws :: String -> String
+parens  x = "(" ++ x ++ ")"
+block   x = "{\n" ++ x ++ "}\n"
+bracket x = "[" ++ x ++ "]"
+ws      x = " " ++ x ++ " "
+
 unlineFun :: (a -> String) -> [a] -> String
-unlineFun f a = unlines $ fmap f a
+unlineFun = unlines .| (<$>)
 
 printLLVMAst :: LLVMAst -> LLVMCode
 printLLVMAst (LLVMAst g c d) = unlines [unlineFun printConstGlobal g,
@@ -54,13 +63,12 @@ printConstGlobal (LConstGlobal i t v) =
 
 printFunDecl :: LFunDecl ->  LLVMCode
 printFunDecl (LFunDecl t i ts) =
-    concat ["declare ", printType t, " ", printIdentFun i,
-            "(", printTypes ts, ")"]
+    unwords ["declare", printType t, printIdentFun i, parens $ printTypes ts]
 
 printFunDef :: LFunDef ->  LLVMCode
 printFunDef (LFunDef t i as is) =
-    concat ["define ", printType t, " ", printIdentFun i,
-            "(", printArgs as, ") {\n", printInsts is, "}\n"]
+    unwords ["define", printType t, printIdentFun i,
+             parens $ printArgs as, block $ printInsts is]
 
 printType :: LType -> LLVMCode
 printType = \case
@@ -68,7 +76,7 @@ printType = \case
     LInt i     -> "i" ++ show i
     LFloat f   -> "f" ++ show f
     LPtr t     -> printType t ++ "*"
-    LArray d t -> concat ["[",show d, " x ", printType t, "]"]
+    LArray d t -> bracket $ unwords [show d, "x", printType t]
 
 printTypes :: LTypes -> LLVMCode
 printTypes t = joinComma $ printType <$> t
@@ -124,7 +132,7 @@ printTValRef (LTValRef t r) = printType t ++ " " ++ printValRef r
 
 printFunRef :: LFunRef -> LLVMCode
 printFunRef (LFunRef i args) =
-    printIdentFun i ++ "(" ++ joinComma (printTValRef <$> args) ++ ")"
+    printIdentFun i ++ parens (joinComma $ printTValRef <$> args)
 
 printInst :: LInst -> LLVMCode
 printInst = \case
@@ -138,6 +146,7 @@ printInst = \case
     LRet r       -> "ret " ++ printTValRef r
     LStore r1 r2 -> "store " ++ joinComma [printTValRef r1, printTValRef r2]
     LUnreachable -> "unreachable"
+    LLabel _     -> error "will never happen"
 
 printInstIndent :: LInst -> LLVMCode
 printInstIndent = \case
@@ -173,7 +182,7 @@ printExpr = \case
 printPhi :: LType -> LPhiRefs -> String
 printPhi t rs = unwords ["phi", printType t, joinComma $ printPR <$> rs]
     where printPR (LPhiRef vr lr) =
-            unwords ["[", printValRef vr, ",", printLabRef lr, "]"]
+            bracket $ ws $ joinComma [printValRef vr, printLabRef lr]
 
 printMathOp :: LLVMCode -> LTValRef -> LValRef -> LLVMCode
 printMathOp c r1 r2 = unwords [c, printTValRef r1 ++ ",", printValRef r2]

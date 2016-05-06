@@ -33,6 +33,8 @@ module Backend.LLVM.LLVMAst where
 
 import Control.Lens
 
+type LLVMCode = String
+
 data LLVMAst = LLVMAst {
     _lGConsts :: LConstGlobals, _lFDecls :: LFunDecls, _lFDefs :: LFunDefs }
     deriving (Eq, Ord, Show, Read)
