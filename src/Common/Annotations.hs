@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Frontend.Annotations
+Module      : Common.Annotations
 Description : AST Annotations in Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
@@ -29,7 +29,7 @@ AST Annotations in Javalette compiler.
 -}
 {-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase, TupleSections #-}
 
-module Frontend.Annotations (
+module Common.Annotations (
     -- * Types
     ASTAnot(..), AnotKey (..), ASTAnots,
     Kind(..), WillExecute(..), Literal(..), ML,

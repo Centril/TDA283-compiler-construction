@@ -57,8 +57,7 @@ import Utils.Monad
 import Common.StateOps as X
 import Common.Computation as X
 import Common.AST
-
-import Frontend.Annotations as X
+import Common.Annotations as X
 
 --------------------------------------------------------------------------------
 -- Scopes / Contexts:

@@ -51,8 +51,7 @@ import Utils.Pointless
 
 import Common.StateOps
 import Common.AST
-
-import Frontend.Annotations
+import Common.Annotations
 
 --------------------------------------------------------------------------------
 -- Operating Environment:

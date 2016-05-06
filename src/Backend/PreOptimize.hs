@@ -44,8 +44,7 @@ import Utils.Foldable
 import Utils.Function
 
 import Common.AST
-
-import Frontend.Annotations
+import Common.Annotations
 
 --------------------------------------------------------------------------------
 -- API:

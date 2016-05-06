@@ -47,8 +47,7 @@ import Control.Lens hiding (Empty, op)
 import Utils.Monad
 
 import Common.AST
-
-import Frontend.Annotations
+import Common.Annotations
 
 import Backend.LLVM.Environment
 import Backend.LLVM.Print
