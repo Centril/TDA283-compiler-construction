@@ -28,12 +28,27 @@ Portability : ALL
 General monadic, applicative, functor utility functions.
 -}
 module Utils.Monad (
-    -- * Operations
-    (>?=>), (>=?>), (<<=), (<!>), (<:>),
-    (<<$>), (<>$>), maybeErr, (<$$>), unless'
+    -- * Functor operations
+    (>$>), (<$<), (<<$>), (<>$>), (<$$>),
+
+    -- * Applicative operations
+    (<!>), (<:>),
+
+    -- * Monad operations
+    (>?=>), (>=?>), (<<=),  maybeErr, unless'
 ) where
 
 import Control.Monad
+
+-- | '<$<': Left-to-right "Kleisli" composition of 'Functor's.
+(>$>) :: Functor f => (a -> f b) -> (b -> c) -> a -> f c
+(>$>) = flip (<$<)
+infixr 1 >$>
+
+-- | '<$<': Right-to-left "Kleisli" composition of 'Functor's.
+(<$<) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
+(<$<) = (.) . (<$>)
+infixr 1 <$<
 
 -- | '>?=>': Same as '>=>', i.e: Left-to-right Kleisli composition of monads.
 -- BUT: first it applies something to the left hand side.
