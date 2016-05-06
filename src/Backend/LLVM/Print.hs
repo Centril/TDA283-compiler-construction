@@ -34,11 +34,18 @@ module Backend.LLVM.Print (
     printLLVMAst
 ) where
 
+import Data.Char
 import Data.List
 
 import Utils.Pointless
 
 import Backend.LLVM.LLVMAst
+
+printLLVMAst :: LLVMAst -> LLVMCode
+printLLVMAst (LLVMAst g c d) =
+    trim $ unlines [unlineFun printConstGlobal g,
+                    unlineFun printFunDecl c,
+                    unlineFun printFunDef d]
 
 joinComma :: [String] -> String
 joinComma = intercalate ", "
@@ -49,13 +56,19 @@ block   x = "{\n" ++ x ++ "}\n"
 bracket x = "[" ++ x ++ "]"
 ws      x = " " ++ x ++ " "
 
+trim :: String -> String
+trim xs = dropSpaceTail "" $ dropWhile isSpace xs
+
+-- from: http://stackoverflow.com/questions/6270324/in-haskell-how-do-you-trim-whitespace-from-the-beginning-and-end-of-a-string
+dropSpaceTail :: String -> String -> String
+dropSpaceTail _    "" = ""
+dropSpaceTail maybeStuff (x:xs)
+    | isSpace x       = dropSpaceTail (x:maybeStuff) xs
+    | null maybeStuff = x : dropSpaceTail "" xs
+    | otherwise       = reverse maybeStuff ++ x : dropSpaceTail "" xs
+
 unlineFun :: (a -> String) -> [a] -> String
 unlineFun = unlines .| (<$>)
-
-printLLVMAst :: LLVMAst -> LLVMCode
-printLLVMAst (LLVMAst g c d) = unlines [unlineFun printConstGlobal g,
-                                        unlineFun printFunDecl c,
-                                        unlineFun printFunDef d]
 
 printConstGlobal :: LConstGlobal -> LLVMCode
 printConstGlobal (LConstGlobal i t v) =
