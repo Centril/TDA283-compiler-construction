@@ -20,7 +20,7 @@ module Main where
 import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
-import Common.Computation hiding (err)
+import Common.Computation
 
 import Frontend.ParseLex
 import Frontend.Annotations
@@ -45,55 +45,41 @@ main = getArgs >>= handleArgs >>= compileUnit
 --------------------------------------------------------------------------------
 
 compileUnit :: String -> IO ()
-compileUnit code =
-    let (result, logs) = runCompileComp code
-    in case result of
-    Left  failure -> compileUnitFailure logs failure
-    Right success -> compileUnitSuccess logs success
+compileUnit = uncurry (either compileUnitFailure compileUnitSuccess)
+            . runPreCodeGen
 
-compileUnitFailure :: InfoLog -> ErrMsg -> IO ()
-compileUnitFailure logs (ErrMsg phase msg) = do
-    errLn $ phaseErr phase
-    putStrLn $ unwords ["ERROR!", "[" ++ show phase ++ "]", msg]
-    printLogs logs
+compileUnitFailure :: ErrMsg -> InfoLog -> IO ()
+compileUnitFailure eMsg logs = do
+    errLn $ phaseErr $ errPhase eMsg
+    printError eMsg >> printLogs logs
     exitFailure
 
-compileUnitSuccess :: InfoLog -> (ProgramA, TCEnv) -> IO ()
-compileUnitSuccess logs (val, env) = do
+compileUnitSuccess :: (ProgramA, TCEnv) -> InfoLog -> IO ()
+compileUnitSuccess (val, env) logs = do
     putStrLn "COMPILATION SUCCESS!"
     putStrLn "Accumulated logs:"        >> printLogs logs
     putStrLn "Final computed value:"    >> poutput val
     putStrLn "Final environment value:" >> poutput env
     errLn "OK"
 
-runCompileComp :: String -> EvalResult ProgramA
-runCompileComp code = runComp (compileComp code) initialTCEnv
+runPreCodeGen :: String -> EvalResult ProgramA
+runPreCodeGen code = runComp (preCodeGen code) initialTCEnv
 
-pinfo :: Show a => Phase -> String -> a -> Comp s ()
-pinfo p header x = info p header >> info p (show x)
-
-compileComp :: String -> Eval ProgramA
-compileComp code = do
+preCodeGen :: String -> Eval ProgramA
+preCodeGen code = do
     ast1 <- parseProgram code
-    pinfo Parser "AST after parse" ast1
+    infoP Parser "AST after parse" ast1
     ast2 <- typeCheck ast1
-    pinfo TypeChecker "AST after type check" ast2
+    infoP TypeChecker "AST after type check" ast2
     let ast3 = alphaRename ast2
-    pinfo AlphaRenamer "AST after alpha rename" ast3
+    infoP AlphaRenamer "AST after alpha rename" ast3
     let ast4 = preOptimize ast3
-    pinfo PreOptimizer "AST after pre optimizing" ast4
+    infoP PreOptimizer "AST after pre optimizing" ast4
     return ast4
 
 --------------------------------------------------------------------------------
 -- Helpers:
 --------------------------------------------------------------------------------
-
-printLogs :: InfoLog -> IO ()
-printLogs logs = putStrLn $ unlines $ showLog <$> logs
-
-showLog :: LogItem -> String
-showLog (LogItem lvl phase msg) =
-    concat ["[", show lvl, "] [", show phase, "]: " ++ prettify msg]
 
 phaseErr :: Phase -> String
 phaseErr Parser        = "SYNTAX ERROR"

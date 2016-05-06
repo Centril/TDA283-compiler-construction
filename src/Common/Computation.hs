@@ -42,7 +42,8 @@ module Common.Computation (
     runComp, transST, changeST, ($:<<),
 
     -- ** Logging and Error operations
-    warn, warn', warnln, info, info', infoln, err, err', errln
+    warn, warn', warnln, info, info', infoln, infoP, err, err', errln,
+    showLogItem, showLogs, printLogs, showError, printError
 ) where
 
 import Control.Arrow
@@ -53,9 +54,8 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
 
-import Control.Monad.Morph
-
 import Utils.Pointless
+import Utils.Terminal
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:
@@ -162,6 +162,10 @@ warn'  = unword2nd  warn
 infoln = unlines2nd info
 warnln = unlines2nd warn
 
+-- | 'infoP': Logs msg with 'Info' level during a 'Phase' with a header before.
+infoP :: Show a => Phase -> String -> a -> Comp s ()
+infoP p header x = info p header >> info p (show x)
+
 -- | '_log': inserts a log item into a computation.
 _log :: LogLevel -> Phase -> String -> Comp s ()
 _log l p m = tell [LogItem l p m]
@@ -169,3 +173,32 @@ _log l p m = tell [LogItem l p m]
 unword2nd, unlines2nd :: (t1 -> String -> t) -> t1 -> [String] -> t
 unword2nd  f a b = f a $ unwords b
 unlines2nd f a b = f a $ unlines b
+
+--------------------------------------------------------------------------------
+-- Log outputting:
+--------------------------------------------------------------------------------
+
+-- | 'bracketize': puts a 'Show'able in brackets.
+bracketize :: Show x => x -> String
+bracketize x = "[" ++ show x ++ "]"
+
+-- | 'showLogItem': pretty "prints" a 'LogItem'.
+showLogItem :: LogItem -> String
+showLogItem (LogItem lvl phase msg) =
+    concat [bracketize lvl, bracketize phase, ": ", prettify msg]
+
+-- | 'showLogs': pretty prints an 'InfoLog'.
+showLogs :: InfoLog -> String
+showLogs = unlines . fmap showLogItem
+
+-- | 'printLogs': pretty prints an 'InfoLog' to standard output.
+printLogs :: InfoLog -> IO ()
+printLogs = putStrLn . showLogs
+
+-- | 'showError': pretty prints an 'ErrorMsg'.
+showError :: ErrMsg -> String
+showError (ErrMsg phase msg) = unwords ["ERROR!", bracketize phase, msg]
+
+-- | 'printError': pretty prints an 'ErrorMsg' to standard output.
+printError :: ErrMsg -> IO ()
+printError = putStrLn . showError
