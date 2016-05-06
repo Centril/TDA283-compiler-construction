@@ -29,8 +29,23 @@ General monadic, applicative, functor utility functions.
 -}
 module Utils.Monad (
     -- * Operations
-    (<<=), (<!>), (<:>), (<<$>), (<>$>), maybeErr, (<$$>), unless'
+    (>?=>), (>=?>), (<<=), (<!>), (<:>),
+    (<<$>), (<>$>), maybeErr, (<$$>), unless'
 ) where
+
+import Control.Monad
+
+-- | '>?=>': Same as '>=>', i.e: Left-to-right Kleisli composition of monads.
+-- BUT: first it applies something to the left hand side.
+(>?=>) :: Monad m => (t -> a -> m b) -> (b -> m c) -> t -> a -> m c
+(>?=>) m1 m2 x = m1 x >=> m2
+infixr 1 >?=>
+
+-- | '>=?>': Same as '>=>', i.e: Left-to-right Kleisli composition of monads.
+-- BUT: first it applies something to the right hand side.
+(>=?>) :: Monad m => (a -> m b) -> (t -> b -> m c) -> t -> a -> m c
+(>=?>) m1 m2 x = m1 >=> m2 x
+infixr 1 >=?>
 
 -- | '<<=': sequentially compose two actions, passing value produced by first as
 -- an argument to the second, but returning the value of produced by first.
