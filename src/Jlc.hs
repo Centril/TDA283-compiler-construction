@@ -26,7 +26,6 @@ import Utils.Terminal
 import Common.Computation
 
 import Frontend.ParseLex
-import Frontend.Computation
 import Frontend.TypeCheck
 
 import Backend.AlphaRename

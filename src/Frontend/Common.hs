@@ -32,7 +32,7 @@ module Frontend.Common (
     lookupFunE, lookupVarE
 ) where
 
-import Frontend.Computation
+import Frontend.Environment
 import Frontend.Error
 
 import Common.AST

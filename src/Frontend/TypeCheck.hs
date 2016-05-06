@@ -28,6 +28,9 @@ Portability : ALL
 Type checker for Javalette compiler.
 -}
 module Frontend.TypeCheck (
+    -- * Modules
+    module X,
+
     -- * Operations
     typeCheck
 ) where
@@ -38,7 +41,7 @@ import Control.Lens hiding (contexts, Empty)
 
 import Utils.Monad
 
-import Frontend.Computation
+import Frontend.Environment as X
 import Frontend.Error
 import Frontend.Common
 import Frontend.TypeFunSig

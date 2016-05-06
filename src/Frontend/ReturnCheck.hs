@@ -45,7 +45,7 @@ import Utils.Pointless
 import Utils.Monad
 import Utils.Function
 
-import Frontend.Computation
+import Frontend.Environment
 import Frontend.Error
 
 import Common.AST

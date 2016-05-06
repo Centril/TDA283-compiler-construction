@@ -38,7 +38,7 @@ import Control.Monad
 
 import Common.AST
 
-import Frontend.Computation
+import Frontend.Environment
 import Frontend.Error
 import Frontend.Common
 

@@ -29,7 +29,7 @@ Error messsages in Frontend of Javalette compiler.
 -}
 module Frontend.Error where
 
-import Frontend.Computation
+import Frontend.Environment
 
 import Common.AST
 

@@ -34,7 +34,7 @@ module Frontend.ParseLex (
 
 import Common.AST
 
-import Frontend.Computation
+import Frontend.Environment
 
 import Javalette.Par
 import Javalette.ErrM
