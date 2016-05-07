@@ -45,17 +45,16 @@ main = getArgs >>= handleArgs >>= compileUnit
 --------------------------------------------------------------------------------
 
 compileUnit :: String -> IO ()
-compileUnit = uncurry (either compileUnitFailure compileUnitSuccess)
-            . runCompile
+compileUnit = uncurry (either compileUnitFail compileUnitSucc) . runCompile
 
-compileUnitFailure :: ErrMsg -> InfoLog -> IO ()
-compileUnitFailure eMsg logs = do
+compileUnitFail :: ErrMsg -> InfoLog -> IO ()
+compileUnitFail eMsg logs = do
     errLn $ phaseErr $ errPhase eMsg
     printError eMsg >> printLogs logs
     exitFailure
 
-compileUnitSuccess :: (LLVMCode, LEnv) -> InfoLog -> IO ()
-compileUnitSuccess (val, env) logs = do
+compileUnitSucc :: (LLVMCode, LEnv) -> InfoLog -> IO ()
+compileUnitSucc (val, env) logs = do
     putStrLn "COMPILATION SUCCESS!"
     putStrLn "Accumulated logs:"        >> printLogs logs
     putStrLn "Final computed value:"    >> poutput val
