@@ -41,7 +41,7 @@ module Backend.LLVM.Environment (
     initialLEnv,
     resetTemp, newTemp,
     newLabel, newLabels, getLabels, lastLabel,
-    newConstRef, pushConst,
+    newConstRef, pushConst, getConsts,
     pushInst, clearInsts, getInsts
 ) where
 
@@ -109,6 +109,9 @@ newConstRef = flip freshOf constCount
 
 pushConst :: LConstGlobal -> LComp ()
 pushConst = sAppendL constants
+
+getConsts :: LComp LConstGlobals
+getConsts = use constants
 
 pushInst :: LInst -> LComp ()
 pushInst = sAppendL insts
