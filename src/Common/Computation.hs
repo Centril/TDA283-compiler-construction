@@ -101,14 +101,16 @@ newtype SEWT s e w m a = SEWT {
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadState s, MonadError e, MonadWriter w)
 
-instance MFunctor (SEWT s e w) where
-    hoist f m = SEWT $ StateT g
-        where g s = ExceptT $  hoist f $ runExceptT $ runStateT (_runSEWT m) s
+instance Monoid w => MonadTrans (SEWT s e w) where
+    lift = SEWT . lift . lift . lift
+
+instance Monoid w => MFunctor (SEWT s e w) where
+    hoist f = SEWT . hoist (hoist (hoist f)) . _runSEWT
 
 -- 'runSEW': runs a 'SEW' computation given an initial state, specialization of
 -- 'runSEWT' for the 'Identity' base monad.
 runSEW :: SEWT s e w Identity a -> s -> (Either e (a, s), w)
-runSEW ev e = runIdentity $ runSEWT ev e
+runSEW = runIdentity .| runSEWT
 
 -- | 'runSEWT': runs a 'SEWT' computation given an initial state.
 runSEWT :: SEWT s e w m a -> s -> m (Either e (a, s), w)
