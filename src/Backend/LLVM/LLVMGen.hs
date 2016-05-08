@@ -55,8 +55,12 @@ import Backend.LLVM.Print
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 
+-- TODO: Refactor
 compileLLVMAst :: ProgramA -> LComp LLVMAst
-compileLLVMAst = mapM compileFun . _pTopDefs >$> LLVMAst [] predefDecls
+compileLLVMAst = mapM compileFun . _pTopDefs >=>
+    \fns -> do
+        consts <- getConsts
+        return $ LLVMAst consts predefDecls fns
 
 predefDecls :: LFunDecls
 predefDecls =
@@ -297,6 +301,7 @@ getType anots = let AType typ = anots ! AKType in typ
 compileAnotType :: ASTAnots -> LType
 compileAnotType = compileType . getType
 
+-- TODO: Use assignTemp
 compileCString :: String -> LComp LTValRef
 compileCString v = do
     temp <- newTemp
@@ -304,7 +309,7 @@ compileCString v = do
     let typ   = LArray (1 + length v) charType
     pushConst $ LConstGlobal ref typ v
     pushInst  $ LAssign temp (strPointer (LPtr typ) ref)
-    return    $ LTValRef strType $ LRef ref
+    return    $ LTValRef strType $ LRef temp
 
 compileType :: TypeA -> LType
 compileType = \case
