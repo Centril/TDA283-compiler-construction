@@ -59,7 +59,7 @@ ws      x = " " ++ x ++ " "
 trim :: String -> String
 trim xs = dropSpaceTail "" $ dropWhile isSpace xs
 
--- from: http://stackoverflow.com/questions/6270324/in-haskell-how-do-you-trim-whitespace-from-the-beginning-and-end-of-a-string
+-- from: http://stackoverflow.com/questions/6270324
 dropSpaceTail :: String -> String -> String
 dropSpaceTail _    "" = ""
 dropSpaceTail maybeStuff (x:xs)
@@ -83,11 +83,12 @@ printFunDef (LFunDef t i as is) =
     unwords ["define", printType t, printIdentFun i,
              parens $ printArgs as, block $ printInsts is]
 
+-- TODO: Figure out double and float in LLVM
 printType :: LType -> LLVMCode
 printType = \case
     LVoid       -> "void"
     LInt i      -> "i" ++ show i
-    LFloat f    -> "f" ++ show f
+    LFloat _    -> "double"
     LPtr t      -> printType t ++ "*"
     LFunPtr r a -> unwords [printType r, parens (printTypes a) ++ "*"]
     LArray d t  -> bracket $ unwords [show d, "x", printType t]
