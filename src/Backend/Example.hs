@@ -1,7 +1,11 @@
 module Backend.Example where
 
 import Backend.LLVM.LLVMAst
+import Backend.LLVM.LLVMApi
 import Backend.LLVM.Print
+
+buildTestExecutable :: IO ()
+buildTestExecutable = buildExecutable createTestLLVMAst "/tmp/test"
 
 printTestLLVMAst :: IO()
 printTestLLVMAst = putStrLn $ printLLVMAst createTestLLVMAst
@@ -21,7 +25,7 @@ createTestLLVMAst = LLVMAst
         "printString"
         [LPtr (LInt 8)]]
     [LFunDef
-        (LInt 32)
+        (LInt 1)
         "main"
         [LArg (LInt 32) "n"]
         [

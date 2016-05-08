@@ -30,20 +30,59 @@ The interface to external programs of the Javalette backend.
 
 module Backend.LLVM.LLVMApi where
 
+import Control.Exception
+import Control.Monad
+import System.Exit
+import System.Process
+
 import Backend.LLVM.LLVMAst
 import Backend.LLVM.Print
 
-compileFilePath :: String -> FilePath
-compileFilePath = undefined
+--------------------------------------------------------------------------------
+-- LLVM phases with error handling:
+--------------------------------------------------------------------------------
 
-createExecutable :: LLVMAst -> IO (Maybe FilePath)
-createExecutable ast = undefined
+buildExecutable :: LLVMAst -> FilePath -> IO ()
+buildExecutable ast file = do
+    l1 <- runLLVMWriter ast file
+    l2 <- runLLVMAssembler file
+    -- l3 <- runLLVMLinker file -- TODO: Implement
+    l4 <- runLLVMCompiler file
+    return ()
 
-runLLVMAssembler :: IO (Maybe FilePath) -> IO (Maybe FilePath)
-runLLVMAssembler = undefined
+runLLVMWriter :: LLVMAst -> FilePath -> IO ()
+runLLVMWriter ast file = do
+    result <- execLLVMWriter ast $ addExtension file ".ll"
+    case result of
+        Left  e -> print e
+        Right _ -> return ()
 
-runLLVMLinker :: IO (Maybe FilePath) -> IO (Maybe FilePath)
-runLLVMLinker = undefined
+runLLVMAssembler :: FilePath -> IO ()
+runLLVMAssembler = runLLVMProg "ASSEMBLER" "llvm-as" ".ll"
 
-runLLVMCompiler :: IO (Maybe FilePath) -> IO (Maybe FilePath)
-runLLVMCompiler = undefined
+runLLVMLinker :: FilePath -> IO ()
+runLLVMLinker = runLLVMProg "LINKER" "llvm-link" ".bc"
+
+runLLVMCompiler :: FilePath -> IO ()
+runLLVMCompiler = runLLVMProg "COMPILER" "llvm-gcc" ".bc"
+
+runLLVMProg :: String -> String -> String -> FilePath -> IO ()
+runLLVMProg phase cmd ext file = do
+    (c,o,e) <- execLLVMProg cmd $ addExtension file ext
+    when (c /= ExitSuccess) $ llvmErr phase e
+
+--------------------------------------------------------------------------------
+-- Helper
+--------------------------------------------------------------------------------
+
+execLLVMWriter :: LLVMAst -> FilePath -> IO (Either SomeException ())
+execLLVMWriter ast file = try $ writeFile file $ printLLVMAst ast
+
+execLLVMProg :: String -> FilePath -> IO (ExitCode, String, String)
+execLLVMProg prog file = readProcessWithExitCode prog [file] []
+
+llvmErr :: String -> FilePath -> IO()
+llvmErr s ex = die $ unwords ["LLVM", s, "ERROR", ex]
+
+addExtension :: FilePath -> String -> FilePath
+addExtension file ext = file ++ ext
