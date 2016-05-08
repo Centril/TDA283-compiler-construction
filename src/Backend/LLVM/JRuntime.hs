@@ -49,7 +49,24 @@ runtimeLLVMAst = LLVMAst
     [LFunDecl (LInt 32) "printf" [LPtr (LInt 8), LInd],
      LFunDecl (LInt 32) "scanf"  [LPtr (LInt 8), LInd],
      LFunDecl (LInt 32) "puts"   [LPtr (LInt 8)]]
-     []
+    [LFunDef LVoid "printInt" [LArg (LInt 32) "x"]
+        [LLabel "entry",
+         LAssign "t0" (LGElemPtr (LPtr (LArray 4 (LInt 8))) "dnl"
+            (LInt 32, 0) [(LInt 32, 0)]),
+         LIExpr (LCall (LFunPtr (LInt 32) [LPtr (LInt 8), LInd])
+            (LFunRef "printf"
+                [LTValRef (LPtr (LInt 8)) (LRef "t0"),
+                 LTValRef (LInt 32) (LRef "x")])),
+         LVRet],
+     LFunDef LVoid "printDouble" [LArg (LFloat 64) "x"]
+        [LLabel "entry",
+         LAssign "t0" (LGElemPtr (LPtr (LArray 6 (LInt 8))) "fnl"
+            (LInt 32, 0) [(LInt 32, 0)]),
+         LIExpr (LCall (LFunPtr (LInt 32) [LPtr (LInt 8), LInd])
+            (LFunRef "printf"
+                [LTValRef (LPtr (LInt 8)) (LRef "t0"),
+                 LTValRef (LFloat 64) (LRef "x")])),
+         LVRet]]
 
 runtimeLLVM :: String
 runtimeLLVM = unlines [

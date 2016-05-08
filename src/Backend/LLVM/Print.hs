@@ -85,12 +85,13 @@ printFunDef (LFunDef t i as is) =
 
 printType :: LType -> LLVMCode
 printType = \case
-    LVoid      -> "void"
-    LInt i     -> "i" ++ show i
-    LFloat f   -> "f" ++ show f
-    LPtr t     -> printType t ++ "*"
-    LArray d t -> bracket $ unwords [show d, "x", printType t]
-    LInd       -> "..."
+    LVoid       -> "void"
+    LInt i      -> "i" ++ show i
+    LFloat f    -> "f" ++ show f
+    LPtr t      -> printType t ++ "*"
+    LFunPtr r a -> unwords [printType r, parens (printTypes a) ++ "*"]
+    LArray d t  -> bracket $ unwords [show d, "x", printType t]
+    LInd        -> "..."
 
 printTypes :: LTypes -> LLVMCode
 printTypes t = joinComma $ printType <$> t
@@ -160,7 +161,7 @@ printInst = \case
     LRet r       -> "ret " ++ printTValRef r
     LStore r1 r2 -> "store " ++ joinComma [printTValRef r1, printTValRef r2]
     LUnreachable -> "unreachable"
-    LLabel _     -> error "will never happen"
+    LLabel _     -> error ""
 
 printInstIndent :: LInst -> LLVMCode
 printInstIndent = \case

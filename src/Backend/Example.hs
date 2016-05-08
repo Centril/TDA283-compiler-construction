@@ -3,10 +3,14 @@ module Backend.Example where
 import Backend.LLVM.LLVMAst
 import Backend.LLVM.LLVMApi
 import Backend.LLVM.Print
+import Backend.LLVM.JRuntime
 
 buildTestExecutable :: String -> IO ()
 buildTestExecutable path =
     buildExecutable (printLLVMAst createTestLLVMAst) path "test"
+
+printRuntimeLLVMAst :: IO()
+printRuntimeLLVMAst = putStrLn $ printLLVMAst runtimeLLVMAst
 
 printTestLLVMAst :: IO()
 printTestLLVMAst = putStrLn $ printLLVMAst createTestLLVMAst

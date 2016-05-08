@@ -57,6 +57,7 @@ data LType
     | LInt { _lIBits :: Int }
     | LFloat { _lFBits :: Int }
     | LPtr { _lTPtr :: LType }
+    | LFunPtr { _lTFRet :: LType, _lTFArgs :: [LType] }
     | LArray { _lADim :: Int, _lAType :: LType }
     | LInd
     deriving (Eq, Ord, Show, Read)
