@@ -5,7 +5,8 @@ import Backend.LLVM.LLVMApi
 import Backend.LLVM.Print
 
 buildTestExecutable :: String -> IO ()
-buildTestExecutable path = buildExecutable createTestLLVMAst path "test"
+buildTestExecutable path =
+    buildExecutable (printLLVMAst createTestLLVMAst) path "test"
 
 printTestLLVMAst :: IO()
 printTestLLVMAst = putStrLn $ printLLVMAst createTestLLVMAst

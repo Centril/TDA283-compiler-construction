@@ -43,12 +43,12 @@ import Backend.LLVM.JRuntime
 -- LLVM phases with error handling:
 --------------------------------------------------------------------------------
 
-buildExecutable :: LLVMAst -> FilePath -> String -> IO ()
-buildExecutable ast path name = do
+buildExecutable :: LLVMCode -> FilePath -> String -> IO ()
+buildExecutable code path name = do
     let runtime = concatPath path "runtime"
     let main = concatPath path name
     let out = concatPath path "out"
-    runLLVMWriter (printLLVMAst ast) main
+    runLLVMWriter code main
     runLLVMWriter runtimeLLVM runtime
     runLLVMAssembler main
     runLLVMAssembler runtime
