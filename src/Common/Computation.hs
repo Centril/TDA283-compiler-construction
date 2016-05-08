@@ -38,11 +38,11 @@ module Common.Computation (
 
     -- * Operations
 
-    -- ** Hoisting
-    rebase,
+    -- ** Monad stack transformations
+    rebase, io, transST, changeST, ($:<<),
 
     -- ** Running computations
-    runComp, runIOComp, transST, changeST, ($:<<),
+    runComp, runIOComp,
 
     -- ** Logging and Error operations
     warn, warn', warnln, info, info', infoln, infoP, err, err', errln,
@@ -75,6 +75,10 @@ type IOCompResult s a = IO (CompResult s a)
 -- work inside as starting environment / state.
 runIOComp :: IOComp s a -> s -> IOCompResult s a
 runIOComp = runSEWT
+
+-- | 'io': alias of 'liftIO'
+io :: MonadIO m => IO a -> m a
+io = liftIO
 
 -- | 'Comp': A computation given an environment or state s,
 -- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.

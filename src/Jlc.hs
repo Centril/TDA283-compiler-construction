@@ -22,7 +22,6 @@ import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
 import Control.Monad
-import Control.Monad.IO.Class
 
 import Utils.Monad
 import Utils.Pointless
@@ -92,7 +91,7 @@ compileBuildIO :: String -> TCEnv -> IOLComp ()
 compileBuildIO = compileIO >?=> build
 
 build :: LLVMCode -> IOLComp ()
-build c = liftIO $ do
+build c = io $ do
     currDir <- getCurrentDirectory
     buildExecutable c (currDir ++ "/") "test"
 
