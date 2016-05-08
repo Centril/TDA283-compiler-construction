@@ -28,7 +28,8 @@ createTestLLVMAst = LLVMAst
             LLabel
                 "entry",
             LAssign
-                "t1" (LCall (LFunRef "even" (LTValRef (LInt 1) (LVInt 20)))),
+                "t1" (LCall (LInt 1)
+                    (LFunRef "even" [LTValRef (LInt 32) (LVInt 20)])),
             LCBr
                 (LTValRef (LInt 1) (LRef "t1")) "then" "else",
             LLabel
@@ -37,7 +38,7 @@ createTestLLVMAst = LLVMAst
                 "t2" (LGElemPtr (LPtr (LArray 6 (LInt 8))) "evenstring"
                     (LInt 32, 0) [(LInt 32, 0)]),
             LVCall
-                (LFunRef "printString" (LTValRef (LPtr (LInt 8)) (LRef "t2"))),
+                (LFunRef "printString" [LTValRef (LPtr (LInt 8)) (LRef "t2")]),
             LABr
                 "kont",
             LLabel
@@ -46,7 +47,7 @@ createTestLLVMAst = LLVMAst
                 "t3" (LGElemPtr (LPtr (LArray 5 (LInt 8))) "oddstring"
                         (LInt 32, 0) [(LInt 32, 0)]),
             LVCall
-                (LFunRef "printString" (LTValRef (LPtr (LInt 8)) (LRef "t3"))),
+                (LFunRef "printString" [LTValRef (LPtr (LInt 8)) (LRef "t3")]),
             LABr
                 "kont",
             LLabel
@@ -82,7 +83,8 @@ createTestLLVMAst = LLVMAst
             LAssign
                 "t4" (LSub (LTValRef (LInt 32) (LRef "t3")) (LVInt 1)),
             LAssign
-                "t5" (LCall (LFunRef "odd" (LTValRef (LInt 1) (LRef "t4")))),
+                "t5" (LCall (LInt 1)
+                    (LFunRef "odd" [LTValRef (LInt 32) (LRef "t4")])),
             LRet
                 (LTValRef (LInt 1) (LRef "t5")),
             LLabel
@@ -117,7 +119,8 @@ createTestLLVMAst = LLVMAst
             LAssign
                 "t4" (LSub (LTValRef (LInt 32) (LRef "t3")) (LVInt 1)),
             LAssign
-                "t5" (LCall (LFunRef "even" (LTValRef (LInt 1) (LRef "t4")))),
+                "t5" (LCall (LInt 1)
+                    (LFunRef "even" [LTValRef (LInt 32) (LRef "t4")])),
             LRet
                 (LTValRef (LInt 1) (LRef "t5")),
             LLabel
