@@ -37,52 +37,69 @@ import System.Process
 
 import Backend.LLVM.LLVMAst
 import Backend.LLVM.Print
+import Backend.LLVM.JRuntime
 
 --------------------------------------------------------------------------------
 -- LLVM phases with error handling:
 --------------------------------------------------------------------------------
 
-buildExecutable :: LLVMAst -> FilePath -> IO ()
-buildExecutable ast file = do
-    l1 <- runLLVMWriter ast file
-    l2 <- runLLVMAssembler file
-    -- l3 <- runLLVMLinker file -- TODO: Implement
-    l4 <- runLLVMCompiler file
+buildExecutable :: LLVMAst -> FilePath -> String -> IO ()
+buildExecutable ast path name = do
+    let runtime = concatPath path "runtime"
+    let main = concatPath path name
+    let out = concatPath path "out"
+    runLLVMWriter (printLLVMAst ast) main
+    runLLVMWriter runtimeLLVM runtime
+    runLLVMAssembler main
+    runLLVMAssembler runtime
+    runLLVMLinker [main, runtime] out
+    runLLVMCompiler out (concatPath path "a")
     return ()
 
-runLLVMWriter :: LLVMAst -> FilePath -> IO ()
+runLLVMWriter :: String -> FilePath -> IO ()
 runLLVMWriter ast file = do
-    result <- execLLVMWriter ast $ addExtension file ".ll"
+    result <- execLLVMWriter ast $ llFile file
     case result of
         Left  e -> print e
         Right _ -> return ()
 
 runLLVMAssembler :: FilePath -> IO ()
-runLLVMAssembler = runLLVMProg "ASSEMBLER" "llvm-as" ".ll"
+runLLVMAssembler file = runLLVMProg "ASSEMBLER" "llvm-as"
+    [llFile file]
 
-runLLVMLinker :: FilePath -> IO ()
-runLLVMLinker = runLLVMProg "LINKER" "llvm-link" ".bc"
+runLLVMLinker :: [FilePath]-> FilePath -> IO ()
+runLLVMLinker files out = runLLVMProg "LINKER" "llvm-link" $
+    fmap bcFile files ++ ["-o=" ++ bcFile out]
 
-runLLVMCompiler :: FilePath -> IO ()
-runLLVMCompiler = runLLVMProg "COMPILER" "llvm-gcc" ".bc"
+runLLVMCompiler :: FilePath -> FilePath -> IO ()
+runLLVMCompiler file out = runLLVMProg "COMPILER" "llvm-gcc"
+    [bcFile file, "-o", outFile out]
 
-runLLVMProg :: String -> String -> String -> FilePath -> IO ()
-runLLVMProg phase cmd ext file = do
-    (c,o,e) <- execLLVMProg cmd $ addExtension file ext
+runLLVMProg :: String -> String -> [String] -> IO ()
+runLLVMProg phase cmd args = do
+    (c,_,e) <- execLLVMProg cmd args
     when (c /= ExitSuccess) $ llvmErr phase e
 
 --------------------------------------------------------------------------------
 -- Helper
 --------------------------------------------------------------------------------
 
-execLLVMWriter :: LLVMAst -> FilePath -> IO (Either SomeException ())
-execLLVMWriter ast file = try $ writeFile file $ printLLVMAst ast
+execLLVMWriter :: String -> FilePath -> IO (Either SomeException ())
+execLLVMWriter code file = try $ writeFile file code
 
-execLLVMProg :: String -> FilePath -> IO (ExitCode, String, String)
-execLLVMProg prog file = readProcessWithExitCode prog [file] []
+execLLVMProg :: String -> [String] -> IO (ExitCode, String, String)
+execLLVMProg cmd args = readProcessWithExitCode cmd args []
 
 llvmErr :: String -> FilePath -> IO()
 llvmErr s ex = die $ unwords ["LLVM", s, "ERROR", ex]
 
-addExtension :: FilePath -> String -> FilePath
-addExtension file ext = file ++ ext
+llFile, bcFile, outFile :: FilePath -> String
+llFile = flip addExt ".ll"
+bcFile = flip addExt ".bc"
+outFile = flip addExt ".out"
+
+addExt :: FilePath -> String -> String
+addExt file ext = file ++ ext
+
+concatPath :: FilePath -> String -> FilePath
+concatPath p1 p2 = p1 ++ p2
