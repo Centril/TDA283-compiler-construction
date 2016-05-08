@@ -38,8 +38,11 @@ module Common.Computation (
 
     -- * Operations
 
+    -- ** Hoisting
+    rebase,
+
     -- ** Running computations
-    runComp, transST, changeST, ($:<<),
+    runComp, runIOComp, transST, changeST, ($:<<),
 
     -- ** Logging and Error operations
     warn, warn', warnln, info, info', infoln, infoP, err, err', errln,
@@ -53,6 +56,7 @@ import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
+import Control.Monad.Morph
 
 import Utils.Pointless
 import Utils.Terminal
@@ -97,6 +101,10 @@ newtype SEWT s e w m a = SEWT {
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadState s, MonadError e, MonadWriter w)
 
+instance MFunctor (SEWT s e w) where
+    hoist f m = SEWT $ StateT g
+        where g s = ExceptT $  hoist f $ runExceptT $ runStateT (_runSEWT m) s
+
 -- 'runSEW': runs a 'SEW' computation given an initial state, specialization of
 -- 'runSEWT' for the 'Identity' base monad.
 runSEW :: SEWT s e w Identity a -> s -> (Either e (a, s), w)
@@ -125,6 +133,10 @@ transST f x_c x_i = SEWT $ StateT $ \y_i -> ExceptT . WriterT $
 changeST :: (Functor m)
          => SEWT x e w m a -> x -> SEWT y e w m a
 changeST =  transST fst
+
+-- | 'rebase': change base monad of from Identity to something else.
+rebase :: (MFunctor t, Monad n) => t Identity b -> t n b
+rebase = hoist generalize
 
 --------------------------------------------------------------------------------
 -- Errors, Logging:

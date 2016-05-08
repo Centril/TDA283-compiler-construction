@@ -20,7 +20,10 @@ module Main where
 import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
+import Control.Monad
+
 import Utils.Monad
+import Utils.Pointless
 import Utils.Terminal
 
 import Common.Computation
@@ -45,7 +48,7 @@ main = getArgs >>= handleArgs >>= compileUnit
 --------------------------------------------------------------------------------
 
 compileUnit :: String -> IO ()
-compileUnit = uncurry (either compileUnitFail compileUnitSucc) . runCompile
+compileUnit = runCompile >=> uncurry (either compileUnitFail compileUnitSucc)
 
 compileUnitFail :: ErrMsg -> InfoLog -> IO ()
 compileUnitFail eMsg logs = do
@@ -61,8 +64,8 @@ compileUnitSucc (val, env) logs = do
     putStrLn "Final environment value:" >> poutput env
     errLn "OK"
 
-runCompile :: String -> LResult LLVMCode
-runCompile code = runComp (compile code initialTCEnv) initialLEnv
+runCompile :: String -> IOLResult LLVMCode
+runCompile code = runIOComp (compileIO code initialTCEnv) initialLEnv
 
 preCodeGen :: String -> TCComp ProgramA
 preCodeGen code = do
@@ -78,6 +81,9 @@ preCodeGen code = do
 
 compile :: String -> TCEnv -> LComp LLVMCode
 compile = changeST . preCodeGen >?=> compileLLVM
+
+compileIO :: String -> TCEnv -> IOLComp LLVMCode
+compileIO = rebase .| compile
 
 --------------------------------------------------------------------------------
 -- Helpers:
