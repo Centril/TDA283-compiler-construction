@@ -33,7 +33,7 @@ Computation monad and operations in Javalette compiler.
 
 module Common.Computation (
     -- * Types
-    Comp, CompResult,
+    Comp, CompResult, IOComp, IOCompResult,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
 
     -- * Operations
@@ -60,6 +60,17 @@ import Utils.Terminal
 --------------------------------------------------------------------------------
 -- Computations in compiler:
 --------------------------------------------------------------------------------
+
+-- | 'IOComp': like 'Comp' but with 'IO' instead of 'Identity' as base monad.
+type IOComp s a = SEWT s ErrMsg InfoLog IO a
+
+-- | 'IOCompResult': result of an 'IOComp' computation.
+type IOCompResult s a = IO (CompResult s a)
+
+-- | 'runIOComp': Evaluates the entire 'IOComp' computation given a state to
+-- work inside as starting environment / state.
+runIOComp :: IOComp s a -> s -> IOCompResult s a
+runIOComp = runSEWT
 
 -- | 'Comp': A computation given an environment or state s,
 -- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.

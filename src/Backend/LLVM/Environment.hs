@@ -35,7 +35,7 @@ module Backend.LLVM.Environment (
     module Backend.LLVM.LLVMAst,
 
     -- * Types
-    LEnv(..), LComp, LResult,
+    LEnv(..), LComp, LResult, IOLComp, IOLResult,
 
     -- * Operations
     initialLEnv,
@@ -79,6 +79,12 @@ initialLEnv = LEnv [] 0 0 0 []
 --------------------------------------------------------------------------------
 -- Environment operations:
 --------------------------------------------------------------------------------
+
+-- | 'IOLComp': An LLVM computation gifted with the powers of IO, use wisely.
+type IOLComp a = IOComp LEnv a
+
+-- | 'IOLResult' result of an 'IOLComp' computation.
+type IOLResult a = IOCompResult LEnv a
 
 -- | 'LComp': A computation in LLVM code generation using environment 'LEnv'.
 type LComp a = Comp LEnv a
