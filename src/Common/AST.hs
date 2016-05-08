@@ -64,7 +64,7 @@ data Stmt a
     = Empty    { _sAnot :: a }
     | BStmt    { _sAnot :: a, _sBlock :: Block a }
     | Decl     { _sAnot :: a, _sDTyp  :: Type a, _sDItems :: [Item a] }
-    | Ass      { _sAnot :: a, _sIdent :: Ident,  _sAExpr  :: Expr a }
+    | Ass      { _sAnot :: a, _sIdent :: Ident,  _sExpr   :: Expr a }
     | Incr     { _sAnot :: a, _sIdent :: Ident }
     | Decr     { _sAnot :: a, _sIdent :: Ident }
     | Ret      { _sAnot :: a, _sExpr  :: Expr a }
@@ -108,7 +108,7 @@ data Expr a
     | EOr       { _eAnot :: a, _eLExpr :: Expr a, _eRExpr :: Expr a  }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data AddOp a = Plus { _addAnot :: a } | Minus { _addAnot :: a } 
+data AddOp a = Plus { _addAnot :: a } | Minus { _addAnot :: a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data MulOp a = Times { _mAnot :: a } | Div { _mAnot :: a } | Mod { _mAnot :: a }
@@ -249,7 +249,7 @@ convert (J.Program anot fns)       = Program anot $ cf <$> fns
           cao (J.Minus    a)       = Minus     a
           cmo (J.Times    a)       = Times     a
           cmo (J.Div      a)       = Div       a
-          cmo (J.Mod      a)       = Mod       a          
+          cmo (J.Mod      a)       = Mod       a
           cro (J.LTH      a)       = LTH       a
           cro (J.LE       a)       = LE        a
           cro (J.GTH      a)       = GTH       a
