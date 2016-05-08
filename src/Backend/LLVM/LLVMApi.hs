@@ -36,7 +36,6 @@ import System.Exit
 import System.Process
 
 import Backend.LLVM.LLVMAst
-import Backend.LLVM.Print
 import Backend.LLVM.JRuntime
 
 --------------------------------------------------------------------------------

@@ -17,10 +17,12 @@
  -}
 module Main where
 
+import System.Directory
 import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
 
 import Control.Monad
+import Control.Monad.IO.Class
 
 import Utils.Monad
 import Utils.Pointless
@@ -35,6 +37,7 @@ import Backend.AlphaRename
 import Backend.PreOptimize
 
 import Backend.LLVM.LLVMGen
+import Backend.LLVM.LLVMApi
 
 --------------------------------------------------------------------------------
 -- main:
@@ -56,7 +59,7 @@ compileUnitFail eMsg logs = do
     printError eMsg >> printLogs logs
     exitFailure
 
-compileUnitSucc :: (LLVMCode, LEnv) -> InfoLog -> IO ()
+compileUnitSucc :: ((), LEnv) -> InfoLog -> IO ()
 compileUnitSucc (val, env) logs = do
     putStrLn "COMPILATION SUCCESS!"
     putStrLn "Accumulated logs:"        >> printLogs logs
@@ -64,8 +67,8 @@ compileUnitSucc (val, env) logs = do
     putStrLn "Final environment value:" >> poutput env
     errLn "OK"
 
-runCompile :: String -> IOLResult LLVMCode
-runCompile code = runIOComp (compileIO code initialTCEnv) initialLEnv
+runCompile :: String -> IOLResult ()
+runCompile code = runIOComp (compileBuildIO code initialTCEnv) initialLEnv
 
 preCodeGen :: String -> TCComp ProgramA
 preCodeGen code = do
@@ -84,6 +87,14 @@ compile = changeST . preCodeGen >?=> compileLLVM
 
 compileIO :: String -> TCEnv -> IOLComp LLVMCode
 compileIO = rebase .| compile
+
+compileBuildIO :: String -> TCEnv -> IOLComp ()
+compileBuildIO = compileIO >?=> build
+
+build :: LLVMCode -> IOLComp ()
+build c = liftIO $ do
+    currDir <- getCurrentDirectory
+    buildExecutable c (currDir ++ "/") "test"
 
 --------------------------------------------------------------------------------
 -- Helpers:
