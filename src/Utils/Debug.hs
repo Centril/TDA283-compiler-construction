@@ -34,6 +34,8 @@ module Utils.Debug (
 
 import System.IO.Unsafe
 
+import Utils.Terminal
+
 -- | 'debug': this function is morally dubious to use,
 -- it lacks referential transparency and might destroy your computer,
 -- set your house on fire, create black holes,
