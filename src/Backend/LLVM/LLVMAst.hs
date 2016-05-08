@@ -58,6 +58,7 @@ data LType
     | LFloat { _lFBits :: Int }
     | LPtr { _lTPtr :: LType }
     | LArray { _lADim :: Int, _lAType :: LType }
+    | LInd
     deriving (Eq, Ord, Show, Read)
 
 data LArg = LArg { _lArgType :: LType, _lArgId :: LIdent }

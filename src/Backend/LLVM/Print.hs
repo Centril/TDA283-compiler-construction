@@ -90,6 +90,7 @@ printType = \case
     LFloat f   -> "f" ++ show f
     LPtr t     -> printType t ++ "*"
     LArray d t -> bracket $ unwords [show d, "x", printType t]
+    LInd       -> "..."
 
 printTypes :: LTypes -> LLVMCode
 printTypes t = joinComma $ printType <$> t
