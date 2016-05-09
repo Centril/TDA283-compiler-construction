@@ -18,10 +18,7 @@
 module Main where
 
 import System.Directory
-import System.Environment ( getArgs )
 import System.Exit ( exitFailure )
-
-import Control.Monad
 
 import Utils.Monad
 import Utils.Pointless
@@ -38,19 +35,26 @@ import Backend.PreOptimize
 import Backend.LLVM.LLVMGen
 import Backend.LLVM.LLVMApi
 
+import CliOptions
+
 --------------------------------------------------------------------------------
 -- main:
 --------------------------------------------------------------------------------
 
 main :: IO ()
-main = getArgs >>= handleArgs >>= compileUnit
+main = do
+    opts <- compOptions
+    -- TODO: use something more sensible than head...
+    let file = head $ _inputFiles opts
+    code <- readFile file
+    compileUnit opts code
 
 --------------------------------------------------------------------------------
 -- Compilation of units:
 --------------------------------------------------------------------------------
 
-compileUnit :: String -> IO ()
-compileUnit = runCompile >=> uncurry (either compileUnitFail compileUnitSucc)
+compileUnit :: JlcOptions -> String -> IO ()
+compileUnit = runCompile >?=> uncurry (either compileUnitFail compileUnitSucc)
 
 compileUnitFail :: ErrMsg -> InfoLog -> IO ()
 compileUnitFail eMsg logs = do
@@ -66,8 +70,9 @@ compileUnitSucc (val, env) logs = do
     putStrLn "Final environment value:" >> poutput env
     errLn "OK"
 
-runCompile :: String -> IOLResult ()
-runCompile code = runIOComp (compileBuildIO code initialTCEnv) initialLEnv
+runCompile :: JlcOptions -> String -> IOLResult ()
+runCompile opts code = runIOComp (compileBuildIO code initialTCEnv)
+                                 opts initialLEnv
 
 preCodeGen :: String -> TCComp ProgramA
 preCodeGen code = do

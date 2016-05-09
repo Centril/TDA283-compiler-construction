@@ -31,7 +31,6 @@ module Utils.Terminal (
     -- * Operations
     errStr, errLn, errChar, errPrint,
     poutput, prettify,
-    handleArgs
 ) where
 
 import System.IO
@@ -57,7 +56,3 @@ prettify str = case parseExp str of
     ParseOk res -> prettyPrintStyleMode style
         {lineLength = 120, ribbonsPerLine = 1.2} defaultMode res
     ParseFailed{} -> str
-
-handleArgs :: [String] -> IO String
-handleArgs []    = getContents
-handleArgs (f:_) = readFile f

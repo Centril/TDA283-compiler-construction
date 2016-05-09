@@ -32,6 +32,9 @@ Computation monad and operations in Javalette compiler.
 {-# LANGUAGE FlexibleContexts #-}
 
 module Common.Computation (
+    -- * Modules
+    module Common.Options,
+
     -- * Types
     Comp, CompResult, IOComp, IOCompResult,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
@@ -56,88 +59,101 @@ import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
+import Control.Monad.Reader
 import Control.Monad.Morph
 
 import Utils.Pointless
 import Utils.Terminal
 
+import Common.Options
+
 --------------------------------------------------------------------------------
--- Computations in compiler:
+-- Computations:
+--------------------------------------------------------------------------------
+
+-- | 'Comp': A computation given an environment or state s,
+-- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.
+-- See 'CompResult' for details.
+type Comp s a = RSEW s JlcOptions ErrMsg InfoLog a
+
+-- | 'CompResult': result of a 'Comp' computation.
+type CompResult s a = (Either ErrMsg (a, s), InfoLog)
+
+-- | 'runComp': Evaluates the entire 'Comp' computation given a read only state,
+-- and a state to work inside as starting environment.
+runComp :: Comp s a -> JlcOptions -> s -> CompResult s a
+runComp = runRSEW
+
+--------------------------------------------------------------------------------
+-- IO Computations:
 --------------------------------------------------------------------------------
 
 -- | 'IOComp': like 'Comp' but with 'IO' instead of 'Identity' as base monad.
-type IOComp s a = SEWT s ErrMsg InfoLog IO a
+type IOComp s a = RSEWT s JlcOptions ErrMsg InfoLog IO a
 
 -- | 'IOCompResult': result of an 'IOComp' computation.
 type IOCompResult s a = IO (CompResult s a)
 
 -- | 'runIOComp': Evaluates the entire 'IOComp' computation given a state to
 -- work inside as starting environment / state.
-runIOComp :: IOComp s a -> s -> IOCompResult s a
-runIOComp = runSEWT
+runIOComp :: IOComp s a -> JlcOptions -> s -> IOCompResult s a
+runIOComp = runRSEWT
 
 -- | 'io': alias of 'liftIO'
 io :: MonadIO m => IO a -> m a
 io = liftIO
 
--- | 'Comp': A computation given an environment or state s,
--- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.
--- Monadic stack: StateT -> ExceptT -> WriterT -> Identity
--- See 'CompResult' for details.
-type Comp s a = SEW s ErrMsg InfoLog a
+--------------------------------------------------------------------------------
+-- RSEWT:
+--------------------------------------------------------------------------------
 
--- | 'CompResult': result of a 'Comp' computation.
-type CompResult s a = (Either ErrMsg (a, s), InfoLog)
+-- RSEW: RSEWT using Identity monad.
+type RSEW s r e w a = RSEWT s r e w Identity a
 
--- | 'runComp': Evaluates the entire 'Comp' computation given a state to work
--- inside as starting environment / state.
-runComp :: Comp s a -> s -> CompResult s a
-runComp = runSEW
-
--- SEW: SEWT using Identity monad.
-type SEW s e w a = SEWT s e w Identity a
-
--- | SEWT: Composition of State . Except . Writer monad transformers in that
--- order where Writer is the innermost transformer.
--- the form of the computation is: s -> (Either e (a, s), w)
-newtype SEWT s e w m a = SEWT {
-    _runSEWT :: StateT s (ExceptT e (WriterT w m)) a }
+-- | RSEWT: Composition of ReaderT . StateT . ExceptT . WriterT
+-- monad transformers in that order where Writer is the innermost transformer.
+-- the form of the computation is: r -> s -> (Either e (a, s), w)
+newtype RSEWT s r e w m a = RSEWT {
+    _runRSEWT :: ReaderT r (StateT s (ExceptT e (WriterT w m))) a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadState s, MonadError e, MonadWriter w)
+              MonadReader r, MonadState s, MonadError e, MonadWriter w)
 
-instance Monoid w => MonadTrans (SEWT s e w) where
-    lift = SEWT . lift . lift . lift
+-- 'runRSEW': runs a 'RSEW' computation given initial states,
+-- specialization of 'runRSEWT' for the 'Identity' base monad.
+runRSEW :: RSEWT s r e w Identity a -> r -> s -> (Either e (a, s), w)
+runRSEW r s m = runIdentity $ runRSEWT r s m
 
-instance Monoid w => MFunctor (SEWT s e w) where
-    hoist f = SEWT . hoist (hoist (hoist f)) . _runSEWT
+-- | 'runRSEWT': runs a 'RSEWT' computation given initial states.
+runRSEWT :: RSEWT s r e w m a -> r -> s -> m (Either e (a, s), w)
+runRSEWT ev r s = runWriterT $ runExceptT $
+                runStateT (runReaderT (_runRSEWT ev) r) s
 
--- 'runSEW': runs a 'SEW' computation given an initial state, specialization of
--- 'runSEWT' for the 'Identity' base monad.
-runSEW :: SEWT s e w Identity a -> s -> (Either e (a, s), w)
-runSEW = runIdentity .| runSEWT
+instance Monoid w => MonadTrans (RSEWT s r e w) where
+    lift = RSEWT . lift . lift . lift . lift
 
--- | 'runSEWT': runs a 'SEWT' computation given an initial state.
-runSEWT :: SEWT s e w m a -> s -> m (Either e (a, s), w)
-runSEWT ev e = runWriterT $ runExceptT $ runStateT (_runSEWT ev) e
+instance Monoid w => MFunctor (RSEWT s r e w) where
+    hoist f = RSEWT . hoist (hoist (hoist (hoist f))) . _runRSEWT
 
--- | 'transST': transitions between one 'SEWT' computation with state x, to
+-- | 'transST': transitions between one 'RSEWT' computation with state x, to
 -- another with state y. The current state and result of the given computation
 -- is given to a mapping function that must produce the next computation.
 -- The initial state must also be passed as the last parameter.
 transST :: Functor m
-        => (((a, y), x) -> (a, y)) -> SEWT x e w m a -> x -> SEWT y e w m a
-transST f x_c x_i = SEWT $ StateT $ \y_i -> ExceptT . WriterT $
-    first ((\(a, x_f) -> f ((a, y_i), x_f)) <$>) <$> runSEWT x_c x_i
+         => (((a, y), x) -> (a, y))
+         -> RSEWT x r e w m a -> x -> RSEWT y r e w m a
+transST f x_c x_i =
+    RSEWT $ ReaderT $ \r -> StateT $ \y_i -> ExceptT . WriterT $
+    first ((\(a, x_f) -> f ((a, y_i), x_f)) <$>) <$> runRSEWT x_c r x_i
 
 -- | '$:<<': infix version 'transST'
 ($:<<) :: Functor m
-       => (((a, y), x) -> (a, y)) -> SEWT x e w m a -> x -> SEWT y e w m a
+        => (((a, y), x) -> (a, y))
+        -> RSEWT x r e w m a -> x -> RSEWT y r e w m a
 ($:<<)  = transST
 
 -- 'changeST': specialization of 'transST', ignoring final state of the
 -- first computation directly using the initial of the second computation.
-changeST :: (Functor m)
-         => SEWT x e w m a -> x -> SEWT y e w m a
+changeST :: Functor m => RSEWT x r e w m a -> x -> RSEWT y r e w m a
 changeST =  transST fst
 
 -- | 'rebase': change base monad of from Identity to something else.
@@ -199,7 +215,7 @@ infoP p header x = info p header >> info p (show x)
 _log :: LogLevel -> Phase -> String -> Comp s ()
 _log l p m = tell [LogItem l p m]
 
-unword2nd, unlines2nd :: (t1 -> String -> t) -> t1 -> [String] -> t
+unword2nd, unlines2nd :: (a -> String -> b) -> a -> [String] -> b
 unword2nd  f a b = f a $ unwords b
 unlines2nd f a b = f a $ unlines b
 
