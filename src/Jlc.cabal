@@ -19,7 +19,7 @@ executable jlc
                          mtl, containers, mmorph, transformers,
                          lens, uniplate,
                          process, directory,
-                         ansi-wl-pprint-0.6.7.3
+                         optparse-applicative, ansi-wl-pprint, filepath,
                          pretty, haskell-src-exts
     build-tools:         alex, happy
     default-language:    Haskell2010

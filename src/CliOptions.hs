@@ -31,14 +31,13 @@ module CliOptions where
 
 import Data.Char
 import Data.Foldable
+import Data.Maybe
 
-import System.Environment
+import System.FilePath hiding ((</>))
+import System.Info
 
 import Options.Applicative
 import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>))
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
-
-import Utils.Pointless
 
 import Common.Options
 
@@ -46,17 +45,28 @@ import Common.Options
 -- API:
 --------------------------------------------------------------------------------
 
--- | 'parseCLI': parses command line interface options given a list of "words".
-parseCLI :: [String] -> IO JlcOptions
-parseCLI = execParse cliParser
+compOptions :: IO JlcOptions
+compOptions = correctifyOutput <$> execParser cliParser
 
 --------------------------------------------------------------------------------
--- Parsing:
+-- Post parsing:
 --------------------------------------------------------------------------------
 
--- | 'execParse': executes an option parser given list of "words" to parse.
-execParse :: ParserInfo a -> [String] -> IO a
-execParse = handleParseResult .| execParserPure defaultPrefs
+correctifyOutput :: JlcOptions -> JlcOptions
+correctifyOutput opts = opts { _outputFile = nof }
+    where nof = Just $ fixExecExt $ fromMaybe dof $ _outputFile opts
+          dof = removeExt "jl" $ head $ _inputFiles opts
+
+fixExecExt :: String -> String
+fixExecExt out | isWindows = removeExt "exe" out <.> "exe"
+               | otherwise = out
+
+removeExt :: String -> FilePath -> FilePath
+removeExt cmp fp = let (base, ext) = splitExtension fp
+                   in if ext == '.' : cmp then base else fp
+
+isWindows :: Bool
+isWindows = os == "mingw32"
 
 --------------------------------------------------------------------------------
 -- Constructing the parser:
