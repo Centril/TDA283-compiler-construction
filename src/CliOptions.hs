@@ -108,7 +108,7 @@ optOutput = optional $ strOption $
     <> short 'o'
     <> showDefaultWith (const "the default")
     <> metavar "FILE"
-    <> help "FILE path to executuable to produce"
+    <> help "FILE path to executable to produce"
 
 optInputs :: Parser [FilePath]
 optInputs = some $ strArgument $
