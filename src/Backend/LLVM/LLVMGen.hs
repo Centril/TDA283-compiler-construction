@@ -109,8 +109,8 @@ compileStmt = \case
     BStmt    _ b       -> compileBlock b
     Decl     _ t is    -> forM_ is $ compileDecl t
     Ass      _ i e     -> compileAss i e
-    Incr     a i       -> compileIncr a i 1 1
-    Decr     a i       -> compileIncr a i (-1) (-1)
+    Incr     a i       -> compileInDeCr a i (Plus emptyAnot)
+    Decr     a i       -> compileInDeCr a i (Minus emptyAnot)
     Ret      _ e       -> compileRet e
     VRet     _         -> pushInst LVRet
     Cond     _ c si    -> compileCond     c si
@@ -118,12 +118,12 @@ compileStmt = \case
     While    _ c sw    -> compileWhile    c sw
     SExp     _ e       -> void $ compileExpr e
 
-compileIncr :: ASTAnots -> Ident -> Integer -> Double -> LComp ()
-compileIncr anots name vi vd = do
-    {--load --} x@(LTValRef t _) <- compileEVar anots name
-    {-- add --} temp <- assignTemp t $ switchAdd (Plus emptyAnot) t x
-                           (switchType (LVInt vi) (LVFloat vd) t)
-    {--store -} compileStore name temp
+compileInDeCr :: ASTAnots -> Ident -> AddOpA -> LComp ()
+compileInDeCr anots name op = do
+    x@(LTValRef t _) <- compileEVar anots name
+    temp <- assignTemp t $ switchAdd op t x
+        (switchType (LVInt 1) (LVFloat 1) t)
+    compileStore name temp
 
 compileStore :: Ident -> LTValRef -> LComp ()
 compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
