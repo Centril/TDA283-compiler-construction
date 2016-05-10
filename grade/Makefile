@@ -1,9 +1,9 @@
-all:
-	cabal build
-	[[ -e dist/build/Grade/Grade ]] && cp -u dist/build/Grade/Grade Grade
-	[[ -e dist/build/Grade/Grade.exe ]] && cp -u dist/build/Grade/Grade.exe Grade.exe
+all: Grade
 
+tester.tar.gz: Tests.py Grade.py testsuite
+	tar zcf tester.tar.gz Tests.py Grade.py testsuite
+
+%: %.hs *.hs
+	ghc -main-is $* -threaded --make $<
 clean:
-	cabal clean
-	rm -f Grade.exe
-	rm -f Grade
+	rm *.{hi,o} Grade
