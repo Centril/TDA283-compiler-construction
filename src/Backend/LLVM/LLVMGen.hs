@@ -75,8 +75,23 @@ compileFun (FnDef _ rtyp name args block) = do
     let name' = compileFName name
     let rtyp' = compileFRTyp rtyp
     let args' = compileFArg <$> args
-    insts <- compileFBlock block
+    insts <- compileFBlock $ returnBlock block rtyp
     return $ LFunDef rtyp' name' args' insts
+
+returnBlock :: BlockA -> TypeA ->  BlockA
+returnBlock b@(Block a st) rtyp = if null st
+    then Block a (st ++ [returnStmt rtyp])
+    else case last st of
+        Ret  _ _ -> b
+        VRet _   -> b
+        _        -> Block a (st ++ [returnStmt rtyp])
+
+returnStmt :: TypeA -> StmtA
+returnStmt rtyp = case void rtyp of
+    Int  _ -> Ret emptyAnot (ELitInt emptyAnot 0)
+    Doub _ -> Ret emptyAnot (ELitDoub emptyAnot 0)
+    Bool _ -> Ret emptyAnot (ELitFalse emptyAnot)
+    _      -> VRet emptyAnot
 
 compileFName :: Ident -> LIdent
 compileFName = _ident
