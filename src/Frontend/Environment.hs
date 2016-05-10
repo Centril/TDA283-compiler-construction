@@ -64,13 +64,14 @@ import Common.Annotations as X
 --------------------------------------------------------------------------------
 
 -- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident TypeA
+type Context = Map Ident Var
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
 
--- | 'Var': a variable specified by its 'Ident' and 'Type'.
-data Var = Var { vident :: Ident, vtype :: TypeA }
+-- | 'Var': a variable specified by its 'Ident', 'Type', 'VarSource'.
+data Var = Var { vident  :: Ident,     vtype :: TypeA,
+                 vsource :: VarSource, vuses :: Integer }
     deriving (Eq, Show, Read)
 
 --------------------------------------------------------------------------------
@@ -122,10 +123,10 @@ type TCResult a = CompResult TCEnv a
 -- Environment operations:
 --------------------------------------------------------------------------------
 
--- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
--- the identifier is 'return':ed, otherwise onErr is given the (var = 'Ident').
-lookupVar' :: (Ident -> TCComp TypeA) -> Ident -> TCComp TypeA
-lookupVar' onErr var = uses contexts (ctxFirst var) >>= maybeErr (onErr var)
+-- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Var' of
+-- the identifier is 'return':ed, otherwise onErr is given the (name = 'Ident').
+lookupVar' :: (Ident -> TCComp Var) -> Ident -> TCComp Var
+lookupVar' onErr name = uses contexts (ctxFirst name) >>= maybeErr (onErr name)
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
 -- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
@@ -133,11 +134,12 @@ lookupFun' :: (Ident -> TCComp FunSig) -> Ident -> TCComp FunSig
 lookupFun' onErr fun = uses functions (lookup fun) >>= maybeErr (onErr fun)
 
 -- | 'extendVar': Extends the current scope with the given variable with name
--- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
+-- and it's additional information. If variable exists, onError is used.
 extendVar' :: (Ident -> TCComp ()) -> Var -> TCComp ()
-extendVar' onErr (Var name typ) = do
+extendVar' onErr var = do
+    let name = vident var
     (c : ctxs) <- use contexts
-    maybe (contexts .= insert name typ c:ctxs)
+    maybe (contexts .= insert name var c:ctxs)
           (const $ onErr name)
           (lookup name c)
 

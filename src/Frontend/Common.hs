@@ -44,5 +44,5 @@ import Common.AST
 lookupFunE :: Ident -> TCComp FunSig
 lookupFunE = lookupFun' funNotDef
 
-lookupVarE :: Ident -> TCComp TypeA
+lookupVarE :: Ident -> TCComp Var
 lookupVarE = lookupVar' varNotDef

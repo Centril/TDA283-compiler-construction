@@ -32,7 +32,7 @@ AST Annotations in Javalette compiler.
 module Common.Annotations (
     -- * Types
     ASTAnot(..), AnotKey (..), ASTAnots,
-    Kind(..), WillExecute(..), Literal(..), ML,
+    Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
 
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
     TypeA, ExprA, AddOpA, MulOpA, RelOpA,
@@ -108,17 +108,28 @@ toWillExecute (Just False) = Never
 toWillExecute Nothing      = Unknown
 
 --------------------------------------------------------------------------------
+-- Variable reference sources:
+--------------------------------------------------------------------------------
+
+-- | 'VarSource': Annotation for a source of an 'EVar'.
+data VarSource = VSArg | VSLocal
+    deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
+
+makePrisms ''VarSource
+
+--------------------------------------------------------------------------------
 -- Annotations:
 --------------------------------------------------------------------------------
 
-data AnotKey = AKType | AKWillExec | AKCExprLit | AKKind
+data AnotKey = AKType | AKWillExec | AKCExprLit | AKKind | AKVarSource
     deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
 
 -- | 'ASTAnot': The annotations allowed in a Javalette AST.
-data ASTAnot = AType     { _anotType     :: Type (Map AnotKey ASTAnot) } |
-               AWillExec { _anotWillExec :: WillExecute    } |
-               ACExprLit { _anotCExprLit :: ML             } |
-               AKind     { _anotKind     :: Kind           }
+data ASTAnot = AType      { _anotType     :: Type (Map AnotKey ASTAnot) }
+             | AWillExec  { _anotWillExec :: WillExecute }
+             | ACExprLit  { _anotCExprLit :: ML          }
+             | AKind      { _anotKind     :: Kind        }
+             | AVarSource { _anotVS       :: VarSource   }
     deriving (Eq, Show, Read, Data, Typeable)
 
 makePrisms ''ASTAnot
