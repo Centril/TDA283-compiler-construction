@@ -17,6 +17,8 @@
  -}
 module Main where
 
+import Control.Monad
+
 import System.FilePath
 import System.Exit ( exitFailure )
 
@@ -97,9 +99,9 @@ compileBuildIO opts code env = compileIO code env >>= build opts
 
 -- TODO: use something more sensible than head...
 build :: JlcOptions -> LLVMCode -> IOLComp ()
-build opts code = io $ do
-    let file = head $ _inputFiles opts
-    buildExecutable code (takeDirectory file) (takeBaseName file)
+build opts code = io $ void $
+    buildMainBC code (takeDirectory file) (takeBaseName file)
+    where file = head $ _inputFiles opts
 
 --------------------------------------------------------------------------------
 -- Helpers:

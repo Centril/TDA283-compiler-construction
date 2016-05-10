@@ -31,7 +31,6 @@ The interface to external programs of the Javalette backend.
 module Backend.LLVM.LLVMApi where
 
 import Control.Exception
-import Control.Monad
 
 import System.Exit
 import System.FilePath
@@ -44,42 +43,52 @@ import Backend.LLVM.JRuntime
 -- LLVM phases with error handling:
 --------------------------------------------------------------------------------
 
-buildExecutable :: LLVMCode -> FilePath -> String -> IO ()
-buildExecutable code path name = do
-    let runtime = path </> "runtime"
-    let main = path </> name
-    let linked = path </> "linked"
-    runLLVMWriter code main
-    runLLVMWriter runtimeLLVM runtime
-    runLLVMAssembler main
-    runLLVMAssembler runtime
-    runLLVMLinker [main, runtime] linked
-    runLLVMCompiler linked (path </> "a")
-    return ()
+buildMainExec :: LLVMCode -> FilePath -> String -> IO FilePath
+buildMainExec code dest name = do
+    main <- buildMainBC code dest name
+    runt <- buildRuntimeBC dest
+    buildExecutable [main, runt] dest
 
-runLLVMWriter :: String -> FilePath -> IO ()
+buildMainBC :: LLVMCode -> FilePath -> String -> IO FilePath
+buildMainBC code dest name = runLLVMWriter code main >>
+    runLLVMAssembler main
+    where main = dest </> name
+
+buildRuntimeBC :: FilePath -> IO FilePath
+buildRuntimeBC dest = runLLVMWriter runtimeLLVM runtime >>
+    runLLVMAssembler runtime
+    where runtime = dest </> "runtime"
+
+buildExecutable :: [FilePath] -> FilePath -> IO FilePath
+buildExecutable sources dest = runLLVMLinker sources linked >>
+    runLLVMCompiler linked (dest </> "a")
+    where linked = dest </> "linked"
+
+runLLVMWriter :: String -> FilePath -> IO FilePath
 runLLVMWriter ast file = do
     result <- execLLVMWriter ast $ llFile file
     case result of
-        Left  e -> print e
-        Right _ -> return ()
+        Left  e -> print e >> exitFailure
+        Right _ -> return file
 
-runLLVMAssembler :: FilePath -> IO ()
-runLLVMAssembler file = runLLVMProg "ASSEMBLER" "llvm-as"
-    [llFile file]
+runLLVMAssembler :: FilePath -> IO FilePath
+runLLVMAssembler file = runLLVMProg (llFile file)
+    "ASSEMBLER" "llvm-as" [llFile file]
 
-runLLVMLinker :: [FilePath]-> FilePath -> IO ()
-runLLVMLinker files out = runLLVMProg "LINKER" "llvm-link" $
-    fmap bcFile files ++ ["-o=" ++ bcFile out]
+runLLVMLinker :: [FilePath]-> FilePath -> IO FilePath
+runLLVMLinker files out = runLLVMProg (bcFile out)
+    "LINKER" "llvm-link" $ fmap bcFile files ++ ["-o=" ++ bcFile out]
 
-runLLVMCompiler :: FilePath -> FilePath -> IO ()
-runLLVMCompiler file out = runLLVMProg "COMPILER" "llvm-gcc"
-    [bcFile file, "-o", outFile out]
+runLLVMCompiler :: FilePath -> FilePath -> IO FilePath
+runLLVMCompiler file out = runLLVMProg (outFile out)
+    "COMPILER" "llvm-gcc" [bcFile file, "-o", outFile out]
 
-runLLVMProg :: String -> String -> [String] -> IO ()
-runLLVMProg phase cmd args = do
+runLLVMProg :: FilePath -> String -> String -> [String] -> IO FilePath
+runLLVMProg result phase cmd args = do
     (c,_,e) <- execLLVMProg cmd args
-    when (c /= ExitSuccess) $ llvmErr phase e
+    if c /= ExitSuccess
+        then llvmErr phase e >> exitFailure
+        else return result
 
 --------------------------------------------------------------------------------
 -- Helper
