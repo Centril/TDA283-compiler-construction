@@ -98,7 +98,7 @@ compileBuildIO = compileIO >?=> build
 build :: LLVMCode -> IOLComp ()
 build c = io $ do
     currDir <- getCurrentDirectory
-    buildExecutable c (currDir ++ "/") "test"
+    buildExecutable c (currDir ++ "/graderTestSuite/good/") "intarith5"
 
 --------------------------------------------------------------------------------
 -- Helpers:
