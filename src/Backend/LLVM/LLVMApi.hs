@@ -32,7 +32,9 @@ module Backend.LLVM.LLVMApi where
 
 import Control.Exception
 import Control.Monad
+
 import System.Exit
+import System.FilePath
 import System.Process
 
 import Backend.LLVM.LLVMAst
@@ -44,15 +46,15 @@ import Backend.LLVM.JRuntime
 
 buildExecutable :: LLVMCode -> FilePath -> String -> IO ()
 buildExecutable code path name = do
-    let runtime = concatPath path "runtime"
-    let main = concatPath path name
-    let out = concatPath path "out"
+    let runtime = path </> "runtime"
+    let main = path </> name
+    let linked = path </> "linked"
     runLLVMWriter code main
     runLLVMWriter runtimeLLVM runtime
     runLLVMAssembler main
     runLLVMAssembler runtime
-    runLLVMLinker [main, runtime] out
-    runLLVMCompiler out (concatPath path "a")
+    runLLVMLinker [main, runtime] linked
+    runLLVMCompiler linked (path </> "a")
     return ()
 
 runLLVMWriter :: String -> FilePath -> IO ()
@@ -93,12 +95,6 @@ llvmErr :: String -> FilePath -> IO()
 llvmErr s ex = die $ unwords ["LLVM", s, "ERROR", ex]
 
 llFile, bcFile, outFile :: FilePath -> String
-llFile = flip addExt ".ll"
-bcFile = flip addExt ".bc"
-outFile = flip addExt ".out"
-
-addExt :: FilePath -> String -> String
-addExt file ext = file ++ ext
-
-concatPath :: FilePath -> String -> FilePath
-concatPath p1 p2 = p1 ++ p2
+llFile = flip addExtension ".ll"
+bcFile = flip addExtension ".bc"
+outFile = flip addExtension ".out"

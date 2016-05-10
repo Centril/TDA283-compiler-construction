@@ -17,7 +17,7 @@
  -}
 module Main where
 
-import System.Directory
+import System.FilePath
 import System.Exit ( exitFailure )
 
 import Utils.Monad
@@ -71,7 +71,7 @@ compileUnitSucc (val, env) logs = do
     errLn "OK"
 
 runCompile :: JlcOptions -> String -> IOLResult ()
-runCompile opts code = runIOComp (compileBuildIO code initialTCEnv)
+runCompile opts code = runIOComp (compileBuildIO opts code initialTCEnv)
                                  opts initialLEnv
 
 preCodeGen :: String -> TCComp ProgramA
@@ -92,13 +92,14 @@ compile = changeST . preCodeGen >?=> compileLLVM
 compileIO :: String -> TCEnv -> IOLComp LLVMCode
 compileIO = rebase .| compile
 
-compileBuildIO :: String -> TCEnv -> IOLComp ()
-compileBuildIO = compileIO >?=> build
+compileBuildIO :: JlcOptions -> String -> TCEnv -> IOLComp ()
+compileBuildIO opts code env = compileIO code env >>= build opts
 
-build :: LLVMCode -> IOLComp ()
-build c = io $ do
-    currDir <- getCurrentDirectory
-    buildExecutable c (currDir ++ "/graderTestSuite/good/") "intarith5"
+-- TODO: use something more sensible than head...
+build :: JlcOptions -> LLVMCode -> IOLComp ()
+build opts code = io $ do
+    let file = head $ _inputFiles opts
+    buildExecutable code (takeDirectory file) (takeBaseName file)
 
 --------------------------------------------------------------------------------
 -- Helpers:
