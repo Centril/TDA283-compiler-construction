@@ -39,6 +39,7 @@ module Backend.LLVM.LLVMGen (
 ) where
 
 import Data.Map ((!))
+import Data.Maybe
 
 import Control.Monad
 
@@ -157,7 +158,7 @@ compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
     let name = _iIdent item
     pushInst $ LAssign (_ident name) $ LAlloca (compileType typ)
-    maybe (return ()) (compileAss name) (item ^? iExpr)
+    compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss name = compileExpr >=> compileStore name
@@ -294,7 +295,9 @@ compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do
     lLhs         <- lastLabel
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
-    compileCondExpr l lRhs lEnd
+    if onLHS == 0
+        then compileCondExpr l lRhs lEnd
+        else compileCondExpr l lEnd lRhs
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
     compileLabel lEnd
     assignTemp boolType $
