@@ -46,7 +46,7 @@ import CliOptions
 main :: IO ()
 main = do
     opts <- compOptions
-    -- TODO: use something more sensible than head...
+    -- TODO: Handle command line options instead of head...
     let file = head $ _inputFiles opts
     code <- readFile file
     compileUnit opts code
@@ -97,7 +97,7 @@ compileIO = rebase .| compile
 compileBuildIO :: JlcOptions -> String -> TCEnv -> IOLComp ()
 compileBuildIO opts code env = compileIO code env >>= build opts
 
--- TODO: use something more sensible than head...
+-- TODO: Handle command line options instead of head...
 build :: JlcOptions -> LLVMCode -> IOLComp ()
 build opts code = io $ void $
     buildMainBC code (takeDirectory file) (takeBaseName file)

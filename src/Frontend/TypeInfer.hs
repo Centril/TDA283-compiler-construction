@@ -46,7 +46,7 @@ import Frontend.Common
 -- Kind inference:
 --------------------------------------------------------------------------------
 
--- @TODO: For now, all types have a concrete kind, change this?
+-- TODO: For now, all types have a concrete kind, change this?
 inferType :: TypeA -> TCComp (TypeA, Kind)
 inferType typ = return $ addKind typ KConcrete
 
@@ -67,7 +67,7 @@ inferExp expr = case expr of
     Not       {} -> inferUnary expr [bool]
     EMul      {} -> ib (mulOp $ _eMOp expr)
     EAdd      {} -> ib [int, doub]
-    ERel      {} -> inferBin (const bool) expr (relOp $ _eROp expr) 
+    ERel      {} -> inferBin (const bool) expr (relOp $ _eROp expr)
     EAnd      {} -> ib [bool]
     EOr       {} -> ib [bool]
     where ib = inferBin id expr

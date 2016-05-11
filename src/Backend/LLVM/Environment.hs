@@ -60,7 +60,6 @@ import Backend.LLVM.LLVMAst
 -- Operating Environment:
 --------------------------------------------------------------------------------
 
--- TODO: Move FnSigMap to Common
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
     _constants  :: LConstGlobals,   -- ^ Accumulated list of constants.
