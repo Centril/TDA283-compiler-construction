@@ -36,6 +36,8 @@ module Frontend.TypeInfer (
 
 import Control.Monad
 
+import Utils.Monad
+
 import Common.AST
 
 import Frontend.Environment
@@ -56,7 +58,7 @@ inferType typ = return $ addKind typ KConcrete
 
 inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
-    EVar _ name  -> addTyp  expr <$> lookupVarE name
+    EVar _ name  -> inferEVar name expr
     EString   {} -> addTyp' expr conststr
     ELitInt   {} -> addTyp' expr int
     ELitDoub  {} -> addTyp' expr doub
@@ -71,6 +73,9 @@ inferExp expr = case expr of
     EAnd      {} -> ib [bool]
     EOr       {} -> ib [bool]
     where ib = inferBin id expr
+
+inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)
+inferEVar name = lookupVarE' name >$> uncurry addTyp
 
 relOp :: RelOpA -> [TypeA]
 relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = [int, doub, bool]

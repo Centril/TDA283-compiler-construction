@@ -40,19 +40,21 @@ module Frontend.Environment (
 
     -- * Operations
     initialTCEnv, functions, contexts, toFunId,
-    lookupVar', lookupFun',
+    lookupVar', lookupFun', currUnused,
     extendVar', extendFun',
 ) where
 
 import Prelude hiding (lookup)
-import Data.Map (Map, empty, lookup, insert)
+
+import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
 
 import Control.Monad()
 import Control.Applicative()
 
-import Control.Lens hiding (Context, contexts)
+import Control.Lens hiding (Context, contexts, uncons)
 
 import Utils.Monad
+import Utils.Foldable
 
 import Common.StateOps as X
 import Common.Computation as X
@@ -64,13 +66,14 @@ import Common.Annotations as X
 --------------------------------------------------------------------------------
 
 -- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident TypeA
+type Context = Map Ident Var
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
 
--- | 'Var': a variable specified by its 'Ident' and 'Type'.
-data Var = Var { vident :: Ident, vtype :: TypeA }
+-- | 'Var': a variable specified by its 'Ident', 'Type', 'VarSource'.
+data Var = Var { vident  :: Ident,     vtype :: TypeA,
+                 vsource :: VarSource, vuses :: Integer }
     deriving (Eq, Show, Read)
 
 --------------------------------------------------------------------------------
@@ -122,10 +125,21 @@ type TCResult a = CompResult TCEnv a
 -- Environment operations:
 --------------------------------------------------------------------------------
 
--- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Type' of
--- the identifier is 'return':ed, otherwise onErr is given the (var = 'Ident').
-lookupVar' :: (Ident -> TCComp TypeA) -> Ident -> TCComp TypeA
-lookupVar' onErr var = uses contexts (ctxFirst var) >>= maybeErr (onErr var)
+-- | 'currUnused': yields all unused variables in most local scope.
+currUnused :: TCComp [Var]
+currUnused = filter ((== 0) . vuses) <$> uses contexts (elems . head)
+
+-- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Var' of
+-- the identifier is 'return':ed, otherwise onErr is given the (name = 'Ident').
+lookupVar' :: (Ident -> TCComp Var) -> Ident -> TCComp Var
+lookupVar' onErr name = contexts %%= mfindU (ctxLookup name) >>=
+                        maybeErr (onErr name)
+
+ctxLookup :: Ident -> Context -> Maybe (Var, Context)
+ctxLookup name ctx = case updateLookupWithKey incUses name ctx of
+    (Just var, ctx') -> Just (var, ctx')
+    (Nothing , _   ) -> Nothing
+    where incUses _ var = Just $ var { vuses = 1 + vuses var }
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
 -- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
@@ -133,11 +147,12 @@ lookupFun' :: (Ident -> TCComp FunSig) -> Ident -> TCComp FunSig
 lookupFun' onErr fun = uses functions (lookup fun) >>= maybeErr (onErr fun)
 
 -- | 'extendVar': Extends the current scope with the given variable with name
--- as 'Ident' and typ as 'Type'. If variable exists, onError is used.
+-- and it's additional information. If variable exists, onError is used.
 extendVar' :: (Ident -> TCComp ()) -> Var -> TCComp ()
-extendVar' onErr (Var name typ) = do
+extendVar' onErr var = do
+    let name = vident var
     (c : ctxs) <- use contexts
-    maybe (contexts .= insert name typ c:ctxs)
+    maybe (contexts .= insert name var c:ctxs)
           (const $ onErr name)
           (lookup name c)
 

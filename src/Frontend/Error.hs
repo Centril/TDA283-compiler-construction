@@ -57,6 +57,10 @@ funAlreadyDef = xAlreadyDef "function"
 argAlreadyDef = xAlreadyDef "parameter"
 varAlreadyDef = xAlreadyDef "variable"
 
+unusedVar :: Var -> TCComp ()
+unusedVar var = warn' TypeChecker
+    ["The", showVS $ vsource var, _ident $ vident var, "was unused."]
+
 wrongRetTyp :: Show b => Type b -> Type b -> TCComp a
 wrongRetTyp texpected tactual =
     terr' ["The current function expected return type:", show texpected,

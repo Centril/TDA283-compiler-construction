@@ -32,20 +32,23 @@ AST Annotations in Javalette compiler.
 module Common.Annotations (
     -- * Types
     ASTAnot(..), AnotKey (..), ASTAnots,
-    Kind(..), WillExecute(..), Literal(..), ML,
+    Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
 
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
     TypeA, ExprA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
-    toWillExecute, showKind, emptyAnot,
+    toWillExecute, showKind, emptyAnot, showVS,
     _LitBool, _LitInt, _LitDouble, _LitString,
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
-    anotCExprLit, anotKind, anotType, anotWillExec,
+    anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
     int, conststr, doub, bool, tvoid, defaultVal,
 
-    (+@), addTyp, addTyp', addKind, addWE, addWE', always, addLit, addLit'
+    (+@),
+    addTyp, addTyp', addKind,
+    addWE, addWE', always, addLit, addLit',
+    addSource
 ) where
 
 import Data.Data
@@ -108,17 +111,32 @@ toWillExecute (Just False) = Never
 toWillExecute Nothing      = Unknown
 
 --------------------------------------------------------------------------------
+-- Variable reference sources:
+--------------------------------------------------------------------------------
+
+-- | 'VarSource': Annotation for a source of an 'EVar'.
+data VarSource = VSArg | VSLocal
+    deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
+
+makePrisms ''VarSource
+
+showVS :: VarSource -> String
+showVS VSArg   = "argument"
+showVS VSLocal = "variable"
+
+--------------------------------------------------------------------------------
 -- Annotations:
 --------------------------------------------------------------------------------
 
-data AnotKey = AKType | AKWillExec | AKCExprLit | AKKind
+data AnotKey = AKType | AKWillExec | AKCExprLit | AKKind | AKVarSource
     deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
 
 -- | 'ASTAnot': The annotations allowed in a Javalette AST.
-data ASTAnot = AType     { _anotType     :: Type (Map AnotKey ASTAnot) } |
-               AWillExec { _anotWillExec :: WillExecute    } |
-               ACExprLit { _anotCExprLit :: ML             } |
-               AKind     { _anotKind     :: Kind           }
+data ASTAnot = AType      { _anotType     :: Type (Map AnotKey ASTAnot) }
+             | AWillExec  { _anotWillExec :: WillExecute }
+             | ACExprLit  { _anotCExprLit :: ML          }
+             | AKind      { _anotKind     :: Kind        }
+             | AVarSource { _anotVS       :: VarSource   }
     deriving (Eq, Show, Read, Data, Typeable)
 
 makePrisms ''ASTAnot
@@ -202,7 +220,7 @@ type RelOpA   = RelOp   ASTAnots
 -- annotation to it. If an annotation of that type already exists, nothing
 -- happens. In other words, from the perspective of this function, the annotated
 -- annotation map is "insert once only".
-(+@) :: Shallowable f => (AnotKey, ASTAnot) -> f ASTAnots-> f ASTAnots
+(+@) :: Shallowable f => (AnotKey, ASTAnot) -> f ASTAnots -> f ASTAnots
 (k, a) +@ n = alter (maybe (Just a) Just) k <@> n
 
 addH :: Shallowable f
@@ -242,3 +260,6 @@ addTyp = addH $ (AKType,) . AType
 addTyp' :: (Applicative m, Shallowable f)
         => f ASTAnots -> TypeA -> m (f ASTAnots, TypeA)
 addTyp' x = pure . addTyp x
+
+addSource :: Shallowable f => f ASTAnots -> VarSource -> f ASTAnots
+addSource x s = (AKVarSource, AVarSource s) +@ x

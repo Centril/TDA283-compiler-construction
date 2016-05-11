@@ -29,11 +29,14 @@ General utility functions on Foldable:s, Lists, Monoids.
 -}
 module Utils.Foldable (
     -- * Operations
-    mfind, maybePred, modifyf, addSuffixes
+    mfind, mfindU, maybePred, modifyf, addSuffixes
 ) where
 
 import Data.Monoid
 import Data.Maybe
+import Data.List
+
+import Control.Arrow
 
 -- 'maybePred': transforms a function into a predicate with the semantics that:
 -- if the function returns 'Just', then there's a match, otheriwse there's not.
@@ -45,6 +48,13 @@ maybePred p = isJust . p
 -- the leftmost element mapped, or 'Nothing' if all elements were rejected.
 mfind :: Foldable t => (a -> Maybe b) -> t a -> Maybe b
 mfind p = getFirst . foldMap (First . p)
+
+-- | 'mfindU': specializes 'mfind' for lists while also allowing an update to
+-- the place the element was considered found. The updated list is yielded
+-- alongside the potenially found transformed element as a pair.
+mfindU :: (a -> Maybe (b, a)) -> [a] -> (Maybe b, [a])
+mfindU tp = maybe (Nothing, []) f . uncons
+    where f (a, as) = maybe (second (a:) $ mfindU tp as) (Just *** (:as)) (tp a)
 
 -- | 'modifyf': modifies the first element of a list.
 modifyf :: (t -> t) -> [t] -> [t]
