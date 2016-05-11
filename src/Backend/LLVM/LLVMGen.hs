@@ -39,7 +39,6 @@ module Backend.LLVM.LLVMGen (
 ) where
 
 import Data.Map ((!))
-import Data.Maybe
 
 import Control.Monad
 
@@ -76,10 +75,10 @@ compileFun (FnDef _ rtyp name args block) = do
     let name' = compileFName name
     let rtyp' = compileFRTyp rtyp
     let args' = compileFArg <$> args
-    insts <- compileFBlock $ returnBlock block rtyp
+    insts <- compileFBlock args $ returnBlock block rtyp
     return $ LFunDef rtyp' name' args' insts
 
-returnBlock :: BlockA -> TypeA ->  BlockA
+returnBlock :: BlockA -> TypeA -> BlockA
 returnBlock b@(Block a st) rtyp = if null st
     then Block a (st ++ [returnStmt rtyp])
     else case last st of
@@ -87,12 +86,11 @@ returnBlock b@(Block a st) rtyp = if null st
         VRet _   -> b
         _        -> Block a (st ++ [returnStmt rtyp])
 
--- TODO: return unreachable for Ret
 returnStmt :: TypeA -> StmtA
 returnStmt rtyp = case void rtyp of
-    Int  _ -> Ret emptyAnot $ defaultVal rtyp
-    Doub _ -> Ret emptyAnot $ defaultVal rtyp
-    Bool _ -> Ret emptyAnot $ defaultVal rtyp
+    Int  _ -> Ret emptyAnot (ELitInt emptyAnot 0)
+    Doub _ -> Ret emptyAnot (ELitDoub emptyAnot 0)
+    Bool _ -> Ret emptyAnot (ELitFalse emptyAnot)
     _      -> VRet emptyAnot
 
 compileFName :: Ident -> LIdent
@@ -104,9 +102,18 @@ compileFRTyp = compileType
 compileFArg :: ArgA -> LArg
 compileFArg arg = LArg (compileType $ _aTyp arg) (_ident $ _aIdent arg)
 
-compileFBlock :: BlockA -> LComp LInsts
-compileFBlock block = compileLabel "entry" >> compileBlock block >>
-                      getInsts <* clearInsts <* resetTemp
+allocArgs :: ArgA -> LComp ()
+allocArgs arg = do
+    let name = _aIdent arg
+    let name' = Ident $ "p" ++ _ident name
+    let typ  = _aTyp   arg
+    pushInst $ LAssign (_ident name') $ LAlloca (compileType typ)
+    compileStore name' (LTValRef (compileType typ) (LRef $ _ident name))
+
+compileFBlock :: [ArgA] -> BlockA -> LComp LInsts
+compileFBlock args block = compileLabel "entry" >>
+                           mapM allocArgs args >> compileBlock block >>
+                           getInsts <* clearInsts <* resetTemp
 
 compileLabel :: LLabelRef -> LComp ()
 compileLabel l = pushInst $ LLabel l
@@ -150,7 +157,7 @@ compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
     let name = _iIdent item
     pushInst $ LAssign (_ident name) $ LAlloca (compileType typ)
-    compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
+    maybe (return ()) (compileAss name) (item ^? iExpr)
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss name = compileExpr >=> compileStore name
@@ -289,15 +296,17 @@ compileLBin l r onLHS prefix = do
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
     compileCondExpr l lRhs lEnd
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
-    lRHS' <- lastLabel
     compileLabel lEnd
     assignTemp boolType $
-        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRHS']
+        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs]
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
     let typ = compileAnotType anots
-    assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ _ident name)
+    let vs = case getVS anots of
+                VSLocal -> ""
+                VSArg   -> "p"
+    assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
 
 compileNot :: ExprA -> LComp LTValRef
 compileNot = compileExpr >=> assignTemp boolType . flip LXor (LVInt 1)
@@ -312,6 +321,9 @@ compileApp anots name es = do
 assignTemp :: LType -> LExpr -> LComp LTValRef
 assignTemp rtyp expr =
     LTValRef rtyp . LRef <$> newTemp <<= pushInst . flip LAssign expr
+
+getVS :: ASTAnots -> VarSource
+getVS anots = let AVarSource vs = anots ! AKVarSource in vs
 
 getType :: ASTAnots -> TypeA
 getType anots = let AType typ = anots ! AKType in typ
