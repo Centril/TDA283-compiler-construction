@@ -293,16 +293,16 @@ compileRelOpF = \case
 
 compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do
-    lLhs         <- lastLabel
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
     if onLHS == 0
         then compileCondExpr l lRhs lEnd
         else compileCondExpr l lEnd lRhs
+    lLhs          <- lastLabel
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
-    lRHS'         <- lastLabel
+    lRhs'         <- lastLabel
     compileLabel lEnd
     assignTemp boolType $
-        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRHS']
+        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
