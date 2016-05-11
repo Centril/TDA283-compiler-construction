@@ -43,8 +43,8 @@ module Common.Annotations (
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec,
-    int, conststr, doub, bool, tvoid,
-    
+    int, conststr, doub, bool, tvoid, defaultVal,
+
     (+@), addTyp, addTyp', addKind, addWE, addWE', always, addLit, addLit'
 ) where
 
@@ -148,6 +148,14 @@ int      = appConcrete Int
 doub     = appConcrete Doub
 bool     = appConcrete Bool
 tvoid    = appConcrete Void
+
+-- TODO: Fix the annotations and move maybe
+defaultVal :: TypeA -> ExprA
+defaultVal typ = case typ of
+    Int  _ -> ELitInt   emptyAnot 0
+    Doub _ -> ELitDoub  emptyAnot 0
+    Bool _ -> ELitFalse emptyAnot
+    x      -> error $ "default value not defined for type " ++ show x
 
 --------------------------------------------------------------------------------
 -- AST Annotations, Aliases:

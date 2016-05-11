@@ -39,6 +39,7 @@ module Backend.LLVM.LLVMGen (
 ) where
 
 import Data.Map ((!))
+import Data.Maybe
 
 import Control.Monad
 
@@ -86,11 +87,12 @@ returnBlock b@(Block a st) rtyp = if null st
         VRet _   -> b
         _        -> Block a (st ++ [returnStmt rtyp])
 
+-- TODO: return unreachable for Ret
 returnStmt :: TypeA -> StmtA
 returnStmt rtyp = case void rtyp of
-    Int  _ -> Ret emptyAnot (ELitInt emptyAnot 0)
-    Doub _ -> Ret emptyAnot (ELitDoub emptyAnot 0)
-    Bool _ -> Ret emptyAnot (ELitFalse emptyAnot)
+    Int  _ -> Ret emptyAnot $ defaultVal rtyp
+    Doub _ -> Ret emptyAnot $ defaultVal rtyp
+    Bool _ -> Ret emptyAnot $ defaultVal rtyp
     _      -> VRet emptyAnot
 
 compileFName :: Ident -> LIdent
@@ -148,7 +150,7 @@ compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
     let name = _iIdent item
     pushInst $ LAssign (_ident name) $ LAlloca (compileType typ)
-    maybe (return ()) (compileAss name) (item ^? iExpr)
+    compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss name = compileExpr >=> compileStore name
