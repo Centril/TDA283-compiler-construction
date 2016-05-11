@@ -47,18 +47,17 @@ data LFunDecl = LFunDecl {
     _lFcRetType :: LType, _lFcIdent :: LIdent, _lFcArgTypes :: LTypes }
     deriving (Eq, Ord, Show, Read)
 
-data LFunDef = LFunDef {
-    _lFdRetType :: LType, _lFdIdent :: LIdent, _lFdArgs :: LArgs,
-    _lFdInsts :: LInsts }
+data LFunDef = LFunDef { _lFdRetType :: LType, _lFdIdent :: LIdent,
+    _lFdArgs :: LArgs, _lFdInsts :: LInsts }
     deriving (Eq, Ord, Show, Read)
 
 data LType
     = LVoid
-    | LInt { _lIBits :: Int }
-    | LFloat { _lFBits :: Int }
-    | LPtr { _lTPtr :: LType }
+    | LInt    { _lIBits :: Int }
+    | LFloat  { _lFBits :: Int }
+    | LPtr    { _lTPtr  :: LType }
     | LFunPtr { _lTFRet :: LType, _lTFArgs :: [LType] }
-    | LArray { _lADim :: Int, _lAType :: LType }
+    | LArray  { _lADim  :: Int,   _lAType  :: LType }
     | LInd
     deriving (Eq, Ord, Show, Read)
 
@@ -73,54 +72,58 @@ data LFCmpOp = LFOeq | LFOgt | LFOge | LFOlt | LFOle | LFOne | LFOrd
     deriving (Eq, Ord, Show, Read, Enum)
 
 data LValRef
-    = LVInt { _lVInt :: Integer }
+    = LVInt   { _lVInt   :: Integer }
     | LVFloat { _lVFloat :: Double }
-    | LRef { _lRIdent :: LIdent }
+    | LRef    { _lRIdent :: LIdent }
     | LNull
     deriving (Eq, Ord, Show, Read)
 
 data LTValRef = LTValRef { _lTType :: LType, _lTVRef :: LValRef }
     deriving (Eq, Ord, Show, Read)
 
-data LFunRef = LFunRef {
-    _lFrIdent :: LIdent, _lFrArgs :: LTValRefs }
+data LFunRef = LFunRef { _lFrIdent :: LIdent, _lFrArgs :: LTValRefs }
     deriving (Eq, Ord, Show, Read)
 
--- TODO: Name the expressions
 data LInst
-    = LLabel { _lLaIdent :: LLabelRef }
-    | LAssign { _lInIdent :: LIdent, _lInExpr :: LExpr }
-    | LIExpr LExpr
-    | LVCall LFunRef
-    | LABr LLabelRef
-    | LCBr LTValRef LLabelRef LLabelRef
+    = LLabel  { _lLabelRef  :: LLabelRef }
+    | LAssign { _lIIdent    :: LIdent,     _lExpr      :: LExpr }
+    | LIExpr  { _lExpr      :: LExpr }
+    | LVCall  { _lIFunRef   :: LFunRef }
+    | LABr    { _lLabelRef  :: LLabelRef }
+    | LCBr    { _lITValRef  :: LTValRef,   _lLLabelRef :: LLabelRef,
+                _lRLabelRef :: LLabelRef }
     | LVRet
-    | LRet LTValRef
-    | LStore LTValRef LTValRef
+    | LRet    { _lITValRef  :: LTValRef }
+    | LStore  { _lILTValRef :: LTValRef,   _lIRTValRef :: LTValRef }
     | LUnreachable
     deriving (Eq, Ord, Show, Read)
 
 data LExpr
-    = LLoad LTValRef
-    | LAlloca LType
-    | LCall LType LFunRef
-    | LBitcast LType LValRef LType
-    | LAdd LTValRef LValRef
-    | LFAdd LTValRef LValRef
-    | LSub LTValRef LValRef
-    | LFSub LTValRef LValRef
-    | LMul LTValRef LValRef
-    | LFMul LTValRef LValRef
-    | LDiv LTValRef LValRef
-    | LFDiv LTValRef LValRef
-    | LSRem LTValRef LValRef
-    | LFRem LTValRef LValRef
-    | LXor LTValRef LValRef
-    | LPhi LType LPhiRefs
-    | LICmp LICmpOp LTValRef LValRef
-    | LFCmp LFCmpOp LTValRef LValRef
-    | LGElemPtr LType LIdent LTIndex [LTIndex]
-    | LPtrToInt LType LValRef LType
+    = LLoad     { _lTValRef :: LTValRef }
+    | LAlloca   { _lType    :: LType }
+    | LCall     { _lType    :: LType,    _lFunRef  :: LFunRef }
+    | LBitcast  { _lLType   :: LType,    _lValRef  :: LValRef,
+                  _lRType   :: LType }
+    | LAdd      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LFAdd     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LSub      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LFSub     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LMul      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LFMul     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LDiv      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LFDiv     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LSRem     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LFRem     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LXor      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
+    | LPhi      { _lType    :: LType,    _lPhiRefs :: LPhiRefs }
+    | LICmp     { _lICmpOp  :: LICmpOp,  _lTValRef :: LTValRef,
+                  _lValRef  :: LValRef }
+    | LFCmp     { _lFCmpOp  :: LFCmpOp,  _lTValRef :: LTValRef,
+                  _lValRef  :: LValRef }
+    | LGElemPtr { _lType    :: LType,    _lIdent   :: LIdent,
+                  _lTIndex  :: LTIndex,  _lTIndexs :: [LTIndex] }
+    | LPtrToInt { _lLType   :: LType,    _lValRef  :: LValRef,
+                  _lRType   :: LType }
     deriving (Eq, Ord, Show, Read)
 
 data LPhiRef = LPhiRef LValRef LLabelRef
