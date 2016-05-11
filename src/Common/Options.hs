@@ -65,7 +65,7 @@ data OptLevel = Optimize0 -- ^ No optimizations for all backends.
     deriving (Eq, Ord, Enum, Show, Read)
 
 -- | 'LRLevel': Logging Reporting Level in increasing levels of verbosity.
-data LRLevel = LRNone | LRError | LRWarn | LRInfo
+data LRLevel = LRError | LRWarn | LRInfo
     deriving (Eq, Ord, Enum, Show, Read)
 
 --------------------------------------------------------------------------------

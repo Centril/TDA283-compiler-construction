@@ -62,6 +62,8 @@ import Control.Monad.Writer
 import Control.Monad.Reader
 import Control.Monad.Morph
 
+import Control.Lens (view)
+
 import Utils.Pointless
 import Utils.Terminal
 
@@ -198,8 +200,13 @@ err :: Phase -> String -> Comp s a
 err = throwError .| ErrMsg
 
 warn, info :: Phase -> String -> Comp s ()
-warn = _log Warn
-info = _log Info
+info p m = _ifll LRInfo $ _log Info p m
+warn p m = do
+    f <- view (compileFlags . warnToError)
+    if f then err p m else _ifll LRWarn $ _log Warn p m
+
+_ifll :: LRLevel -> Comp s () -> Comp s ()
+_ifll min pass = (< min) <$> view logLevel >>= flip unless pass
 
 info', warn', infoln, warnln :: Phase -> [String] -> Comp s ()
 info'  = unword2nd  info
@@ -230,7 +237,7 @@ bracketize x = "[" ++ show x ++ "]"
 -- | 'showLogItem': pretty "prints" a 'LogItem'.
 showLogItem :: LogItem -> String
 showLogItem (LogItem lvl phase msg) =
-    concat [bracketize lvl, bracketize phase, ": ", prettify msg]
+    unwords [bracketize lvl, bracketize phase ++ ":", prettify msg]
 
 -- | 'showLogs': pretty prints an 'InfoLog'.
 showLogs :: InfoLog -> String
