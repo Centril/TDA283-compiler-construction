@@ -287,9 +287,10 @@ compileLBin l r onLHS prefix = do
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
     compileCondExpr l lRhs lEnd
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
+    lRHS' <- lastLabel
     compileLabel lEnd
     assignTemp boolType $
-        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs]
+        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRHS']
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do

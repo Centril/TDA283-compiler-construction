@@ -126,4 +126,4 @@ getLabels :: LComp [LLabelRef]
 getLabels = mapMaybe (^? _LLabel) <$> getInsts
 
 lastLabel :: LComp LLabelRef
-lastLabel = head <$> getLabels
+lastLabel = last <$> getLabels
