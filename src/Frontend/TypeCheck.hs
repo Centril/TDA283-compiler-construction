@@ -89,14 +89,19 @@ collectArgVars :: [ArgA] -> TCComp ()
 collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
 checkBlock :: TypeA -> BlockA -> TCComp BlockA
-checkBlock rtyp = (<* sPopM contexts) . (bStmts %%~ mapM (checkStm rtyp))
+checkBlock rtyp block = (bStmts %%~ mapM (checkStm rtyp) $ block) <*
+                        checkUnused <* sPopM contexts
+
+checkUnused :: TCComp ()
+checkUnused = view (compileFlags . noWarnUnused) >>= 
+              flip unless (currUnused >>= mapM_ unusedVar)
 
 checkStm :: TypeA -> StmtA -> TCComp StmtA
 checkStm typ stmt = case stmt of
     Empty     _ -> return stmt
     BStmt    {} -> sPushM contexts >> (sBlock %%~ checkBlock typ $ stmt)
     Decl     {} -> checkDecls stmt
-    Ass a n e   -> Ass a n <$> checkIdentExp n e
+    Ass      {} -> checkAss stmt
     Incr     {} -> checkInc
     Decr     {} -> checkInc
     SExp     {} -> sExpr %%~ fmap fst . inferExp $ stmt
@@ -109,11 +114,13 @@ checkStm typ stmt = case stmt of
           checkS f = f %%~ checkStm typ
           checkInc = checkIdent [int, doub] stmt
 
+checkAss :: StmtA -> TCComp StmtA
+checkAss ass = do
+    (ass', typ) <- lookupVarE' ( _sIdent ass) ass
+    sExpr %%~ checkExp typ $ ass'
+
 checkVoid :: TypeA -> TCComp ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)
-
-checkIdentExp :: Ident -> ExprA -> TCComp ExprA
-checkIdentExp name expr = lookupVarE name >>= flip checkExp expr
 
 checkDecls :: StmtA -> TCComp StmtA
 checkDecls decl = do
@@ -133,11 +140,12 @@ checkExp texpected expr = fst <$> unless' (inferExp expr) ((texpected ==) . snd)
 checkIdent :: [TypeA] -> StmtA -> TCComp StmtA
 checkIdent types stmt = do
     let name = _sIdent stmt
-    fst . addTyp stmt <$> unless' (lookupVarE name) (`elem` types)
-                                  (wrongIdentTyp name types)
+    (stmt', typ) <- lookupVarE' name stmt
+    fst . addTyp stmt' <$> unless' (return typ) (`elem` types)
+                                   (wrongIdentTyp name types)
 
 argToVar :: ArgA -> Var
-argToVar a = Var (_aIdent a) (_aTyp a)
+argToVar a = Var (_aIdent a) (_aTyp a) VSArg 0
 
 itemToVar :: TypeA -> ItemA -> Var
-itemToVar typ = flip Var typ . _iIdent
+itemToVar typ item = Var (_iIdent item) typ VSLocal 0

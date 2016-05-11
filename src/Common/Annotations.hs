@@ -38,14 +38,17 @@ module Common.Annotations (
     TypeA, ExprA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
-    toWillExecute, showKind, emptyAnot,
+    toWillExecute, showKind, emptyAnot, showVS,
     _LitBool, _LitInt, _LitDouble, _LitString,
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
-    anotCExprLit, anotKind, anotType, anotWillExec,
+    anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
     int, conststr, doub, bool, tvoid,
     
-    (+@), addTyp, addTyp', addKind, addWE, addWE', always, addLit, addLit'
+    (+@),
+    addTyp, addTyp', addKind,
+    addWE, addWE', always, addLit, addLit',
+    addSource
 ) where
 
 import Data.Data
@@ -116,6 +119,10 @@ data VarSource = VSArg | VSLocal
     deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
 
 makePrisms ''VarSource
+
+showVS :: VarSource -> String
+showVS VSArg   = "argument"
+showVS VSLocal = "variable"
 
 --------------------------------------------------------------------------------
 -- Annotations:
@@ -205,7 +212,7 @@ type RelOpA   = RelOp   ASTAnots
 -- annotation to it. If an annotation of that type already exists, nothing
 -- happens. In other words, from the perspective of this function, the annotated
 -- annotation map is "insert once only".
-(+@) :: Shallowable f => (AnotKey, ASTAnot) -> f ASTAnots-> f ASTAnots
+(+@) :: Shallowable f => (AnotKey, ASTAnot) -> f ASTAnots -> f ASTAnots
 (k, a) +@ n = alter (maybe (Just a) Just) k <@> n
 
 addH :: Shallowable f
@@ -245,3 +252,6 @@ addTyp = addH $ (AKType,) . AType
 addTyp' :: (Applicative m, Shallowable f)
         => f ASTAnots -> TypeA -> m (f ASTAnots, TypeA)
 addTyp' x = pure . addTyp x
+
+addSource :: Shallowable f => f ASTAnots -> VarSource -> f ASTAnots
+addSource x s = (AKVarSource, AVarSource s) +@ x

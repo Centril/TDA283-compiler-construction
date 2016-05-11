@@ -40,19 +40,21 @@ module Frontend.Environment (
 
     -- * Operations
     initialTCEnv, functions, contexts, toFunId,
-    lookupVar', lookupFun',
+    lookupVar', lookupFun', currUnused,
     extendVar', extendFun',
 ) where
 
 import Prelude hiding (lookup)
-import Data.Map (Map, empty, lookup, insert)
+
+import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
 
 import Control.Monad()
 import Control.Applicative()
 
-import Control.Lens hiding (Context, contexts)
+import Control.Lens hiding (Context, contexts, uncons)
 
 import Utils.Monad
+import Utils.Foldable
 
 import Common.StateOps as X
 import Common.Computation as X
@@ -123,10 +125,21 @@ type TCResult a = CompResult TCEnv a
 -- Environment operations:
 --------------------------------------------------------------------------------
 
+-- | 'currUnused': yields all unused variables in most local scope.
+currUnused :: TCComp [Var]
+currUnused = filter ((== 0) . vuses) <$> uses contexts (elems . head)
+
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Var' of
 -- the identifier is 'return':ed, otherwise onErr is given the (name = 'Ident').
 lookupVar' :: (Ident -> TCComp Var) -> Ident -> TCComp Var
-lookupVar' onErr name = uses contexts (ctxFirst name) >>= maybeErr (onErr name)
+lookupVar' onErr name = contexts %%= mfindU (ctxLookup name) >>=
+                        maybeErr (onErr name)
+
+ctxLookup :: Ident -> Context -> Maybe (Var, Context)
+ctxLookup name ctx = case updateLookupWithKey incUses name ctx of
+    (Just var, ctx') -> Just (var, ctx')
+    (Nothing , _   ) -> Nothing
+    where incUses _ var = Just $ var { vuses = 1 + vuses var }
 
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
 -- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').

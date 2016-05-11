@@ -29,8 +29,12 @@ Common functions for Frontend of Javalette compiler.
 -}
 module Frontend.Common (
     -- * Operations
-    lookupFunE, lookupVarE
+    lookupFunE, lookupVarE, lookupVarE'
 ) where
+
+import Control.Arrow
+
+import Utils.Shallow
 
 import Frontend.Environment
 import Frontend.Error
@@ -46,3 +50,6 @@ lookupFunE = lookupFun' funNotDef
 
 lookupVarE :: Ident -> TCComp Var
 lookupVarE = lookupVar' varNotDef
+
+lookupVarE' :: Overable f => Ident -> f ASTAnots -> TCComp (f ASTAnots, TypeA)
+lookupVarE' name node = (addSource node . vsource &&& vtype) <$> lookupVarE name
