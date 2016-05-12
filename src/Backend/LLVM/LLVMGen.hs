@@ -335,15 +335,12 @@ getType anots = let AType typ = anots ! AKType in typ
 compileAnotType :: ASTAnots -> LType
 compileAnotType = compileType . getType
 
--- TODO: Use assignTemp
 compileCString :: String -> LComp LTValRef
 compileCString v = do
-    temp <- newTemp
     ref  <- newConstRef "cstring"
     let typ   = LArray (1 + length v) charType
     pushConst $ LConstGlobal ref typ v
-    pushInst  $ LAssign temp (strPointer (LPtr typ) ref)
-    return    $ LTValRef strType $ LRef temp
+    assignTemp strType $ strPointer (LPtr typ) ref
 
 compileType :: TypeA -> LType
 compileType = \case
