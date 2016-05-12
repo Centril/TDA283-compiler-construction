@@ -76,6 +76,7 @@ allOpts :: Parser JlcOptions
 allOpts =  JlcOptions
        <$> optInputs
        <*> optOutput
+       <*> optOutFT
        <*> optCompilerFlags
        <*> optTCOnly
        <*> optLRLevel
@@ -110,6 +111,22 @@ optOutput = optional $ strOption $
     <> showDefaultWith (const "the default")
     <> metavar "FILE"
     <> help "FILE path to executable to produce"
+
+parseOFT :: String -> ReadM OutFType
+parseOFT pstr = case toLower <$> pstr of
+    "exec" -> return OFTExec
+    "asm"  -> return OFTAsm
+    "bc"   -> return OFTBitcode
+    x      -> readerError $ unwords ["Unrecognized output file type:", x ++ ",",
+                                     "should be one of: exec | asm | bc"]
+
+optOutFT :: Parser OutFType
+optOutFT = option (str >>= parseOFT) $
+       long "outtype"
+    <> value OFTExec
+    <> metavar "exec | asm | bc"
+    <> showDefaultWith (const "exec")
+    <> help "exec for executable, asm for native assembly, bc for llvm bitcode."
 
 optInputs :: Parser [FilePath]
 optInputs = some $ strArgument $

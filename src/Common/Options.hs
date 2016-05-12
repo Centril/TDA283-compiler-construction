@@ -41,6 +41,7 @@ import Control.Lens
 data JlcOptions = JlcOptions {
       _inputFiles    :: [FilePath]     -- ^ .jl files to compile
     , _outputFile    :: Maybe FilePath -- ^ path to executable to produce
+    , _outFileType   :: OutFType       -- ^ type of output file
     , _compileFlags  :: CompilerFlags  -- ^ compiler flags
     , _typecheckOnly :: Bool           -- ^ only perform typechecking?
     , _logLevel      :: LRLevel        -- ^ Log reporting level
@@ -54,6 +55,10 @@ data CompilerFlags = CompilerFlags {
       _warnToError  :: Bool          -- ^ convert all warnings to errors?
     , _noWarnUnused :: Bool          -- ^ warn about unused params/variables?
     } deriving (Eq, Ord, Show, Read)
+
+-- | 'OutFType': available output file types of compiler.
+data OutFType = OFTExec | OFTAsm | OFTBitcode
+    deriving (Eq, Ord, Enum, Show, Read)
 
 -- | 'OptLevel': Optimization levels, semantics depends on backend.
 data OptLevel = Optimize0 -- ^ No optimizations for all backends.
@@ -78,3 +83,4 @@ makeLenses ''CompilerFlags
 
 makePrisms ''OptLevel
 makePrisms ''LRLevel
+makePrisms ''OutFType
