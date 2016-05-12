@@ -42,6 +42,7 @@ data JlcOptions = JlcOptions {
       _inputFiles    :: [FilePath]     -- ^ .jl files to compile
     , _outputFile    :: Maybe FilePath -- ^ path to executable to produce
     , _compileFlags  :: CompilerFlags  -- ^ compiler flags
+    , _typecheckOnly :: Bool           -- ^ only perform typechecking?
     , _logLevel      :: LRLevel        -- ^ Log reporting level
     , _optLevel      :: OptLevel       -- ^ optimization levels
     , _llInputFiles  :: [FilePath]     -- ^ .ll files to assemble (extra)

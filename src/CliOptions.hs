@@ -77,6 +77,7 @@ allOpts =  JlcOptions
        <$> optInputs
        <*> optOutput
        <*> optCompilerFlags
+       <*> optTCOnly
        <*> optLRLevel
        <*> optOptLevel
        <*> optLLInputs
@@ -114,6 +115,12 @@ optInputs :: Parser [FilePath]
 optInputs = some $ strArgument $
        metavar "FILES..."
     <> help "FILE paths to javalette input files"
+
+optTCOnly :: Parser Bool
+optTCOnly = switch $
+       long "typecheck"
+    <> short 't'
+    <> help "Only perform typechecking."
 
 onlyLLVM :: String -> Mod f a
 onlyLLVM x = helpDoc $ Just $ text x </> text
