@@ -64,7 +64,6 @@ import Control.Monad.Morph
 
 import Control.Lens (view)
 
-import Utils.Monad
 import Utils.Pointless
 import Utils.Terminal
 
@@ -229,7 +228,7 @@ unlines2nd f a b = f a $ unlines b
 
 phaseEnd :: (Show s, Show a) => Phase -> a -> Comp s a
 phaseEnd p x = do
-    get <<= infoP p "Final environment value:"
+    get >>= infoP p "Final environment value:"
     infoP p "Final computed value:" x >> return x
 
 --------------------------------------------------------------------------------
