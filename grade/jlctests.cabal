@@ -21,7 +21,6 @@ executable Grade
     , process   >=1.2 && <1.3
     , directory >=1.2 && <1.3
     , filepath  >=1.4 && <1.5
-    , unix      >=2.7 && <2.8
     , temporary >=1.2 && <3
   default-language:
     Haskell2010

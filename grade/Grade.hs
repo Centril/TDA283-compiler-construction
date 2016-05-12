@@ -11,7 +11,6 @@ import System.Exit
 import System.IO
 import System.Process
 import System.FilePath
-import System.Posix.Files
 import Control.Exception
 import Control.Monad
 import System.Console.GetOpt

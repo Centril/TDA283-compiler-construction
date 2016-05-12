@@ -12,6 +12,7 @@ import System.Exit
 import System.IO
 import System.FilePath
 import System.IO.Temp (withTempFile)
+import System.Info (os)
 import Data.Char
 import RunCommand
 
@@ -247,6 +248,16 @@ linkLLVM libPath bcFile = do
     -- bitcode file containing the runtime
     runtimeBitcode = "runtime.bc"
 
+isWindows :: Bool
+isWindows = os == "mingw32"
+
+linkLLVMWin :: FilePath -> FilePath -> IO ()
+linkLLVMWin libPath bcFile = withTempFile "." "a.s" $ \file h -> void $ do
+      hClose h
+      system $ unwords ["llvm-link", bcFile, libPath </> "runtime.bc", "-o", "a.bc"]
+
+runLLVMWin  = return ("a.bc",  linkLLVMWin, "lli a.bc")
+runLLVMUnix = return ("a.out", linkLLVM,    "./a.out" )
 
 runLLVM ::  String -- libpath
          -> String -- ^ LLVM bitcode file
@@ -259,9 +270,10 @@ runLLVM libPath bcFile src inp outp = do
   let dir  = takeDirectory bcFile
   d0  <- System.Directory.getCurrentDirectory
   setCurrentDirectory dir
-  killFile ("a.out")
-  linkLLVM libPath bcFile
-  result <- runProg "./a.out" src inp outp
+  (kf, linker, prog) <- if isWindows then runLLVMWin else runLLVMUnix
+  killFile kf
+  linker libPath bcFile
+  result <- runProg prog src inp outp
   setCurrentDirectory d0
   return result
 
