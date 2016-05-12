@@ -38,6 +38,9 @@ module Backend.LLVM.LLVMGen (
     compileLLVM
 ) where
 
+import Safe
+
+import Data.Tuple
 import Data.Map ((!))
 import Data.Maybe
 
@@ -56,12 +59,9 @@ import Backend.LLVM.Print
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 
--- TODO: Refactor
 compileLLVMAst :: ProgramA -> LComp LLVMAst
 compileLLVMAst = mapM compileFun . _pTopDefs >=>
-    \fns -> do
-        consts <- getConsts
-        return $ LLVMAst consts predefDecls fns
+    liftM3 LLVMAst getConsts (return predefDecls) . return
 
 predefDecls :: LFunDecls
 predefDecls =
@@ -76,23 +76,13 @@ compileFun (FnDef _ rtyp name args block) = do
     let name' = compileFName name
     let rtyp' = compileFRTyp rtyp
     let args' = compileFArg <$> args
-    insts <- compileFBlock args $ returnBlock block rtyp
-    return $ LFunDef rtyp' name' args' insts
+    insts <- compileFBlock args block
+    let insts' = insts ++ unreachableMay block
+    return $ LFunDef rtyp' name' args' insts'
 
-returnBlock :: BlockA -> TypeA -> BlockA
-returnBlock b@(Block a st) rtyp = if null st
-    then Block a (st ++ [returnStmt rtyp])
-    else case last st of
-        Ret  _ _ -> b
-        VRet _   -> b
-        _        -> Block a (st ++ [returnStmt rtyp])
-
-returnStmt :: TypeA -> StmtA
-returnStmt rtyp = case void rtyp of
-    Int  _ -> Ret emptyAnot (ELitInt emptyAnot 0)
-    Doub _ -> Ret emptyAnot (ELitDoub emptyAnot 0)
-    Bool _ -> Ret emptyAnot (ELitFalse emptyAnot)
-    _      -> VRet emptyAnot
+unreachableMay :: BlockA -> LInsts
+unreachableMay block = maybe [LUnreachable] (const []) $
+                             lastMay (_bStmts block) >>= (^? _Ret)
 
 compileFName :: Ident -> LIdent
 compileFName = _ident
@@ -106,9 +96,8 @@ compileFArg arg = LArg (compileType $ _aTyp arg) (_ident $ _aIdent arg)
 allocArgs :: ArgA -> LComp ()
 allocArgs arg = do
     let name = _aIdent arg
-    let name' = Ident $ "p" ++ _ident name
-    let typ  = _aTyp   arg
-    pushInst $ LAssign (_ident name') $ LAlloca (compileType typ)
+    let (name', typ) = (Ident $ "p" ++ _ident name, _aTyp arg)
+    compileAlloca name' typ
     compileStore name' (LTValRef (compileType typ) (LRef $ _ident name))
 
 compileFBlock :: [ArgA] -> BlockA -> LComp LInsts
@@ -146,9 +135,8 @@ compileStmt = \case
 compileInDeCr :: ASTAnots -> Ident -> AddOpA -> LComp ()
 compileInDeCr anots name op = do
     x@(LTValRef t _) <- compileEVar anots name
-    temp <- assignTemp t $ switchAdd op t x
-        (switchType (LVInt 1) (LVFloat 1) t)
-    compileStore name temp
+    assignTemp t (switchAdd op t x $ switchType (LVInt 1) (LVFloat 1) t)
+        >>= compileStore name
 
 compileStore :: Ident -> LTValRef -> LComp ()
 compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
@@ -157,14 +145,18 @@ compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
 compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
     let name = _iIdent item
-    pushInst $ LAssign (_ident name) $ LAlloca (compileType typ)
+    compileAlloca name typ
     compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
+compileAlloca :: Ident -> TypeA -> LComp ()
+compileAlloca name typ = pushInst $ LAssign (_ident name)
+                                  $ LAlloca (compileType typ)
+
 compileAss :: Ident -> ExprA -> LComp ()
-compileAss name = compileExpr >=> compileStore name
+compileAss = compileExpr >=?> compileStore
 
 compileRet :: ExprA -> LComp ()
-compileRet e = LRet <$> compileExpr e >>= pushInst
+compileRet = compileExpr >$> LRet >=> pushInst
 
 compileCond :: ExprA -> StmtA -> LComp ()
 compileCond c si = do
@@ -190,9 +182,8 @@ compileWhile c sw = do
     compileLabel             _cont
 
 compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
-compileCondExpr c _then _else = do
-    c' <- compileExpr c
-    pushInst $ LCBr c' _then _else
+compileCondExpr c _then _else = LCBr <$> compileExpr c >>=
+                                \f -> pushInst $ f _then _else
 
 compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
 compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
@@ -208,9 +199,9 @@ compileExpr = \case
     EApp      a i es  -> compileApp a i es
     Neg       _ e     -> compileNeg e
     Not       _ e     -> compileNot e
-    EMul      _ l o r -> compileMul o l r
-    EAdd      _ l o r -> compileAdd o l r
-    ERel      _ l o r -> compileLRel l r o
+    EMul      _ l o r -> compileMul  o l r
+    EAdd      _ l o r -> compileAdd  o l r
+    ERel      _ l o r -> compileLRel o l r
     EAnd      _ l   r -> compileLBin l r 0 "land"
     EOr       _ l   r -> compileLBin l r 1 "lor"
 
@@ -227,21 +218,23 @@ compileNeg e = do
                                  (LFSub, flip LTValRef $ LVFloat 0) t
     assignTemp t $ ctor (tvr t) e'
 
-compileBArith :: (LType -> LTValRef -> LValRef -> LExpr) -> ExprA -> ExprA
+compileBArith :: (LType -> LType)
+              -> (LType -> LTValRef -> LValRef -> LExpr) -> ExprA -> ExprA
               -> LComp LTValRef
-compileBArith gf l r = do
+compileBArith th gf l r = do
     l'            <- compileExpr l
     LTValRef t r' <- compileExpr r
-    assignTemp t $ gf t l' r'
+    assignTemp (th t) $ gf t l' r'
 
 compileAdd :: AddOpA -> ExprA -> ExprA -> LComp LTValRef
-compileAdd = compileBArith . switchAdd
+compileAdd = compileBArith id . switchAdd
 
 switchAdd :: AddOpA -> LType -> LTValRef -> LValRef -> LExpr
 switchAdd op = switchType (compileIAddOp op) (compileFAddOp op)
 
 compileMul :: MulOpA -> ExprA -> ExprA -> LComp LTValRef
-compileMul op = compileBArith $ switchType (compileIMulOp op) (compileFMulOp op)
+compileMul op = compileBArith id $
+                switchType (compileIMulOp op) (compileFMulOp op)
 
 compileIAddOp :: AddOpA -> LTValRef -> LValRef -> LExpr
 compileIAddOp = \case
@@ -266,12 +259,9 @@ compileFMulOp = \case
     Div   _ -> LFDiv
     Mod   _ -> LFRem -- will never happen, but added for completeness.
 
-compileLRel :: ExprA -> ExprA -> RelOpA -> LComp LTValRef
-compileLRel l r op = do
-    l'            <- compileExpr l
-    LTValRef t r' <- compileExpr r
-    assignTemp boolType $
-        switchType (LICmp . compileRelOpI) (LFCmp . compileRelOpF) t op l' r'
+compileLRel :: RelOpA -> ExprA -> ExprA -> LComp LTValRef
+compileLRel = compileBArith (const boolType) .
+    flip (switchType (LICmp . compileRelOpI) (LFCmp . compileRelOpF))
 
 compileRelOpI :: RelOpA -> LICmpOp
 compileRelOpI = \case
@@ -294,9 +284,7 @@ compileRelOpF = \case
 compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
-    if onLHS == 0
-        then compileCondExpr l lRhs lEnd
-        else compileCondExpr l lEnd lRhs
+    uncurry (compileCondExpr l) $ (if onLHS == 0 then id else swap) (lRhs, lEnd)
     lLhs          <- lastLabel
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
     lRhs'         <- lastLabel
@@ -307,9 +295,7 @@ compileLBin l r onLHS prefix = do
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
     let typ = compileAnotType anots
-    let vs = case getVS anots of
-                VSLocal -> ""
-                VSArg   -> "p"
+    let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
     assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
 
 compileNot :: ExprA -> LComp LTValRef

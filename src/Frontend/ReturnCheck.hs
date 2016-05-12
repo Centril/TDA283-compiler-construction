@@ -34,6 +34,8 @@ module Frontend.ReturnCheck (
     returnCheck
 ) where
 
+import Safe
+
 import Data.Monoid
 
 import Control.Arrow
@@ -55,8 +57,12 @@ returnCheck = pTopDefs %%~ mapM checkFunRet
 
 checkFunRet :: TopDefA -> TCComp TopDefA
 checkFunRet fun
-    | _fRetTyp fun == tvoid = return fun
+    | _fRetTyp fun == tvoid = checkFunVoid fun
     | otherwise             = fBlock %%~ checkBlockTop (_fIdent fun) $ fun
+
+checkFunVoid :: TopDefA -> TCComp TopDefA
+checkFunVoid = fBlock . bStmts %%~ \stmts -> return $ stmts ++
+    maybe [always $ VRet emptyAnot] (const []) (lastMay stmts >>= (^? _VRet))
 
 checkBlockTop :: Ident -> BlockA -> TCComp BlockA
 checkBlockTop fid block = fst <$> unless' (checkBlock fid block) snd
