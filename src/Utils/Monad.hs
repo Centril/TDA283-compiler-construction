@@ -43,12 +43,12 @@ import Control.Monad
 -- | '<$<': Left-to-right "Kleisli" composition of 'Functor's.
 (>$>) :: Functor f => (a -> f b) -> (b -> c) -> a -> f c
 (>$>) = flip (<$<)
-infixr 1 >$>
+infixr 3 >$>
 
 -- | '<$<': Right-to-left "Kleisli" composition of 'Functor's.
 (<$<) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
 (<$<) = (.) . (<$>)
-infixr 1 <$<
+infixr 3 <$<
 
 -- | '>?=>': Same as '>=>', i.e: Left-to-right Kleisli composition of monads.
 -- BUT: first it applies something to the left hand side.
