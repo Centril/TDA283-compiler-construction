@@ -19,6 +19,8 @@ module Main where
 
 import Control.Monad
 
+import Control.Lens
+
 import System.FilePath
 import System.Exit ( exitFailure )
 
@@ -46,47 +48,28 @@ import CliOptions
 main :: IO ()
 main = do
     opts <- compOptions
-    -- TODO: Handle command line options instead of head...
-    let file = head $ _inputFiles opts
-    code <- readFile file
-    compileUnit opts code
+    if _typecheckOnly opts
+    then typecheckTarget opts >>= compileCheck
+    else compileUnit opts
 
 --------------------------------------------------------------------------------
 -- Compilation of units:
 --------------------------------------------------------------------------------
 
-compileUnit :: JlcOptions -> String -> IO ()
-compileUnit = runCompile >?=> uncurry (either compileUnitFail compileUnitSucc)
+compileUnit :: JlcOptions -> IO ()
+compileUnit = runCompile >=> compileCheck
 
-compileUnitFail :: ErrMsg -> InfoLog -> IO ()
-compileUnitFail eMsg logs = do
-    errLn $ phaseErr $ errPhase eMsg
-    printError eMsg >> printLogs logs
-    exitFailure
-
-compileUnitSucc :: ((), LEnv) -> InfoLog -> IO ()
-compileUnitSucc (val, env) logs = do
-    putStrLn "COMPILATION SUCCESS!"
-    putStrLn "Accumulated logs:"        >> printLogs logs
-    putStrLn "Final computed value:"    >> poutput val
-    putStrLn "Final environment value:" >> poutput env
-    errLn "OK"
-
-runCompile :: JlcOptions -> String -> IOLResult ()
-runCompile opts code = runIOComp (compileBuildIO opts code initialTCEnv)
-                                 opts initialLEnv
+runCompile :: JlcOptions -> IOLResult ()
+runCompile opts = runIOComp (compileBuildIO initialTCEnv) opts initialLEnv
 
 preCodeGen :: String -> TCComp ProgramA
 preCodeGen code = do
-    ast1 <- parseProgram code
-    infoP Parser "AST after parse" ast1
-    ast2 <- typeCheck ast1
-    infoP TypeChecker "AST after type check" ast2
-    let ast3 = alphaRename ast2
-    infoP AlphaRenamer "AST after alpha rename" ast3
-    let ast4 = preOptimize ast3
-    infoP PreOptimizer "AST after pre optimizing" ast4
-    return ast4
+    ast1 <- compileTC code
+    let ast2 = alphaRename ast1
+    infoP AlphaRenamer "AST after alpha rename" ast2
+    let ast3 = preOptimize ast2
+    infoP PreOptimizer "AST after pre optimizing" ast3
+    return ast3
 
 compile :: String -> TCEnv -> LComp LLVMCode
 compile = changeST . preCodeGen >?=> compileLLVM
@@ -94,18 +77,50 @@ compile = changeST . preCodeGen >?=> compileLLVM
 compileIO :: String -> TCEnv -> IOLComp LLVMCode
 compileIO = rebase .| compile
 
-compileBuildIO :: JlcOptions -> String -> TCEnv -> IOLComp ()
-compileBuildIO opts code env = compileIO code env >>= build opts
+compileBuildIO :: TCEnv -> IOLComp ()
+compileBuildIO env = do
+    code <- head <$> inputSources
+    compileIO code env >>= build
 
 -- TODO: Handle command line options instead of head...
-build :: JlcOptions -> LLVMCode -> IOLComp ()
-build opts code = io $ void $
-    buildMainBC code (takeDirectory file) (takeBaseName file)
-    where file = head $ _inputFiles opts
+build :: LLVMCode -> IOLComp ()
+build code = do
+    file <- head <$> view inputFiles
+    io $ void $ buildMainBC code (takeDirectory file) (takeBaseName file)
+
+--------------------------------------------------------------------------------
+-- Typecheck target:
+--------------------------------------------------------------------------------
+
+typecheckTarget :: JlcOptions -> IOCompResult TCEnv ()
+typecheckTarget = flip (runIOComp compileTCIO) initialTCEnv
+
+compileTCIO :: IOComp TCEnv ()
+compileTCIO = inputSources >>= mapM_ (rebase . compileTC)
+
+compileTC :: String -> TCComp ProgramA
+compileTC code = do
+    ast1 <- parseProgram code <<= infoP Parser      "AST after parse"
+    typeCheck ast1            <<= phaseEnd TypeChecker
 
 --------------------------------------------------------------------------------
 -- Helpers:
 --------------------------------------------------------------------------------
+
+inputSources :: IOComp s [String]
+inputSources = view inputFiles >>= mapM (io . readFile)
+
+compileCheck :: (Show r, Show e) => CompResult e r -> IO ()
+compileCheck = uncurry $ either compileUnitFail compileUnitSucc
+
+compileUnitFail :: ErrMsg -> InfoLog -> IO ()
+compileUnitFail eMsg logs = do
+    errLn $ phaseErr $ errPhase eMsg
+    printError eMsg >> printLogs logs
+    exitFailure
+
+compileUnitSucc :: (a, b) -> InfoLog -> IO ()
+compileUnitSucc (_, _) logs = printLogs logs >> errLn "OK"
 
 phaseErr :: Phase -> String
 phaseErr Parser        = "SYNTAX ERROR"

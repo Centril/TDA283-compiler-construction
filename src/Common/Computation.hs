@@ -49,7 +49,7 @@ module Common.Computation (
 
     -- ** Logging and Error operations
     warn, warn', warnln, info, info', infoln, infoP, err, err', errln,
-    showLogItem, showLogs, printLogs, showError, printError
+    showLogItem, showLogs, printLogs, showError, printError, phaseEnd
 ) where
 
 import Control.Arrow
@@ -64,6 +64,7 @@ import Control.Monad.Morph
 
 import Control.Lens (view)
 
+import Utils.Monad
 import Utils.Pointless
 import Utils.Terminal
 
@@ -225,6 +226,11 @@ _log l p m = tell [LogItem l p m]
 unword2nd, unlines2nd :: (a -> String -> b) -> a -> [String] -> b
 unword2nd  f a b = f a $ unwords b
 unlines2nd f a b = f a $ unlines b
+
+phaseEnd :: (Show s, Show a) => Phase -> a -> Comp s a
+phaseEnd p x = do
+    get <<= infoP p "Final environment value:"
+    infoP p "Final computed value:" x >> return x
 
 --------------------------------------------------------------------------------
 -- Log outputting:
