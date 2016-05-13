@@ -27,7 +27,7 @@ Portability : ALL
 
 Options and configurations in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, LambdaCase #-}
 
 module Common.Options where
 
@@ -119,12 +119,15 @@ classifyInputs opts = fromList $ second nub <$>
 -- | 'determineOutput': from options to the end product to write to as a
 -- filepath. This assumes that an end product will be produced.
 determineOutput :: JlcOptions -> FilePath
-determineOutput opts = fromMaybe ifhead $ _outputFile opts
-    where (ifhead, oft) = (-<.> re) . head . _inputFiles &&& _outFileType $ opts
-          re = case oft of
-               OFTExec    -> if isWindows then "exe" else "out"
-               OFTAsm     -> "s"
-               OFTBitcode -> "bc"
+determineOutput opts = fromMaybe ifhead out
+    where (ifhead, (out, oft)) = (-<.> oftToExt oft) . head . _inputFiles
+                                 &&& _outputFile &&& _outFileType $ opts
+
+-- 'oftToExt': get the extension for the output file type.
+oftToExt :: OutFType -> String
+oftToExt = \case OFTExec    -> if isWindows then "exe" else "out"
+                 OFTAsm     -> "s"
+                 OFTBitcode -> "bc"
 
 -- | 'withExt': given an extension, splits list of filepaths into one with the
 -- given extension and one without.
