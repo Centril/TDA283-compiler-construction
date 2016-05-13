@@ -31,7 +31,16 @@ Options and configurations in Javalette compiler.
 
 module Common.Options where
 
-import Control.Lens
+import Data.List (partition, nub)
+import Data.Map (Map, fromList)
+import Data.Maybe
+
+import Control.Arrow
+
+import Control.Lens hiding ((<.>))
+
+import System.Info
+import System.FilePath
 
 --------------------------------------------------------------------------------
 -- Data Types:
@@ -56,10 +65,6 @@ data CompilerFlags = CompilerFlags {
     , _noWarnUnused :: Bool          -- ^ warn about unused params/variables?
     } deriving (Eq, Ord, Show, Read)
 
--- | 'OutFType': available output file types of compiler.
-data OutFType = OFTExec | OFTAsm | OFTBitcode
-    deriving (Eq, Ord, Enum, Show, Read)
-
 -- | 'OptLevel': Optimization levels, semantics depends on backend.
 data OptLevel = Optimize0 -- ^ No optimizations for all backends.
               | Optimize1 -- ^ -O1 for LLVM
@@ -74,6 +79,17 @@ data OptLevel = Optimize0 -- ^ No optimizations for all backends.
 data LRLevel = LRError | LRWarn | LRInfo
     deriving (Eq, Ord, Enum, Show, Read)
 
+-- | 'OutFType': available output file types of compiler.
+data OutFType = OFTExec | OFTAsm | OFTBitcode
+    deriving (Eq, Ord, Enum, Show, Read)
+
+-- | 'InputFType': classifications of input file types.
+data InputFType = IFJavalette | IFLlvm | IFLlvmBc
+    deriving (Eq, Ord, Enum, Show, Read)
+
+-- | 'IFMap': classified lists of filepaths.
+type IFMap = Map InputFType [FilePath]
+
 --------------------------------------------------------------------------------
 -- Lenses and Prisms:
 --------------------------------------------------------------------------------
@@ -84,3 +100,42 @@ makeLenses ''CompilerFlags
 makePrisms ''OptLevel
 makePrisms ''LRLevel
 makePrisms ''OutFType
+makePrisms ''InputFType
+
+--------------------------------------------------------------------------------
+-- Operations:
+--------------------------------------------------------------------------------
+
+-- | 'classifyInputs': from options to classified lists of filepaths.
+classifyInputs :: JlcOptions -> IFMap
+classifyInputs opts = fromList $ second nub <$>
+    [(IFJavalette, jls         ),
+     (IFLlvm,      lls1 ++ lls2),
+     (IFLlvmBc,    bcs         )]
+    where (lls1, (lls2, (bcs, jls))) =
+            _llInputFiles &&&
+            second (withExt "bc") . withExt "ll" . _inputFiles $ opts
+
+-- | 'determineOutput': from options to the end product to write to as a
+-- filepath. This assumes that an end product will be produced.
+determineOutput :: JlcOptions -> FilePath
+determineOutput opts = fromMaybe ifhead $ _outputFile opts
+    where (ifhead, oft) = (-<.> re) . head . _inputFiles &&& _outFileType $ opts
+          re = case oft of
+               OFTExec    -> if isWindows then "exe" else "out"
+               OFTAsm     -> "s"
+               OFTBitcode -> "bc"
+
+-- | 'withExt': given an extension, splits list of filepaths into one with the
+-- given extension and one without.
+withExt :: String -> [FilePath] -> ([FilePath], [FilePath])
+withExt = partition . hasExt
+
+-- | 'hasExt': checks if the given extension is part of a filepath.
+-- The extension is specified without the point at the start.
+hasExt :: String -> FilePath -> Bool
+hasExt ext fp = '.' : ext == takeExtension fp
+
+-- | 'isWindows': are we on a Windows machine?
+isWindows :: Bool
+isWindows = os == "mingw32"

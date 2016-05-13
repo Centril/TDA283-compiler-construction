@@ -27,14 +27,13 @@ Portability : ALL
 
 CLI (Command Line Interface) options parser in Javalette compiler.
 -}
-module CliOptions where
+module CliOptions (
+    -- * Operations
+    compOptions
+) where
 
 import Data.Char
 import Data.Foldable
-import Data.Maybe
-
-import System.FilePath hiding ((</>))
-import System.Info
 
 import Options.Applicative
 import Text.PrettyPrint.ANSI.Leijen hiding ((<>), (<$>))
@@ -46,27 +45,7 @@ import Common.Options
 --------------------------------------------------------------------------------
 
 compOptions :: IO JlcOptions
-compOptions = correctifyOutput <$> execParser cliParser
-
---------------------------------------------------------------------------------
--- Post parsing:
---------------------------------------------------------------------------------
-
-correctifyOutput :: JlcOptions -> JlcOptions
-correctifyOutput opts = opts { _outputFile = nof }
-    where nof = Just $ fixExecExt $ fromMaybe dof $ _outputFile opts
-          dof = removeExt "jl" $ head $ _inputFiles opts
-
-fixExecExt :: String -> String
-fixExecExt out | isWindows = removeExt "exe" out <.> "exe"
-               | otherwise = out
-
-removeExt :: String -> FilePath -> FilePath
-removeExt cmp fp = let (base, ext) = splitExtension fp
-                   in if ext == '.' : cmp then base else fp
-
-isWindows :: Bool
-isWindows = os == "mingw32"
+compOptions = execParser cliParser
 
 --------------------------------------------------------------------------------
 -- Constructing the parser:
@@ -181,12 +160,12 @@ optQuiet :: Parser LRLevel
 optQuiet = optLR LRError $
        long "quiet"
     <> short 'q'
-    <> help "Supress all messages except for errors."
+    <> help "Suppress all messages except for errors."
 
 optWarn :: Parser LRLevel
 optWarn = optLR LRWarn $
        long "warn"
-    <> help "Supress all messages except for errors and warnings (default)."
+    <> help "Suppress all messages except for errors and warnings (default)."
 
 optInfo :: Parser LRLevel
 optInfo = optLR LRInfo $
