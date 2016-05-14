@@ -6,6 +6,9 @@ submita: submit
 submitb: submit
 	tar -zcf submission/partB-1.tar.gz doc lib src README.md LICENSE.md
 
+submitc: submit
+	tar -zcf submission/partC-1.tar.gz doc lib src README.md LICENSE.md
+
 submit: doc clean
 	mkdir -p lib
 	mkdir -p submission
@@ -15,6 +18,9 @@ testa: test
 
 testb: test
 	cd grade && ./Grade -b LLVM . ../submission
+
+testc: test
+	cd grade && ./Grade -b LLVM -x arrays1 -x arrays2 . ../submission
 
 test:
 	mkdir -p submission

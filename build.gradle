@@ -104,9 +104,11 @@ project(':grade') { p ->
         dependsOn build, ':src:build'
         description "Runs grader program for jlc."
         if ( isWin() )
-            commandLine file("Grade.exe"), "-s", "jlc.exe", "-b", "LLVM", ".", "../submission"
+            commandLine file("Grade.exe"), "-s", "jlc.exe", "-b", "LLVM",
+                "-x", "arrays1", "-x", "arrays2", ".", "../submission"
         else
-            commandLine "./Grade", "-b", "LLVM", ".", "../submission"
+            commandLine "./Grade", "-b", "LLVM",
+                "-x", "arrays1", "-x", "arrays2", ".", "../submission"
     }
 }
 
