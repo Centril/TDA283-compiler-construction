@@ -1,10 +1,10 @@
 all: clean submitb
 
 submita: submit
-	tar -zcf submission/partA-1.tar.gz doc lib src README.md
+	tar -zcf submission/partA-1.tar.gz doc lib src README.md LICENSE.md
 
 submitb: submit
-	tar -zcf submission/partB-1.tar.gz doc lib src README.md
+	tar -zcf submission/partB-1.tar.gz doc lib src README.md LICENSE.md
 
 submit: doc clean
 	mkdir -p lib
