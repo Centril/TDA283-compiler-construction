@@ -39,7 +39,7 @@ import Data.List
 
 import Utils.Pointless
 
-import Backend.LLVM.LLVMAst
+import Backend.LLVM.AST
 
 printLLVMAst :: LLVMAst -> LLVMCode
 printLLVMAst (LLVMAst g c d) =

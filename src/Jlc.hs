@@ -25,7 +25,7 @@ import Common.Computation
 
 import Frontend.TypeCheck
 
-import Backend.LLVM.LLVMApi
+import Backend.LLVM.LLVM
 
 import CliOptions
 

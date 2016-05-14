@@ -32,7 +32,7 @@ Operating environment of LLVM Backend in Javalette compiler.
 module Backend.LLVM.Environment (
     -- * Modules
     module Common.Computation,
-    module Backend.LLVM.LLVMAst,
+    module Backend.LLVM.AST,
 
     -- * Types
     LEnv(..), LComp, IOLComp,
@@ -54,7 +54,7 @@ import Utils.Foldable
 import Common.Computation
 import Common.StateOps
 
-import Backend.LLVM.LLVMAst
+import Backend.LLVM.AST
 
 --------------------------------------------------------------------------------
 -- Operating Environment:

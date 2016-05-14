@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Backend.LLVM.LLVMApi
+Module      : Backend.LLVM.LLVM
 Description : LLVM backend target for Javalette compiler
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
@@ -30,7 +30,7 @@ LLVM backend target for Javalette compiler
 
 {-# LANGUAGE LambdaCase #-}
 
-module Backend.LLVM.LLVMApi (
+module Backend.LLVM.LLVM (
     -- * Operations
     targetLLVM
 ) where
@@ -54,7 +54,7 @@ import Frontend.TypeCheck
 import Backend.AlphaRename
 import Backend.PreOptimize
 
-import Backend.LLVM.LLVMGen
+import Backend.LLVM.CodeGen
 
 targetLLVM :: JlcTarget
 targetLLVM opts = evalIOComp compileLLIO opts initialLEnv

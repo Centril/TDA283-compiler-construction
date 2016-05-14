@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Backend.LLVM.LLVMGen
+Module      : Backend.LLVM.CodeGen
 Description : LLVM code generator in the LLVM backend of the Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
@@ -29,7 +29,7 @@ LLVM code generator in the LLVM backend of the Javalette compiler.
 -}
 {-# LANGUAGE LambdaCase #-}
 
-module Backend.LLVM.LLVMGen (
+module Backend.LLVM.CodeGen (
     -- * Modules
     module Backend.LLVM.Environment,
     module Backend.LLVM.Print,

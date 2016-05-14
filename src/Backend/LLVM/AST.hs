@@ -17,7 +17,7 @@
  -}
 
 {-|
-Module      : Backend.LLVM.LLVMAst
+Module      : Backend.LLVM.AST
 Description : The LLVM AST in the LLVM backend of the Javalette compiler.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
@@ -29,7 +29,7 @@ The LLVM AST in the LLVM backend of the Javalette compiler.
 -}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Backend.LLVM.LLVMAst where
+module Backend.LLVM.AST where
 
 import Control.Lens
 
