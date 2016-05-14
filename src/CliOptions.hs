@@ -74,7 +74,7 @@ jlcProgDesc = hardline
                </> text "run the compiler like so"
                </> parens (text "assuming it is on the PATH") <> colon
          <$$> enclose hardline hardline (indent 4 (text "jlc myprogram.jl"))
-         <$$> text "which will create the file myprogram"
+         <$$> text "which will create the file myprogram.out"
           </> parens (text "or myprogram.exe on Windows") <> dot
            <> hardline
          <$$> text "For more advanced use cases, see options."
@@ -102,7 +102,7 @@ parseOFT pstr = case toLower <$> pstr of
 optOutFT :: Parser OutFType
 optOutFT = option (str >>= parseOFT) $
        long "outtype"
-    <> value OFTExec
+    <> value OFTBitcode
     <> metavar "exec | asm | bc"
     <> showDefaultWith (const "exec")
     <> help "exec for executable, asm for native assembly, bc for llvm bitcode."
