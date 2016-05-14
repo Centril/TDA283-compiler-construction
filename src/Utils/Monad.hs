@@ -29,10 +29,10 @@ General monadic, applicative, functor utility functions.
 -}
 module Utils.Monad (
     -- * Functor operations
-    (>$>), (<$<), (<<$>), (<>$>), (<$$>),
+    (>$>), (<$<), (<<$>), (<>$>), (<$$>), fkeep,
 
     -- * Applicative operations
-    (<!>), (<:>),
+    (<!>), (<:>), (<++>),
 
     -- * Monad operations
     (>?=>), (>=?>), (<<=),  maybeErr, unless'
@@ -105,3 +105,12 @@ maybeErr whenNothing = maybe whenNothing return
 -- given the value and is the result of the computation.
 unless' :: Monad m => m a -> (a -> Bool) -> (a -> m a) -> m a
 unless' m p e = m >>= \x -> if p x then return x else e x
+
+-- | 'fkeep': given a function that produces f b given an a. And given an a in
+-- the second argument, a functor with both values as a pair is produced.
+fkeep :: Functor f => (a -> f b) -> a -> f (a, b)
+fkeep f a = (\b -> (a, b)) <$> f a
+
+-- | '<++>': 'mappend' a monoidal value inside a monad to another.
+(<++>) :: (Applicative f, Monoid b) => f b -> f b -> f b
+(<++>) l r = mappend <$> l <*> r
