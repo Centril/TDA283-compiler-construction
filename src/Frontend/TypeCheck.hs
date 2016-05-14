@@ -32,10 +32,11 @@ module Frontend.TypeCheck (
     module X,
 
     -- * Operations
-    typeCheck
+    typeCheck, compileFrontend, targetTypeCheck
 ) where
 
 import Control.Monad
+import Control.Monad.Reader
 
 import Control.Lens hiding (contexts, Empty)
 
@@ -47,12 +48,30 @@ import Frontend.Common
 import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
+import Frontend.ParseLex
 
 import Common.AST
+import Common.FileOps
+
+--------------------------------------------------------------------------------
+-- TARGET, Typecheck:
+--------------------------------------------------------------------------------
+
+targetTypeCheck :: JlcTarget
+targetTypeCheck = flip (evalIOComp compileTCIO) initialTCEnv
+
+compileTCIO :: IOTCComp ()
+compileTCIO = jlFiles . classifyInputs <$> ask
+              >>= mapM_ (readF >=> rebase . compileFrontend)
 
 --------------------------------------------------------------------------------
 -- API:
 --------------------------------------------------------------------------------
+
+compileFrontend :: String -> TCComp ProgramA
+compileFrontend code = do
+    ast1 <- parseProgram code <<= infoP Parser      "AST after parse"
+    typeCheck ast1            <<= phaseEnd TypeChecker
 
 typeCheck :: Program () -> TCComp ProgramA
 typeCheck prog0 = do
