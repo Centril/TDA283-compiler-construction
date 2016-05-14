@@ -32,7 +32,7 @@ Options and configurations in Javalette compiler.
 module Common.Options where
 
 import Data.List (partition, nub)
-import Data.Map (Map, fromList)
+import Data.Map (Map, fromList, (!))
 import Data.Maybe
 
 import Control.Arrow
@@ -105,6 +105,11 @@ makePrisms ''InputFType
 --------------------------------------------------------------------------------
 -- Operations:
 --------------------------------------------------------------------------------
+
+llFiles, bcFiles, jlFiles :: IFMap -> [FilePath]
+llFiles = (! IFLlvm)
+bcFiles = (! IFLlvmBc)
+jlFiles = (! IFJavalette)
 
 -- | 'classifyInputs': from options to classified lists of filepaths.
 classifyInputs :: JlcOptions -> IFMap
