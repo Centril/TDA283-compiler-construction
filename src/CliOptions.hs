@@ -102,7 +102,7 @@ parseOFT pstr = case toLower <$> pstr of
 optOutFT :: Parser OutFType
 optOutFT = option (str >>= parseOFT) $
        long "outtype"
-    <> value OFTBitcode
+    <> value OFTBitcode -- the default should be OFTEec, but for submission...
     <> metavar "exec | asm | bc"
     <> showDefaultWith (const "exec")
     <> help "exec for executable, asm for native assembly, bc for llvm bitcode."
