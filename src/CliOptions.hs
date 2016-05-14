@@ -124,7 +124,7 @@ optTCOnly = switch $
 
 onlyLLVM :: String -> Mod f a
 onlyLLVM x = helpDoc $ Just $ text x </> text
-    "Only applies when used in conjunction with the llvm backend"
+    "Applies in conjunction with the llvm backend"
 
 optLLInputs :: Parser [FilePath]
 optLLInputs = many $ strOption $
