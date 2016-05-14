@@ -26,6 +26,7 @@ executable jlc
                        , uniplate == 1.6.*
                        , process == 1.2.*
                        , directory == 1.2.*
+                       , temporary == 1.2.*
                        , optparse-applicative == 0.12.*
                        , ansi-wl-pprint == 0.6.*
                        , filepath == 1.4.*
