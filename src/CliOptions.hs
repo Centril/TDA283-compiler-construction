@@ -77,6 +77,10 @@ jlcProgDesc = hardline
          <$$> text "which will create the file myprogram.out"
           </> parens (text "or myprogram.exe on Windows") <> dot
            <> hardline
+         <$$> text "Jlc will determine how to handle files by their extensions."
+          </> text "It will treat .ll files as llvm IR, .bc at llvm bitcode."
+          </> text "All other files will be treated as .jl files."
+           <> hardline
          <$$> text "For more advanced use cases, see options."
 
 cliParser :: ParserInfo JlcOptions
