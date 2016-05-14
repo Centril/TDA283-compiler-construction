@@ -78,7 +78,7 @@ jlcProgDesc = hardline
           </> parens (text "or myprogram.exe on Windows") <> dot
            <> hardline
          <$$> text "Jlc will determine how to handle files by their extensions."
-          </> text "It will treat .ll files as llvm IR, .bc at llvm bitcode."
+          </> text "It will treat .ll files as llvm IR and .bc at llvm bitcode."
           </> text "All other files will be treated as .jl files."
            <> hardline
          <$$> text "For more advanced use cases, see options."
@@ -109,7 +109,7 @@ optOutFT = option (str >>= parseOFT) $
     <> value OFTBitcode -- the default should be OFTEec, but for submission...
     <> metavar "exec | asm | bc"
     <> showDefaultWith (const "exec")
-    <> help "exec for executable, asm for native assembly, bc for llvm bitcode."
+    <> help "exec for executable, asm for native assembly, bc for llvm bitcode"
 
 optInputs :: Parser [FilePath]
 optInputs = some $ strArgument $
@@ -120,24 +120,24 @@ optTCOnly :: Parser Bool
 optTCOnly = switch $
        long "typecheck"
     <> short 't'
-    <> help "Only perform typechecking."
+    <> help "Only perform typechecking"
 
 onlyLLVM :: String -> Mod f a
 onlyLLVM x = helpDoc $ Just $ text x </> text
-    "This only applies when used in conjunction with the llvm backend."
+    "Only applies when used in conjunction with the llvm backend"
 
 optLLInputs :: Parser [FilePath]
 optLLInputs = many $ strOption $
        long "llvm-extras"
     <> short 'l'
     <> metavar "FILES..."
-    <> onlyLLVM "FILE paths to additional llvm code to compile and link with."
+    <> onlyLLVM "FILE paths to additional llvm code for compilation"
 
 optLLIntermed :: Parser Bool
 optLLIntermed = switch $
        long "llvm-inter"
     <> short 'i'
-    <> onlyLLVM "Enable emitting intermediary produced .ll files."
+    <> onlyLLVM "Emit all intermediary produced .ll files"
 
 optCompilerFlags :: Parser CompilerFlags
 optCompilerFlags = CompilerFlags <$> optWarnToError <*> optNoWarnUnused
@@ -146,13 +146,13 @@ optWarnToError :: Parser Bool
 optWarnToError = switch $
        long "fwarn-error"
     <> short 'w'
-    <> help "Make all warnings into errors."
+    <> help "Turn all warnings into errors"
 
 optNoWarnUnused :: Parser Bool
 optNoWarnUnused = switch $
        long "fno-warn-unused"
     <> short 'n'
-    <> help "Do not warn about unused parameter and variables."
+    <> help "Do not warn about unused parameter and variables"
 
 optLRLevel :: Parser LRLevel
 optLRLevel = optQuiet <|> optInfo <|> optWarn
@@ -164,17 +164,17 @@ optQuiet :: Parser LRLevel
 optQuiet = optLR LRError $
        long "quiet"
     <> short 'q'
-    <> help "Suppress all messages except for errors."
+    <> help "Suppress all messages except for errors"
 
 optWarn :: Parser LRLevel
 optWarn = optLR LRWarn $
        long "warn"
-    <> help "Suppress all messages except for errors and warnings (default)."
+    <> help "Suppress all messages except for errors and warnings (default)"
 
 optInfo :: Parser LRLevel
 optInfo = optLR LRInfo $
        long "info"
-    <> help "Verbose mode. Show all types of messages including info messages."
+    <> help "Verbose mode. Show all types of messages including info messages"
 
 optOptLevel :: Parser OptLevel
 optOptLevel = asum $ zipWith3 opt gs [0..] ["0", "1", "2", "s", "z", "3", "4"]
@@ -184,4 +184,4 @@ optOptLevel = asum $ zipWith3 opt gs [0..] ["0", "1", "2", "s", "z", "3", "4"]
           opt g i llvm = flag Optimize0 (toEnum i) $
                         long ("O" ++ show i)
                      <> short (intToDigit i)
-                     <> help (g i ++ ", for LLVM this is -O" ++ llvm ++ ".")
+                     <> help (g i ++ ", for LLVM this is -O" ++ llvm)
