@@ -31,8 +31,6 @@ module Common.FileOps where
 
 import Control.Monad.Except
 
-import Control.Lens hiding ((<.>))
-
 import System.Exit
 import System.Process
 import System.IO.Temp
