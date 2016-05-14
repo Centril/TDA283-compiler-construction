@@ -17,26 +17,14 @@
  -}
 module Main where
 
-import Control.Monad
+import System.Exit
 
-import Control.Lens
-
-import System.FilePath
-import System.Exit ( exitFailure )
-
-import Utils.Monad
-import Utils.Pointless
 import Utils.Terminal
 
 import Common.Computation
 
-import Frontend.ParseLex
 import Frontend.TypeCheck
 
-import Backend.AlphaRename
-import Backend.PreOptimize
-
-import Backend.LLVM.LLVMGen
 import Backend.LLVM.LLVMApi
 
 import CliOptions
@@ -48,79 +36,29 @@ import CliOptions
 main :: IO ()
 main = do
     opts <- compOptions
+    determineTarget opts opts >>= evalCheck
+
+determineTarget :: JlcOptions -> JlcTarget
+determineTarget opts =
     if _typecheckOnly opts
-    then typecheckTarget opts >>= compileCheck
-    else compileUnit opts
-
---------------------------------------------------------------------------------
--- Compilation of units:
---------------------------------------------------------------------------------
-
-compileUnit :: JlcOptions -> IO ()
-compileUnit = runCompile >=> compileCheck
-
-runCompile :: JlcOptions -> IOLResult ()
-runCompile opts = runIOComp (compileBuildIO initialTCEnv) opts initialLEnv
-
-preCodeGen :: String -> TCComp ProgramA
-preCodeGen code = do
-    ast1 <- compileTC code
-    let ast2 = alphaRename ast1
-    infoP AlphaRenamer "AST after alpha rename" ast2
-    let ast3 = preOptimize ast2
-    infoP PreOptimizer "AST after pre optimizing" ast3
-    return ast3
-
-compile :: String -> TCEnv -> LComp LLVMCode
-compile = changeST . preCodeGen >?=> compileLLVM
-
-compileIO :: String -> TCEnv -> IOLComp LLVMCode
-compileIO = rebase .| compile
-
-compileBuildIO :: TCEnv -> IOLComp ()
-compileBuildIO env = do
-    code <- head <$> inputSources
-    compileIO code env >>= build
-
--- TODO: Handle command line options instead of head...
-build :: LLVMCode -> IOLComp ()
-build code = do
-    file <- head <$> view inputFiles
-    io $ void $ buildMainBC code (takeDirectory file) (takeBaseName file)
-
---------------------------------------------------------------------------------
--- Typecheck target:
---------------------------------------------------------------------------------
-
-typecheckTarget :: JlcOptions -> IOCompResult TCEnv ()
-typecheckTarget = flip (runIOComp compileTCIO) initialTCEnv
-
-compileTCIO :: IOComp TCEnv ()
-compileTCIO = inputSources >>= mapM_ (rebase . compileTC)
-
-compileTC :: String -> TCComp ProgramA
-compileTC code = do
-    ast1 <- parseProgram code <<= infoP Parser      "AST after parse"
-    typeCheck ast1            <<= phaseEnd TypeChecker
+    then targetTypeCheck
+    else targetLLVM
 
 --------------------------------------------------------------------------------
 -- Helpers:
 --------------------------------------------------------------------------------
 
-inputSources :: IOComp s [String]
-inputSources = view inputFiles >>= mapM (io . readFile)
+evalCheck :: CompEval a -> IO ()
+evalCheck = uncurry $ either evalFailure evalSuccess
 
-compileCheck :: (Show r, Show e) => CompResult e r -> IO ()
-compileCheck = uncurry $ either compileUnitFail compileUnitSucc
-
-compileUnitFail :: ErrMsg -> InfoLog -> IO ()
-compileUnitFail eMsg logs = do
+evalFailure :: ErrMsg -> InfoLog -> IO ()
+evalFailure eMsg logs = do
     errLn $ phaseErr $ errPhase eMsg
     printError eMsg >> printLogs logs
     exitFailure
 
-compileUnitSucc :: (a, b) -> InfoLog -> IO ()
-compileUnitSucc (_, _) logs = printLogs logs >> errLn "OK"
+evalSuccess :: a -> InfoLog -> IO ()
+evalSuccess _ logs = printLogs logs >> errLn "OK"
 
 phaseErr :: Phase -> String
 phaseErr Parser        = "SYNTAX ERROR"

@@ -34,7 +34,7 @@ module Frontend.Environment (
     module X,
 
     -- * Types
-    TCComp, TCResult,
+    TCComp, IOTCComp,
     TCEnv(..), Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,
 
@@ -47,9 +47,6 @@ module Frontend.Environment (
 import Prelude hiding (lookup)
 
 import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
-
-import Control.Monad()
-import Control.Applicative()
 
 import Control.Lens hiding (Context, contexts, uncons)
 
@@ -115,11 +112,11 @@ initialTCEnv = TCEnv empty [empty]
 -- Computations in compiler:
 --------------------------------------------------------------------------------
 
+-- | 'IOTCComp': A computation in typechecker gifted with IO powers, use wisely.
+type IOTCComp a = IOComp TCEnv a
+
 -- | 'TCComp': A computation in typechecker using environment 'TCEnv'.
 type TCComp a = Comp TCEnv a
-
--- | 'TCResult': result of a 'TCComp' computation.
-type TCResult a = CompResult TCEnv a
 
 --------------------------------------------------------------------------------
 -- Environment operations:

@@ -27,140 +27,72 @@ Portability : ALL
 
 Computation monad and operations in Javalette compiler.
 -}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
-{-# LANGUAGE FlexibleContexts #-}
-
 module Common.Computation (
     -- * Modules
-    module Common.Options,
+    module X,
 
     -- * Types
-    Comp, CompResult, IOComp, IOCompResult,
+    JlcTarget,
+    Comp, CompEval, IOComp, IOCompEval, BaseComp,
     Phase(..), ErrMsg(..), LogLevel, InfoLog, LogItem(..),
 
     -- * Operations
 
-    -- ** Monad stack transformations
-    rebase, io, transST, changeST, ($:<<),
-
     -- ** Running computations
-    runComp, runIOComp,
+    evalIOComp,
 
     -- ** Logging and Error operations
     warn, warn', warnln, info, info', infoln, infoP, err, err', errln,
     showLogItem, showLogs, printLogs, showError, printError, phaseEnd
 ) where
 
-import Control.Arrow
-import Control.Monad()
-import Control.Applicative()
 import Control.Monad.Identity
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Writer
-import Control.Monad.Reader
-import Control.Monad.Morph
 
 import Control.Lens (view)
 
+import Utils.RSEWT as X
 import Utils.Pointless
 import Utils.Terminal
 
-import Common.Options
+import Common.Options as X
+
+--------------------------------------------------------------------------------
+-- Jlc targets:
+--------------------------------------------------------------------------------
+
+type JlcTarget = JlcOptions -> IOCompEval ()
 
 --------------------------------------------------------------------------------
 -- Computations:
 --------------------------------------------------------------------------------
 
+type BaseComp m s = RSEWT s JlcOptions ErrMsg InfoLog m
+
 -- | 'Comp': A computation given an environment or state s,
 -- potential fail-fast errors of type 'ErrMsg' and accumulated 'InfoLog's.
 -- See 'CompResult' for details.
-type Comp s a = RSEW s JlcOptions ErrMsg InfoLog a
+type Comp s = BaseComp Identity s
 
--- | 'CompResult': result of a 'Comp' computation.
-type CompResult s a = (Either ErrMsg (a, s), InfoLog)
-
--- | 'runComp': Evaluates the entire 'Comp' computation given a read only state,
--- and a state to work inside as starting environment.
-runComp :: Comp s a -> JlcOptions -> s -> CompResult s a
-runComp = runRSEW
+-- | 'CompEval': result of an evaluation of a 'Comp' computation.
+type CompEval a = (Either ErrMsg a, InfoLog)
 
 --------------------------------------------------------------------------------
 -- IO Computations:
 --------------------------------------------------------------------------------
 
 -- | 'IOComp': like 'Comp' but with 'IO' instead of 'Identity' as base monad.
-type IOComp s a = RSEWT s JlcOptions ErrMsg InfoLog IO a
+type IOComp s = BaseComp IO s
 
--- | 'IOCompResult': result of an 'IOComp' computation.
-type IOCompResult s a = IO (CompResult s a)
+-- | 'IOCompEval': result of an evaluation of an 'IOComp' computation.
+type IOCompEval a = IO (Either ErrMsg a, InfoLog)
 
--- | 'runIOComp': Evaluates the entire 'IOComp' computation given a state to
+-- | 'evalIOComp': Evaluates the entire 'IOComp' computation given a state to
 -- work inside as starting environment / state.
-runIOComp :: IOComp s a -> JlcOptions -> s -> IOCompResult s a
-runIOComp = runRSEWT
-
--- | 'io': alias of 'liftIO'
-io :: MonadIO m => IO a -> m a
-io = liftIO
-
---------------------------------------------------------------------------------
--- RSEWT:
---------------------------------------------------------------------------------
-
--- RSEW: RSEWT using Identity monad.
-type RSEW s r e w a = RSEWT s r e w Identity a
-
--- | RSEWT: Composition of ReaderT . StateT . ExceptT . WriterT
--- monad transformers in that order where Writer is the innermost transformer.
--- the form of the computation is: r -> s -> (Either e (a, s), w)
-newtype RSEWT s r e w m a = RSEWT {
-    _runRSEWT :: ReaderT r (StateT s (ExceptT e (WriterT w m))) a }
-    deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadReader r, MonadState s, MonadError e, MonadWriter w)
-
--- 'runRSEW': runs a 'RSEW' computation given initial states,
--- specialization of 'runRSEWT' for the 'Identity' base monad.
-runRSEW :: RSEWT s r e w Identity a -> r -> s -> (Either e (a, s), w)
-runRSEW r s m = runIdentity $ runRSEWT r s m
-
--- | 'runRSEWT': runs a 'RSEWT' computation given initial states.
-runRSEWT :: RSEWT s r e w m a -> r -> s -> m (Either e (a, s), w)
-runRSEWT ev r s = runWriterT $ runExceptT $
-                runStateT (runReaderT (_runRSEWT ev) r) s
-
-instance Monoid w => MonadTrans (RSEWT s r e w) where
-    lift = RSEWT . lift . lift . lift . lift
-
-instance Monoid w => MFunctor (RSEWT s r e w) where
-    hoist f = RSEWT . hoist (hoist (hoist (hoist f))) . _runRSEWT
-
--- | 'transST': transitions between one 'RSEWT' computation with state x, to
--- another with state y. The current state and result of the given computation
--- is given to a mapping function that must produce the next computation.
--- The initial state must also be passed as the last parameter.
-transST :: Functor m
-         => (((a, y), x) -> (a, y))
-         -> RSEWT x r e w m a -> x -> RSEWT y r e w m a
-transST f x_c x_i =
-    RSEWT $ ReaderT $ \r -> StateT $ \y_i -> ExceptT . WriterT $
-    first ((\(a, x_f) -> f ((a, y_i), x_f)) <$>) <$> runRSEWT x_c r x_i
-
--- | '$:<<': infix version 'transST'
-($:<<) :: Functor m
-        => (((a, y), x) -> (a, y))
-        -> RSEWT x r e w m a -> x -> RSEWT y r e w m a
-($:<<)  = transST
-
--- 'changeST': specialization of 'transST', ignoring final state of the
--- first computation directly using the initial of the second computation.
-changeST :: Functor m => RSEWT x r e w m a -> x -> RSEWT y r e w m a
-changeST =  transST fst
-
--- | 'rebase': change base monad of from Identity to something else.
-rebase :: (MFunctor t, Monad n) => t Identity b -> t n b
-rebase = hoist generalize
+evalIOComp :: IOComp s a -> JlcOptions -> s -> IOCompEval a
+evalIOComp = evalRSEWT
 
 --------------------------------------------------------------------------------
 -- Errors, Logging:
@@ -191,42 +123,42 @@ data LogItem = LogItem {
     logLvl :: LogLevel, logPhase :: Phase, logMsg :: String }
     deriving (Eq, Show, Read)
 
-errln, err' :: Phase -> [String] -> Comp s a
+errln, err' :: Monad m => Phase -> [String] -> BaseComp m s a
 errln = unlines2nd err
 err'  = unword2nd err
 
 -- | 'err': throws an error in a computation ignoring any continuations.
-err :: Phase -> String -> Comp s a
+err :: Monad m => Phase -> String -> BaseComp m s a
 err = throwError .| ErrMsg
 
-warn, info :: Phase -> String -> Comp s ()
+warn, info :: Monad m => Phase -> String -> BaseComp m s ()
 info p m = _ifll LRInfo $ _log Info p m
 warn p m = do
     f <- view (compileFlags . warnToError)
     if f then err p m else _ifll LRWarn $ _log Warn p m
 
-_ifll :: LRLevel -> Comp s () -> Comp s ()
+_ifll :: Monad m => LRLevel -> BaseComp m s () -> BaseComp m s ()
 _ifll _min _pass = (< _min) <$> view logLevel >>= flip unless _pass
 
-info', warn', infoln, warnln :: Phase -> [String] -> Comp s ()
+info', warn', infoln, warnln :: Monad m => Phase -> [String] -> BaseComp m s ()
 info'  = unword2nd  info
 warn'  = unword2nd  warn
 infoln = unlines2nd info
 warnln = unlines2nd warn
 
 -- | 'infoP': Logs msg with 'Info' level during a 'Phase' with a header before.
-infoP :: Show a => Phase -> String -> a -> Comp s ()
+infoP :: (Monad m, Show a) => Phase -> String -> a -> BaseComp m s ()
 infoP p header x = info p header >> info p (show x)
 
 -- | '_log': inserts a log item into a computation.
-_log :: LogLevel -> Phase -> String -> Comp s ()
+_log :: Monad m => LogLevel -> Phase -> String -> BaseComp m s ()
 _log l p m = tell [LogItem l p m]
 
 unword2nd, unlines2nd :: (a -> String -> b) -> a -> [String] -> b
 unword2nd  f a b = f a $ unwords b
 unlines2nd f a b = f a $ unlines b
 
-phaseEnd :: (Show s, Show a) => Phase -> a -> Comp s a
+phaseEnd :: (Monad m, Show s, Show a) => Phase -> a -> BaseComp m s a
 phaseEnd p x = do
     get >>= infoP p "Final environment value:"
     infoP p "Final computed value:" x >> return x
