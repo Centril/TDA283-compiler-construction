@@ -18,92 +18,121 @@
 
 {-|
 Module      : Backend.LLVM.LLVMApi
-Description : The interface to external programs of the Javalette backend.
+Description : LLVM backend target for Javalette compiler
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
 License     : GPL-2+
 Stability   : experimental
 Portability : ALL
 
-The interface to external programs of the Javalette backend.
+LLVM backend target for Javalette compiler
 -}
 
-module Backend.LLVM.LLVMApi where
+{-# LANGUAGE LambdaCase #-}
 
-import Control.Exception
+module Backend.LLVM.LLVMApi (
+    -- * Operations
+    targetLLVM
+) where
 
-import System.Exit
+import Control.Arrow
+
+import Control.Monad
+import Control.Monad.Reader
+
+import Control.Lens hiding ((<.>))
+
 import System.FilePath
-import System.Process
 
-import Backend.LLVM.LLVMAst
-import Backend.LLVM.JRuntime
+import Utils.Monad
 
---------------------------------------------------------------------------------
--- LLVM phases with error handling:
---------------------------------------------------------------------------------
+import Common.Computation
+import Common.FileOps
 
-buildMainExec :: LLVMCode -> FilePath -> String -> IO FilePath
-buildMainExec code dest name = do
-    main <- buildMainBC code dest name
-    runt <- buildRuntimeBC dest
-    buildExecutable [main, runt] dest
+import Frontend.TypeCheck
 
-buildMainBC :: LLVMCode -> FilePath -> String -> IO FilePath
-buildMainBC code dest name = runLLVMWriter code main >>
-    runLLVMAssembler main
-    where main = dest </> name
+import Backend.AlphaRename
+import Backend.PreOptimize
 
-buildRuntimeBC :: FilePath -> IO FilePath
-buildRuntimeBC dest = runLLVMWriter runtimeLLVM runtime >>
-    runLLVMAssembler runtime
-    where runtime = dest </> "runtime"
+import Backend.LLVM.LLVMGen
 
-buildExecutable :: [FilePath] -> FilePath -> IO FilePath
-buildExecutable sources dest = runLLVMLinker sources linked >>
-    runLLVMCompiler linked (dest </> "a")
-    where linked = dest </> "linked"
+targetLLVM :: JlcTarget
+targetLLVM opts = evalIOComp compileLLIO opts initialLEnv
 
-runLLVMWriter :: String -> FilePath -> IO FilePath
-runLLVMWriter ast file = do
-    result <- execLLVMWriter ast $ llFile file
-    case result of
-        Left  e -> print e >> exitFailure
-        Right _ -> return file
+compileLLIO :: IOLComp ()
+compileLLIO = do
+    (out, ifm) <- (determineOutput &&& classifyInputs) <$> ask
+    lls        <- mapM compileLL (jlFiles ifm) <++> mapM readF (llFiles ifm)
+    withSysTempDir "jlc" $ \tmp -> do
+        bcs    <- (bcFiles ifm ++) <$> zipWithM (llvmAssemble tmp) [1..] lls
+        let bcLinked = bcFile tmp "linked"
+        llvmLink bcs bcLinked >> llvmOpt bcLinked
+        view outFileType >>= \case
+            OFTBitcode -> copyF bcLinked out
+            OFTExec    -> let tmpObj = tmp </> "linked" <.> "o"
+                          in llvmLLC "obj" bcLinked tmpObj >> llvmGCC tmpObj out
+            OFTAsm     -> llvmLLC "asm" bcLinked out
 
-runLLVMAssembler :: FilePath -> IO FilePath
-runLLVMAssembler file = runLLVMProg (llFile file)
-    "ASSEMBLER" "llvm-as" [llFile file]
+compileLL :: FilePath -> IOLComp LLVMCode
+compileLL = fkeep (readF >=> rebase . compile) >=> \(orig, ll) -> do
+    inter <- view llIntermed
+    when inter $ writeF (orig -<.> "ll") ll
+    return ll
 
-runLLVMLinker :: [FilePath]-> FilePath -> IO FilePath
-runLLVMLinker files out = runLLVMProg (bcFile out)
-    "LINKER" "llvm-link" $ fmap bcFile files ++ ["-o=" ++ bcFile out]
+compile :: String -> LComp LLVMCode
+compile = flip (changeST . preCodeGen) initialTCEnv >=> compileLLVM
 
-runLLVMCompiler :: FilePath -> FilePath -> IO FilePath
-runLLVMCompiler file out = runLLVMProg (outFile out)
-    "COMPILER" "llvm-gcc" [bcFile file, "-o", outFile out]
+llvmAssemble :: FilePath -> Int -> LLVMCode -> IOLComp FilePath
+llvmAssemble tmp count ll = let fp = bcFile tmp $ show count
+                            in llvmAs fp ll >> return fp
 
-runLLVMProg :: FilePath -> String -> String -> [String] -> IO FilePath
-runLLVMProg result phase cmd args = do
-    (c,_,e) <- execLLVMProg cmd args
-    if c /= ExitSuccess
-        then llvmErr phase e >> exitFailure
-        else return result
+bcFile :: FilePath -> FilePath -> FilePath
+bcFile dir name = dir </> name <.> "bc"
 
 --------------------------------------------------------------------------------
--- Helper
+-- Pre Code Gen:
 --------------------------------------------------------------------------------
 
-execLLVMWriter :: String -> FilePath -> IO (Either SomeException ())
-execLLVMWriter code file = try $ writeFile file code
+preCodeGen :: String -> TCComp ProgramA
+preCodeGen code = do
+    ast1 <- compileFrontend code
+    let ast2 = alphaRename ast1
+    infoP AlphaRenamer "AST after alpha rename" ast2
+    let ast3 = preOptimize ast2
+    infoP PreOptimizer "AST after pre optimizing" ast3
+    return ast3
 
-execLLVMProg :: String -> [String] -> IO (ExitCode, String, String)
-execLLVMProg cmd args = readProcessWithExitCode cmd args []
+--------------------------------------------------------------------------------
+-- LLVM: External programs:
+--------------------------------------------------------------------------------
 
-llvmErr :: String -> FilePath -> IO()
-llvmErr s ex = die $ unwords ["LLVM", s, "ERROR", ex]
+llvmAs :: FilePath -> LLVMCode -> IOLComp ()
+llvmAs fp = void . execProcess (err Compiler) "llvm-as" ["-o", fp]
 
-llFile, bcFile, outFile :: FilePath -> String
-llFile = flip addExtension ".ll"
-bcFile = flip addExtension ".bc"
-outFile = flip addExtension ".out"
+llvmGCC :: FilePath -> FilePath -> IOLComp ()
+llvmGCC = execLink "gcc" [] . pure
+
+llvmLLC :: String -> FilePath -> FilePath -> IOLComp ()
+llvmLLC ftype = execLink "llc" ["-filetype", ftype, "--march=x86-64"] . pure
+
+llvmLink :: [FilePath] -> FilePath -> IOLComp ()
+llvmLink = execLink "llvm-link" []
+
+llvmOpt :: FilePath -> IOLComp ()
+llvmOpt inp = do
+    optFlag <- view optLevel
+    unless (optFlag == Optimize0) $
+        execLink "opt" [determineOptFlag optFlag] [inp] inp
+
+determineOptFlag :: OptLevel -> String
+determineOptFlag = \case
+    Optimize0 -> "O0" -- not used, for totality.
+    Optimize1 -> "O1"
+    Optimize2 -> "O2"
+    Optimize3 -> "Os"
+    Optimize4 -> "Oz"
+    Optimize5 -> "O3"
+    Optimize6 -> "O3"
+
+execLink :: FilePath -> [String] -> [FilePath] -> FilePath -> IOComp s ()
+execLink = execInOut (err Linker)
