@@ -30,7 +30,9 @@ Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= Ident "=" Expr  ";" ;
+Ass.       Stmt ::= Ident "=" Expr ";" ;
+
+AssArr.    Stmt ::= Ident [DimE] "=" Expr ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
@@ -101,6 +103,8 @@ EString.   Expr6 ::= String ;
 Neg.       Expr5 ::= "-" Expr6 ;
 
 Not.       Expr5 ::= "!" Expr6 ;
+
+Length.    Expr6 ::= Ident ".length";
 
 EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
 
