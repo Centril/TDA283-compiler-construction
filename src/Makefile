@@ -11,7 +11,7 @@ bnfc:
 
 jlc:
 	cabal install --only-dependencies
-	cabal build
+	cabal build --ghc-options="-j4"
 	cp dist/build/jlc/jlc ../jlc
 
 doc: docclean bnfc
