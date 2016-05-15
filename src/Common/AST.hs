@@ -97,7 +97,7 @@ data DimT a = DimenT { _dtAnot :: a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data Expr a
-    = ENew      { _eAnot :: a, _nTyp   :: Type a, _eDimEs :: [DimE a] }
+    = ENew      { _eAnot :: a, _eTyp   :: Type a, _eDimEs :: [DimE a] }
     | EVar      { _eAnot :: a, _eIdent :: Ident,  _eDimEs :: [DimE a] }
     | Length    { _eAnot :: a, _eExpr  :: Expr a }
     | ELitInt   { _eAnot :: a, _eLIVal :: Integer }
