@@ -6,6 +6,8 @@ bnfc:
 	bnfc -d --functor contrib/Javalette.cf
 	cd Javalette && happy -gca Par.y
 	cd Javalette && alex -g Lex.x
+	cd Javalette && sed 's/\.Applicative.*/.Applicative/g'\
+		ErrM.hs > tmp && mv tmp ErrM.hs
 
 jlc:
 	cabal install --only-dependencies
