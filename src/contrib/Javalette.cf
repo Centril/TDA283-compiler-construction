@@ -74,13 +74,9 @@ DimenT.    DimT ::= "[]" ;
 
 separator  nonempty DimT "" ;
 
--- Newables ------------------------------------------------
-
-ArrNew.    Newable ::= Type [DimE] ;
-
 -- Expressions ---------------------------------------------
 
-ENew.      Expr6 ::= "new" Newable ;
+ENew.      Expr6 ::= "new" Type [DimE] ;
 
 EVar.      Expr6 ::= Ident [DimE] ;
 
