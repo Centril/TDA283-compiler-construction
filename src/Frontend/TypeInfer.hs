@@ -27,7 +27,7 @@ Portability : ALL
 
 Type inference for Javalette compiler.
 -}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, LambdaCase #-}
 
 module Frontend.TypeInfer (
     -- * Operations
@@ -35,6 +35,8 @@ module Frontend.TypeInfer (
 ) where
 
 import Control.Monad
+
+import Control.Lens
 
 import Utils.Monad
 
@@ -58,7 +60,10 @@ inferType typ = return $ addKind typ KConcrete
 
 inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
-    EVar _ name  -> inferEVar name expr
+    ENew      {} -> inferENew expr
+    EVar _ n []  -> inferEVar n expr
+    EVar _ n ds  -> inferEVar' n expr ds
+    Length    {} -> inferLength expr
     EString   {} -> addTyp' expr conststr
     ELitInt   {} -> addTyp' expr int
     ELitDoub  {} -> addTyp' expr doub
@@ -74,8 +79,65 @@ inferExp expr = case expr of
     EOr       {} -> ib [bool]
     where ib = inferBin id expr
 
+-- TODO: Rename and implement the functions in Error.hs
+u = undefined
+typeNotNewable = u
+arrAccNotInt = u
+accOfNotArr = u
+accOfNotArrNoName = u
+arrDimsNotMatching = u
+
+isPrimitive :: TypeA -> Bool
+isPrimitive = \case
+    Int  _ -> True
+    Doub _ -> True
+    Bool _ -> True
+    _      -> False
+
+inferENew :: ExprA -> TCComp (ExprA, TypeA)
+inferENew expr = do
+    let typ  = _eTyp expr
+    unless (isPrimitive typ) $ typeNotNewable typ expr
+    let dims = _eDimEs expr
+    dims' <- mapM (deExpr %%~ inferInt) dims
+    let typ' = appConcrete $ \a ->
+                Array a typ $ replicate (length dims) (DimenT emptyAnot)
+    addTyp' (expr {  _eDimEs = dims' }) typ'
+
 inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)
 inferEVar name = lookupVarE' name >$> uncurry addTyp
+
+inferEVar' :: Ident -> ExprA -> [DimEA] -> TCComp (ExprA, TypeA)
+inferEVar' name expr dims = do
+    (expr', typ) <- lookupVarE' name expr
+    dimst <- inferArray (accOfNotArr name) typ
+    unless (length dimst == length dims) $ arrDimsNotMatching name
+    dims' <- mapM (deExpr %%~ inferInt) dims
+    return $ (expr' { _eDimEs = dims' }, typ)
+
+inferArray :: (TypeA -> TCComp [DimTA]) -> TypeA -> TCComp [DimTA]
+inferArray onErr typ = do
+    case typ ^? _Array of
+        Nothing -> onErr typ
+        Just (_, _, dimst) -> return dimst
+
+inferInt :: ExprA -> TCComp ExprA
+inferInt expr = do
+    (expr', typ) <- inferExp expr
+    if typ /= int
+        then arrAccNotInt expr
+        else return expr'
+
+inferLength :: ExprA -> TCComp (ExprA, TypeA)
+inferLength expr = do
+    expr' <- eExpr %%~ inferLengthH $ expr
+    return (expr', int)
+
+inferLengthH :: ExprA -> TCComp ExprA
+inferLengthH e = do
+    (e', typ) <- inferExp e
+    inferArray (accOfNotArrNoName) typ
+    return e'
 
 relOp :: RelOpA -> [TypeA]
 relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = [int, doub, bool]

@@ -43,7 +43,7 @@ module Common.Annotations (
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
-    int, conststr, doub, bool, tvoid, defaultVal,
+    appConcrete, int, conststr, doub, bool, tvoid, defaultVal,
 
     (+@),
     addTyp, addTyp', addKind,

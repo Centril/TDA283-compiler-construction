@@ -190,7 +190,7 @@ compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
-    EVar      a i     -> compileEVar a i
+    EVar      a i ds  -> compileEVar a i
     ELitInt   _ v     -> compileLInt   sizeofInt   v
     ELitDoub  _ v     -> compileLFloat sizeofFloat v
     EString   _ v     -> compileCString v

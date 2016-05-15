@@ -110,6 +110,7 @@ arItem :: ItemA -> ARComp ItemA
 arItem i = (case i of Init {} -> iExpr %%~ arExpr $ i; _ -> return i) >>=
            (iIdent %%~ newSubst)
 
+-- TODO: Check if ds is alpharenamed
 arExpr :: ExprA -> ARComp ExprA
-arExpr = U.transformM $ \case EVar a i -> EVar a <$> arRef i
-                              x        -> return x
+arExpr = U.transformM $ \case EVar a i ds -> flip (EVar a) ds <$> arRef i
+                              x           -> return x
