@@ -35,7 +35,7 @@ module Common.Annotations (
     Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
 
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
-    TypeA, DimTA, NewableA, DimNA, ExprA, DimEA, AddOpA, MulOpA, RelOpA,
+    TypeA, DimTA, NewableA, ExprA, DimEA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
     toWillExecute, showKind, emptyAnot, showVS,
@@ -205,9 +205,6 @@ type DimTA    = DimT    ASTAnots
 
 -- | 'NewableA': 'Newable' annotated with 'ASTAnots'.
 type NewableA = Newable ASTAnots
-
--- | 'DimNA': 'DimN' annotated with 'ASTAnots'.
-type DimNA    = DimN    ASTAnots
 
 -- | 'ExprA': 'Expr' annotated with 'ASTAnots'.
 type ExprA    = Expr    ASTAnots
