@@ -96,10 +96,7 @@ data Type a
 data DimT a = DimenT { _dtAnot :: a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data Newable a = ArrNew { _nAnot :: a, _nTyp :: Type a, _nDimNs :: [DimN a] }
-    deriving (Eq, Ord, Show, Read, Data, Typeable)
-
-data DimN a = DimenN { _dnAnot :: a, _dnSize :: Integer }
+data Newable a = ArrNew { _nAnot :: a, _nTyp :: Type a, _nDimEs :: [DimE a] }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data Expr a
@@ -151,7 +148,6 @@ makeLenses ''Item
 makeLenses ''Type
 makeLenses ''DimT
 makeLenses ''Newable
-makeLenses ''DimN
 makeLenses ''Expr
 makeLenses ''DimE
 makeLenses ''AddOp
@@ -168,7 +164,6 @@ makePrisms ''Item
 makePrisms ''Type
 makePrisms ''DimT
 makePrisms ''Newable
-makePrisms ''DimN
 makePrisms ''Expr
 makePrisms ''DimE
 makePrisms ''AddOp
@@ -226,8 +221,6 @@ instance Functor DimT where fmap = over dtAnot
 instance Functor Newable where
     fmap f (ArrNew a t d) = ArrNew (f a) (f <$> t) (f <$$> d)
 
-instance Functor DimN where fmap = over dnAnot
-
 instance Functor Expr where
     fmap f = \case
         ENew      a n      -> ENew      (f a) (f <$> n)
@@ -267,7 +260,6 @@ instance Overable Item    where overF = iAnot
 instance Overable Type    where overF = tAnot
 instance Overable DimT    where overF = dtAnot
 instance Overable Newable where overF = nAnot
-instance Overable DimN    where overF = dnAnot
 instance Overable Expr    where overF = eAnot
 instance Overable DimE    where overF = deAnot
 instance Overable AddOp   where overF = addAnot
@@ -319,7 +311,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           cs  (J.While     a c i)     = While     a (ce c) (cs i)
           cs  (J.For       a t i e s) = For       a (ct t) (ci i) (ce e) (cs s)
           cs  (J.SExp      a e)       = SExp      a (ce e)
-          cn  (J.ArrNew    a t dns)   = ArrNew    a (ct t) (cdn <$> dns)
+          cn  (J.ArrNew    a t des)   = ArrNew    a (ct t) (cde <$> des)
           ce  (J.ENew      a n)       = ENew      a (cn n)
           ce  (J.EVar      a i des)   = EVar      a (ci i) (cde <$> des)
           ce  (J.Length    a e)       = Length    a (ce e)
@@ -337,5 +329,4 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           ce  (J.EAnd      a l   r)   = EAnd      a (ce l)         (ce r)
           ce  (J.EOr       a l   r)   = EOr       a (ce l)         (ce r)
           cdt (J.DimenT    a)         = DimenT    a
-          cdn (J.DimenN    a i)       = DimenN    a i
           cde (J.DimenE    a e)       = DimenE    a (ce e)
