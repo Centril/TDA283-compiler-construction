@@ -96,12 +96,9 @@ data Type a
 data DimT a = DimenT { _dtAnot :: a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data Newable a = ArrNew { _nAnot :: a, _nTyp :: Type a, _nDimEs :: [DimE a] }
-    deriving (Eq, Ord, Show, Read, Data, Typeable)
-
 data Expr a
-    = ENew      { _eAnot :: a, _eNew   :: Newable a }
-    | EVar      { _eAnot :: a, _eIdent :: Ident, _eDimEs :: [DimE a] }
+    = ENew      { _eAnot :: a, _nTyp   :: Type a, _nDimEs :: [DimE a] }
+    | EVar      { _eAnot :: a, _eIdent :: Ident,  _eDimEs :: [DimE a] }
     | Length    { _eAnot :: a, _eExpr  :: Expr a }
     | ELitInt   { _eAnot :: a, _eLIVal :: Integer }
     | ELitDoub  { _eAnot :: a, _eLDVal :: Double  }
@@ -147,7 +144,6 @@ makeLenses ''Stmt
 makeLenses ''Item
 makeLenses ''Type
 makeLenses ''DimT
-makeLenses ''Newable
 makeLenses ''Expr
 makeLenses ''DimE
 makeLenses ''AddOp
@@ -163,7 +159,6 @@ makePrisms ''Stmt
 makePrisms ''Item
 makePrisms ''Type
 makePrisms ''DimT
-makePrisms ''Newable
 makePrisms ''Expr
 makePrisms ''DimE
 makePrisms ''AddOp
@@ -218,13 +213,10 @@ instance Functor Type where
 
 instance Functor DimT where fmap = over dtAnot
 
-instance Functor Newable where
-    fmap f (ArrNew a t d) = ArrNew (f a) (f <$> t) (f <$$> d)
-
 instance Functor Expr where
     fmap f = \case
-        ENew      a n      -> ENew      (f a) (f <$> n)
-        EVar      a i des  -> EVar      (f a) i (f <$$> des)
+        ENew      a t des  -> ENew      (f a) (f <$> t) (f <$$> des)
+        EVar      a i des  -> EVar      (f a) i         (f <$$> des)
         Length    a e      -> Length    (f a) (f <$> e)
         ELitInt   a v      -> ELitInt   (f a) v
         ELitDoub  a v      -> ELitDoub  (f a) v
@@ -259,7 +251,6 @@ instance Overable Stmt    where overF = sAnot
 instance Overable Item    where overF = iAnot
 instance Overable Type    where overF = tAnot
 instance Overable DimT    where overF = dtAnot
-instance Overable Newable where overF = nAnot
 instance Overable Expr    where overF = eAnot
 instance Overable DimE    where overF = deAnot
 instance Overable AddOp   where overF = addAnot
@@ -311,8 +302,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           cs  (J.While     a c i)     = While     a (ce c) (cs i)
           cs  (J.For       a t i e s) = For       a (ct t) (ci i) (ce e) (cs s)
           cs  (J.SExp      a e)       = SExp      a (ce e)
-          cn  (J.ArrNew    a t des)   = ArrNew    a (ct t) (cde <$> des)
-          ce  (J.ENew      a n)       = ENew      a (cn n)
+          ce  (J.ENew      a t des)   = ENew      a (ct t) (cde <$> des)
           ce  (J.EVar      a i des)   = EVar      a (ci i) (cde <$> des)
           ce  (J.Length    a e)       = Length    a (ce e)
           ce  (J.ELitInt   a v)       = ELitInt   a v
