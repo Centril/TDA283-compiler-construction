@@ -76,11 +76,7 @@ separator  nonempty DimT "" ;
 
 -- Newables ------------------------------------------------
 
-ArrNew.    Newable ::= Type [DimN] ;
-
-DimenN.    DimN ::= "[" Integer "]" ;
-
-separator  nonempty DimN "" ;
+ArrNew.    Newable ::= Type [DimE] ;
 
 -- Expressions ---------------------------------------------
 
@@ -104,7 +100,7 @@ Neg.       Expr5 ::= "-" Expr6 ;
 
 Not.       Expr5 ::= "!" Expr6 ;
 
-Length.    Expr5 ::= Expr6 ".length";
+Length.    Expr5 ::= Expr6 "." "length";
 
 EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
 
