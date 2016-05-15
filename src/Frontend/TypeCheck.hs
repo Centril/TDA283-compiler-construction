@@ -70,26 +70,24 @@ compileTCIO = jlFiles . classifyInputs <$> ask
 
 compileFrontend :: String -> TCComp ProgramA
 compileFrontend code = do
-    ast1 <- parseProgram code <<= infoP Parser      "AST after parse"
+    ast1 <- parseProgram code <<= infoP Parser "AST after parse"
     typeCheck ast1            <<= phaseEnd TypeChecker
 
 typeCheck :: Program () -> TCComp ProgramA
 typeCheck prog0 = do
     let prog1 = fmap (const emptyAnot) prog0
-    -- P1: collect functions:
+    -- Part 1: Collect all functions
     info TypeChecker   "Collecting all functions"
     prog2 <- allFunctions prog1
-
-    info TypeChecker "AST after collect"
+    info TypeChecker   "AST after collect"
     info TypeChecker $ show prog2
-
-    -- P2: check for existance + correctness of main definition:
+    -- Part 2: Check for the correctness of the main definition
     info TypeChecker   "Checking existence of main"
     mainCorrect
-    -- P3: type check the program
+    -- Part 3: Type check the program
     info TypeChecker   "Type checking the program"
     prog3 <- checkProg prog2
-    -- P4: return check the program.
+    -- Part 4: Return check the program.
     info ReturnChecker "Return checking the program"
     returnCheck prog3
 
@@ -112,7 +110,7 @@ checkBlock rtyp block = (bStmts %%~ mapM (checkStm rtyp) $ block) <*
                         checkUnused <* sPopM contexts
 
 checkUnused :: TCComp ()
-checkUnused = view (compileFlags . noWarnUnused) >>= 
+checkUnused = view (compileFlags . noWarnUnused) >>=
               flip unless (currUnused >>= mapM_ unusedVar)
 
 checkStm :: TypeA -> StmtA -> TCComp StmtA
