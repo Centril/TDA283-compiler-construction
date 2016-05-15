@@ -65,6 +65,8 @@ data Stmt a
     | BStmt    { _sAnot :: a, _sBlock :: Block a }
     | Decl     { _sAnot :: a, _sDTyp  :: Type a, _sDItems :: [Item a] }
     | Ass      { _sAnot :: a, _sIdent :: Ident,  _sExpr   :: Expr a }
+    | AssArr   { _sAnot :: a, _sIdent :: Ident,  _sDimEs  :: [DimE a],
+                 _sExpr :: Expr a }
     | Incr     { _sAnot :: a, _sIdent :: Ident }
     | Decr     { _sAnot :: a, _sIdent :: Ident }
     | Ret      { _sAnot :: a, _sExpr  :: Expr a }
@@ -103,6 +105,7 @@ data DimN a = DimenN { _dnAnot :: a, _dnSize :: Integer }
 data Expr a
     = ENew      { _eAnot :: a, _eNew   :: Newable a }
     | EVar      { _eAnot :: a, _eIdent :: Ident, _eDimEs :: [DimE a] }
+    | Length    { _eAnot :: a, _eExpr  :: Expr a }
     | ELitInt   { _eAnot :: a, _eLIVal :: Integer }
     | ELitDoub  { _eAnot :: a, _eLDVal :: Double  }
     | EString   { _eAnot :: a, _eLSVal :: String  }
@@ -194,6 +197,7 @@ instance Functor Stmt where
         BStmt    a b       -> BStmt    (f a) (f <$> b)
         Decl     a t is    -> Decl     (f a) (f <$> t) (f <$$> is)
         Ass      a i e     -> Ass      (f a) i (f <$> e)
+        AssArr   a i ds e  -> AssArr   (f a) i (f <$$> ds) (f <$> e)
         Incr     a i       -> Incr     (f a) i
         Decr     a i       -> Decr     (f a) i
         Ret      a e       -> Ret      (f a) (f <$> e)
@@ -228,6 +232,7 @@ instance Functor Expr where
     fmap f = \case
         ENew      a n      -> ENew      (f a) (f <$> n)
         EVar      a i des  -> EVar      (f a) i (f <$$> des)
+        Length    a e      -> Length    (f a) (f <$> e)
         ELitInt   a v      -> ELitInt   (f a) v
         ELitDoub  a v      -> ELitDoub  (f a) v
         ELitTrue  a        -> ELitTrue  (f a)
@@ -304,6 +309,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           cs  (J.BStmt     a b)       = BStmt     a (cb b)
           cs  (J.Decl      a t is)    = Decl      a (ct t) (cit <$> is)
           cs  (J.Ass       a i e)     = Ass       a (ci i) (ce e)
+          cs  (J.AssArr    a i ds e)  = AssArr    a (ci i) (cde <$> ds) (ce e)
           cs  (J.Incr      a i)       = Incr      a (ci i)
           cs  (J.Decr      a i)       = Decr      a (ci i)
           cs  (J.Ret       a e)       = Ret       a (ce e)
@@ -316,6 +322,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           cn  (J.ArrNew    a t dns)   = ArrNew    a (ct t) (cdn <$> dns)
           ce  (J.ENew      a n)       = ENew      a (cn n)
           ce  (J.EVar      a i des)   = EVar      a (ci i) (cde <$> des)
+          ce  (J.Length    a e)       = Length    a (ce e)
           ce  (J.ELitInt   a v)       = ELitInt   a v
           ce  (J.ELitDoub  a v)       = ELitDoub  a v
           ce  (J.EString   a v)       = EString   a v
