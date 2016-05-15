@@ -104,7 +104,7 @@ Neg.       Expr5 ::= "-" Expr6 ;
 
 Not.       Expr5 ::= "!" Expr6 ;
 
-Length.    Expr6 ::= Ident ".length";
+Length.    Expr5 ::= Expr6 ".length";
 
 EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
 
