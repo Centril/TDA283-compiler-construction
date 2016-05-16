@@ -98,3 +98,27 @@ wrongArgsTyp fun texpected tactual =
 
 insufficientFunRet :: Ident -> TCComp a
 insufficientFunRet fun = terr' ["The function", _ident fun, "might not return"]
+
+lengthOfNotArr :: TypeA -> TCComp a
+lengthOfNotArr typ =
+    terr' ["The expression of type", show typ, "is not an array",
+           "and thus length can not be used on it."]
+
+accArrOverDimen :: Ident -> Int -> Int -> TCComp a
+accArrOverDimen name arr attempt =
+    terr' ["Illegal access element of array", _ident name ,
+           "with dimensions", show arr, "in", show attempt,
+           "levels deep, which does not yield a type."]
+
+accOfNotArr :: Ident -> TypeA -> TCComp a
+accOfNotArr name typ = terr' ["Illegal attempt to access", _ident name,
+                              "of type: ", show typ, "as an array."]
+
+accArrNotInt :: TypeA -> TCComp a
+accArrNotInt typ = terr' ["Illegal use of non-integer type", show typ,
+                          "in array element access."]
+
+typeNotNewable :: TypeA -> TCComp a
+typeNotNewable typ =
+    terr' ["Illegal use of base type", show typ,
+           "in new, which is not a primitive type."]

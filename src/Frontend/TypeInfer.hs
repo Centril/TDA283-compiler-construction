@@ -61,8 +61,8 @@ inferType typ = return $ addKind typ KConcrete
 inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
     ENew      {} -> inferENew expr
-    EVar _ n []  -> inferEVar n expr
-    EVar _ n ds  -> inferEVar' n expr ds
+    EVar _ n  [] -> inferEVar n expr
+    EVar _ n  ds -> inferEVar' n expr ds
     Length    {} -> inferLength expr
     EString   {} -> addTyp' expr conststr
     ELitInt   {} -> addTyp' expr int
@@ -79,14 +79,6 @@ inferExp expr = case expr of
     EOr       {} -> ib [bool]
     where ib = inferBin id expr
 
--- TODO: Rename and implement the functions in Error.hs
-u = undefined
-typeNotNewable = u
-arrAccNotInt = u
-accOfNotArr = u
-accOfNotArrNoName = u
-arrDimsNotMatching = u
-
 isPrimitive :: TypeA -> Bool
 isPrimitive = \case
     Int  _ -> True
@@ -94,15 +86,17 @@ isPrimitive = \case
     Bool _ -> True
     _      -> False
 
+arrayT :: TypeA -> Int -> TypeA
+arrayT base dim = appConcrete make
+    where make a = Array a base $ replicate dim $ DimenT emptyAnot
+
 inferENew :: ExprA -> TCComp (ExprA, TypeA)
 inferENew expr = do
     let typ  = _eTyp expr
-    unless (isPrimitive typ) $ typeNotNewable typ expr
+    unless (isPrimitive typ) $ typeNotNewable typ
     let dims = _eDimEs expr
-    dims' <- mapM (deExpr %%~ inferInt) dims
-    let typ' = appConcrete $ \a ->
-                Array a typ $ replicate (length dims) (DimenT emptyAnot)
-    addTyp' (expr {  _eDimEs = dims' }) typ'
+    dims' <- inferAccInts dims
+    addTyp' (expr {  _eDimEs = dims' }) $ arrayT typ $ length dims
 
 inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)
 inferEVar name = lookupVarE' name >$> uncurry addTyp
@@ -110,34 +104,28 @@ inferEVar name = lookupVarE' name >$> uncurry addTyp
 inferEVar' :: Ident -> ExprA -> [DimEA] -> TCComp (ExprA, TypeA)
 inferEVar' name expr dims = do
     (expr', typ) <- lookupVarE' name expr
-    dimst <- inferArray (accOfNotArr name) typ
-    unless (length dimst == length dims) $ arrDimsNotMatching name
-    dims' <- mapM (deExpr %%~ inferInt) dims
-    return $ (expr' { _eDimEs = dims' }, typ)
+    (bt, dimst)  <- inferArray (accOfNotArr name) typ
+    let dimDiff = length dimst - length dims
+    unless (dimDiff >= 0) $ accArrOverDimen name (length dimst) (length dims)
+    let typ' = if dimDiff == 0 then bt else arrayT bt dimDiff
+    (, typ') <$> (eDimEs %%~ inferAccInts $ expr')
 
-inferArray :: (TypeA -> TCComp [DimTA]) -> TypeA -> TCComp [DimTA]
-inferArray onErr typ = do
-    case typ ^? _Array of
-        Nothing -> onErr typ
-        Just (_, _, dimst) -> return dimst
+inferArray :: (TypeA -> TCComp (TypeA, [DimTA]))
+           ->  TypeA -> TCComp (TypeA, [DimTA])
+inferArray onErr typ = maybe (onErr typ) extract $ typ ^? _Array
+    where extract (_, bt, dimst) = return (bt, dimst)
 
-inferInt :: ExprA -> TCComp ExprA
-inferInt expr = do
+inferAccInts :: [DimEA] -> TCComp [DimEA]
+inferAccInts = mapM $ deExpr %%~ inferAccInt
+
+inferAccInt :: ExprA -> TCComp ExprA
+inferAccInt expr = do
     (expr', typ) <- inferExp expr
-    if typ /= int
-        then arrAccNotInt expr
-        else return expr'
+    unless (typ == int) (accArrNotInt typ) >> return expr'
 
 inferLength :: ExprA -> TCComp (ExprA, TypeA)
-inferLength expr = do
-    expr' <- eExpr %%~ inferLengthH $ expr
-    return (expr', int)
-
-inferLengthH :: ExprA -> TCComp ExprA
-inferLengthH e = do
-    (e', typ) <- inferExp e
-    inferArray (accOfNotArrNoName) typ
-    return e'
+inferLength = eExpr %%~ csub >$> (, int)
+    where csub e = fst <$> inferExp e <<= inferArray lengthOfNotArr . snd
 
 relOp :: RelOpA -> [TypeA]
 relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = [int, doub, bool]
