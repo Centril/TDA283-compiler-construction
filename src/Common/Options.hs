@@ -53,6 +53,8 @@ data JlcOptions = JlcOptions {
     , _outFileType   :: OutFType       -- ^ type of output file
     , _compileFlags  :: CompilerFlags  -- ^ compiler flags
     , _typecheckOnly :: Bool           -- ^ only perform typechecking?
+    , _aRenameOnly   :: Bool           -- ^ only perform alpha renaming?
+    , _preOptOnly    :: Bool           -- ^ only perform pre optimization?
     , _logLevel      :: LRLevel        -- ^ Log reporting level
     , _optLevel      :: OptLevel       -- ^ optimization levels
     , _llInputFiles  :: [FilePath]     -- ^ .ll files to assemble (extra)

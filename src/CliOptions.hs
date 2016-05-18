@@ -58,6 +58,8 @@ allOpts =  JlcOptions
        <*> optOutFT
        <*> optCompilerFlags
        <*> optTCOnly
+       <*> optAROnly
+       <*> optPOOnly
        <*> optLRLevel
        <*> optOptLevel
        <*> optLLInputs
@@ -121,6 +123,18 @@ optTCOnly = switch $
        long "typecheck"
     <> short 't'
     <> help "Only perform typechecking"
+
+optAROnly :: Parser Bool
+optAROnly = switch $
+       long "alpha-rename"
+    <> short 'a'
+    <> help "Stop after alpha renaming"
+
+optPOOnly :: Parser Bool
+optPOOnly = switch $
+       long "pre-opt"
+    <> short 'p'
+    <> help "Stop after pre-optimization"
 
 onlyLLVM :: String -> Mod f a
 onlyLLVM x = helpDoc $ Just $ text x </> text
