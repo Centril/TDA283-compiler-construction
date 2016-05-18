@@ -27,7 +27,8 @@ Portability : ALL
 
 AST Annotations in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase, TupleSections #-}
+{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase, TupleSections,
+             TypeSynonymInstances, FlexibleInstances #-}
 
 module Common.Annotations (
     -- * Types
@@ -43,7 +44,7 @@ module Common.Annotations (
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
-    appConcrete, int, conststr, doub, bool, tvoid, defaultVal,
+    appConcrete, int, conststr, doub, bool, tvoid, defaultVal, arrayT,
 
     (+@),
     addTyp, addTyp', addKind,
@@ -58,6 +59,7 @@ import Data.Map (Map, empty, singleton, alter)
 import Control.Lens hiding (Context, contexts, Empty)
 
 import Utils.Shallow
+import Utils.Sizeables
 
 import Common.AST
 
@@ -174,6 +176,19 @@ defaultVal typ = case typ of
     Doub _ -> ELitDoub  emptyAnot 0
     Bool _ -> ELitFalse emptyAnot
     x      -> error $ "default value not defined for type " ++ show x
+
+--------------------------------------------------------------------------------
+-- Arrays & related:
+--------------------------------------------------------------------------------
+
+instance Growable TypeA where
+    grow = \case
+        Array _ b dts -> arrayT b $ 1 + length dts
+        x             -> arrayT x 1
+
+arrayT :: TypeA -> Int -> TypeA
+arrayT base dim = appConcrete make
+    where make a = Array a base $ replicate dim $ DimenT emptyAnot
 
 --------------------------------------------------------------------------------
 -- AST Annotations, Aliases:

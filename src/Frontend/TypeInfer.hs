@@ -27,11 +27,13 @@ Portability : ALL
 
 Type inference for Javalette compiler.
 -}
-{-# LANGUAGE TupleSections, LambdaCase #-}
+{-# LANGUAGE TupleSections, LambdaCase,
+             TypeSynonymInstances, FlexibleInstances #-}
 
 module Frontend.TypeInfer (
     -- * Operations
-    inferExp, inferType
+    inferExp, inferType,
+    inferArray, inferAccInts
 ) where
 
 import Control.Monad
@@ -39,6 +41,7 @@ import Control.Monad
 import Control.Lens
 
 import Utils.Monad
+import Utils.Sizeables
 
 import Common.AST
 
@@ -52,7 +55,9 @@ import Frontend.Common
 
 -- TODO: For now, all types have a concrete kind, change this?
 inferType :: TypeA -> TCComp (TypeA, Kind)
-inferType typ = return $ addKind typ KConcrete
+inferType typ = do
+    typ1 <- tTyp %%~ (inferType >$> fst) $ typ
+    return $ addKind typ1 KConcrete
 
 --------------------------------------------------------------------------------
 -- Type inference:
@@ -79,24 +84,19 @@ inferExp expr = case expr of
     EOr       {} -> ib [bool]
     where ib = inferBin id expr
 
-isPrimitive :: TypeA -> Bool
-isPrimitive = \case
-    Int  _ -> True
-    Doub _ -> True
-    Bool _ -> True
-    _      -> False
-
-arrayT :: TypeA -> Int -> TypeA
-arrayT base dim = appConcrete make
-    where make a = Array a base $ replicate dim $ DimenT emptyAnot
+-- TODO: lenses...
+notArray :: TypeA -> Bool
+notArray = \case
+    Array {} -> False
+    _        -> True
 
 inferENew :: ExprA -> TCComp (ExprA, TypeA)
 inferENew expr = do
-    let typ  = _eTyp expr
-    unless (isPrimitive typ) $ typeNotNewable typ
-    let dims = _eDimEs expr
-    dims' <- inferAccInts dims
-    addTyp' (expr {  _eDimEs = dims' }) $ arrayT typ $ length dims
+    (bt, _)  <- inferType $ _eTyp expr
+    unless (notArray bt) $ typeNotNewable bt
+    dims     <- inferAccInts $ _eDimEs expr
+    (typ, _) <- inferType $ arrayT bt $ length dims
+    addTyp' (expr { _eDimEs = dims, _eTyp = bt }) typ
 
 inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)
 inferEVar name = lookupVarE' name >$> uncurry addTyp
@@ -107,8 +107,7 @@ inferEVar' name expr dims = do
     (bt, dimst)  <- inferArray (accOfNotArr name) typ
     let dimDiff = length dimst - length dims
     unless (dimDiff >= 0) $ accArrOverDimen name (length dimst) (length dims)
-    let typ' = if dimDiff == 0 then bt else arrayT bt dimDiff
-    (, typ') <$> (eDimEs %%~ inferAccInts $ expr')
+    (, growN dimDiff bt) <$> (eDimEs %%~ inferAccInts $ expr')
 
 inferArray :: (TypeA -> TCComp (TypeA, [DimTA]))
            ->  TypeA -> TCComp (TypeA, [DimTA])

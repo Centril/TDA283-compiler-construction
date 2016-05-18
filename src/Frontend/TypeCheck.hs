@@ -27,9 +27,6 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-{-# LANGUAGE LambdaCase, TypeSynonymInstances,
-             FlexibleInstances, UndecidableInstances #-}
-
 module Frontend.TypeCheck (
     -- * Modules
     module X,
@@ -137,32 +134,30 @@ checkStm typ stmt = case stmt of
           checkS f = f %%~ checkStm typ
           checkInc = checkIdent [int, doub] stmt
 
-u = undefined
-
-instance Growable TypeA where
-    grow = \case
-        Array a b dts -> arrayT b $ 1 + length dts
-        x             -> arrayT x 1
-
-arrayT :: TypeA -> Int -> TypeA
-arrayT base dim = appConcrete make
-    where make a = Array a base $ replicate dim $ DimenT emptyAnot
-
 checkFor :: TypeA -> StmtA -> TCComp StmtA
-checkFor rtyp for =
-    ((sExpr %%~ checkExp (grow typ) $ for) <* sPushM contexts
-    <* (extendVar' varAlreadyDef $ Var (_sIdent for) typ VSLocal 0)
-    >>= (sSi %%~ checkStm rtyp))           <* sPopM contexts
-    where typ = _sTyp for
+checkFor rtyp for = do
+    for1 <- sTyp %%~ (inferType >$> fst) $ for
+    let typ = _sTyp for1
+    ((sExpr %%~ checkExp (grow typ)) for1
+        <* sPushM contexts 
+        <* extendVar' varAlreadyDef (Var (_sIdent for) typ VSLocal 0)
+        >>= sSi %%~ checkStm rtyp)
+        <* sPopM contexts
 
+-- TODO: combine checkAss & checkAssArr?
 checkAss :: StmtA -> TCComp StmtA
 checkAss ass = do
-    (ass', typ) <- lookupVarE' ( _sIdent ass) ass
+    (ass', typ) <- lookupVarE' (_sIdent ass) ass
     sExpr %%~ checkExp typ $ ass'
 
--- TODO: Implement
 checkAssArr :: StmtA -> TCComp StmtA
-checkAssArr = error "checkAssArr undefined"
+checkAssArr ass = do
+    let dimsl = _sDimEs ass
+    let name  = _sIdent ass
+    (ass1, typ) <- lookupVarE' name ass
+    (bt, dimst) <- inferArray (accOfNotArr name) typ
+    sExpr %%~ checkExp (growN (length dimst - length dimsl) bt) >=>
+        sDimEs %%~ inferAccInts $ ass1
 
 checkVoid :: TypeA -> TCComp ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)
