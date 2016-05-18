@@ -140,7 +140,7 @@ checkAss ass = do
 
 -- TODO: Implement
 checkAssArr :: StmtA -> TCComp StmtA
-checkAssArr = undefined
+checkAssArr = error "checkAssArr undefined"
 
 checkVoid :: TypeA -> TCComp ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)

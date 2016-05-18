@@ -159,7 +159,7 @@ compileAss = compileExpr >=?> compileStore
 
 -- TODO: Implement
 compileAssArr :: Ident -> [DimEA] -> ExprA -> LComp ()
-compileAssArr = undefined
+compileAssArr = error "compileAssArr undefined"
 
 compileRet :: ExprA -> LComp ()
 compileRet = compileExpr >$> LRet >=> pushInst
@@ -196,7 +196,7 @@ compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
 
 -- TODO: Implement
 compileFor :: TypeA -> Ident -> ExprA -> StmtA -> LComp ()
-compileFor = undefined
+compileFor = error "compileFor undefined"
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
@@ -306,7 +306,7 @@ compileLBin l r onLHS prefix = do
 
 -- TODO: Implement
 compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
-compileENew = undefined
+compileENew = error "compileENew undefined"
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
@@ -316,7 +316,7 @@ compileEVar anots name = do
 
 -- TODO: Implement
 compileLength :: ExprA -> LComp LTValRef
-compileLength = undefined
+compileLength = error "compileLength undefined"
 
 compileNot :: ExprA -> LComp LTValRef
 compileNot = compileExpr >=> assignTemp boolType . flip LXor (LVInt 1)
@@ -367,7 +367,7 @@ strType   = LPtr charType
 
 -- TODO: Implement
 arrayType :: LType
-arrayType = undefined
+arrayType = error "arrayType undefined"
 
 zeroIndex :: LTIndex
 zeroIndex = (LInt 32, 0)
