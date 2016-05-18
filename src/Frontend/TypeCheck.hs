@@ -27,6 +27,7 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE LambdaCase, TypeSynonymInstances,
              FlexibleInstances, UndecidableInstances #-}
 
@@ -137,11 +138,9 @@ checkStm typ stmt = case stmt of
           checkS f = f %%~ checkStm typ
           checkInc = checkIdent [int, doub] stmt
 
-u = undefined
-
 instance Growable TypeA where
     grow = \case
-        Array a b dts -> arrayT b $ 1 + length dts
+        Array _ b dts -> arrayT b $ 1 + length dts
         x             -> arrayT x 1
 
 arrayT :: TypeA -> Int -> TypeA
