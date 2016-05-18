@@ -32,10 +32,6 @@ module Utils.Function (
     flip3, (§), (<§>), untilMatch, untilEq, applyN
 ) where
 
---import Utils.Pointless
-
-import Data.List
-
 -- | 'flip3': move the third argument of a function to the front.
 flip3 :: (a -> b -> c -> r) -> c -> a -> b -> r
 flip3 f c a b = f a b c
@@ -66,5 +62,5 @@ untilEq = untilMatch (==)
 
 -- | 'applyN': applies a function f, i times to x. Therefore applyN 0 id == id.
 applyN :: (Eq i, Num i) => i -> (a -> a) -> a -> a
-applyN 0 f x = x
+applyN 0 _ x = x
 applyN i f x = applyN (i - 1) f $ f x
