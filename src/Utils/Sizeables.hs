@@ -165,11 +165,3 @@ growThenUntil x y = (x :) . growUntil y
 -- Can be used as 'enumFromThenTo'.
 shrinkThenUntil :: (Shrinkable x, Ord x) => x -> x -> x -> [x]
 shrinkThenUntil x y = (x :) . shrinkUntil y
-
---------------------------------------------------------------------------------
--- Instances:
---------------------------------------------------------------------------------
-
-instance Enum x => Zero       x where zero   = toEnum 0
-instance Enum x => Growable   x where grow   = succ
-instance Enum x => Shrinkable x where shrink = pred
