@@ -70,7 +70,7 @@ alphaRename :: ProgramA -> ProgramA
 alphaRename = flip evalState (AREnv [] 0) . (pTopDefs %%~ mapM arFun)
     where arFun f = sPushM substs >> arF f <* (nameCount .= 0)
           arF     = fArgs %%~ mapM arArg >=> fBlock %%~ arBlock
-          arArg   = aIdent %%~ newSubst
+          arArg   = aIdent %%~ newSub
 
 --------------------------------------------------------------------------------
 -- Alpha Renaming:
@@ -82,8 +82,8 @@ type ARComp a = State AREnv a
 arRef :: Ident -> ARComp Ident
 arRef i = uses substs $ fromJust .| ctxFirst $ i
 
-newSubst :: Ident -> ARComp Ident
-newSubst from = (Ident <$> freshOf "v" nameCount) <<=
+newSub :: Ident -> ARComp Ident
+newSub from = (Ident <$> freshOf "v" nameCount) <<=
                 (substs %=) . modifyf . insert from
 
 arBlock :: BlockA -> ARComp BlockA
@@ -94,6 +94,7 @@ arStmt stmt = case stmt of
     BStmt    {} -> sPushM substs >> (sBlock %%~ arBlock $ stmt)
     Decl     {} -> sDItems %%~ mapM arItem $ stmt
     Ass      {} -> arI >=> arE $ stmt
+    AssArr   {} -> arI >=> arE >=> sDimEs %%~ mapM (deExpr %%~ arExpr) $ stmt
     Incr     {} -> arI stmt
     Decr     {} -> arI stmt
     SExp     {} -> arE stmt
@@ -101,16 +102,17 @@ arStmt stmt = case stmt of
     While    {} -> arC stmt
     Cond     {} -> arC stmt
     CondElse {} -> arC >=> sSe %%~ arStmt $ stmt
+    For      {} -> arE >=> sInScope substs . (sIdent %%~ newSub >=> arSi) $ stmt
     _           -> return stmt
-    where arC = arE >=> sSi %%~ arStmt
+    where arC = arE >=> arSi
+          arSi = sSi %%~ arStmt
           arE = sExpr %%~ arExpr
           arI = sIdent %%~ arRef
 
 arItem :: ItemA -> ARComp ItemA
 arItem i = (case i of Init {} -> iExpr %%~ arExpr $ i; _ -> return i) >>=
-           (iIdent %%~ newSubst)
+           (iIdent %%~ newSub)
 
--- TODO: Check if ds is alpharenamed
 arExpr :: ExprA -> ARComp ExprA
 arExpr = U.transformM $ \case EVar a i ds -> flip (EVar a) ds <$> arRef i
                               x           -> return x
