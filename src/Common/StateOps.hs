@@ -31,7 +31,7 @@ Common MonadState operations using lenses in Javalette Compiler.
 
 module Common.StateOps (
     -- * Operations
-    postInc, freshOf, sPopM, sPushM, sAppendL, ctxFirst
+    postInc, freshOf, sPopM, sPushM, sInScope, sAppendL, ctxFirst
 ) where
 
 import Prelude hiding (lookup)
@@ -58,6 +58,9 @@ freshOf prefix = fmap ((prefix ++) . show) . postInc
 sPopM, sPushM :: MonadState s m => ASetter s s [Map k a] [Map k a] -> m ()
 sPushM = (%= (empty:))
 sPopM  = (%= (fromMaybe [] . tailMay))
+
+sInScope :: MonadState s m => ASetter s s [Map k a] [Map k a] -> m b -> m b
+sInScope s m = sPushM s *> m <* sPopM s
 
 sAppendL :: (Applicative f, Monoid (f a), MonadState s m)
          => ASetter s s (f a) (f a) -> a -> m ()
