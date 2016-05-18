@@ -118,20 +118,22 @@ checkRetWrap fid stmt ctor = first ctor <$> checkHasRet fid stmt
 
 evalConstExpr :: ExprA -> (ExprA, ML)
 evalConstExpr expr = case expr of
-    EVar {}        -> addLit  expr Nothing
-    EApp {}        -> addLit  expr Nothing
-    ELitTrue  _    -> addLit' expr $ LitBool True
-    ELitFalse _    -> addLit' expr $ LitBool False
-    ELitInt   _ v  -> addLit' expr $ LitInt    v
-    ELitDoub  _ v  -> addLit' expr $ LitDouble v
-    EString   _ v  -> addLit' expr $ LitString v
-    Not  a e       -> evalNot a e
-    Neg  a e       -> evalNeg a e
-    EOr  a l r     -> evaLitBoolOp (||) EOr  a l r
-    EAnd a l r     -> evaLitBoolOp (&&) EAnd a l r
-    EMul a l op r  -> evalMul a l op r
-    EAdd a l op r  -> evalAdd a l op r
-    ERel a l op r  -> evalRel a l op r
+    ENew      {}  -> addLit  expr Nothing
+    EVar      {}  -> addLit  expr Nothing
+    Length    {}  -> addLit  expr Nothing -- TODO: Check if correct
+    EApp      {}  -> addLit  expr Nothing
+    ELitTrue  _   -> addLit' expr $ LitBool True
+    ELitFalse _   -> addLit' expr $ LitBool False
+    ELitInt   _ v -> addLit' expr $ LitInt    v
+    ELitDoub  _ v -> addLit' expr $ LitDouble v
+    EString   _ v -> addLit' expr $ LitString v
+    Not  a e      -> evalNot a e
+    Neg  a e      -> evalNeg a e
+    EOr  a l r    -> evaLitBoolOp (||) EOr  a l r
+    EAnd a l r    -> evaLitBoolOp (&&) EAnd a l r
+    EMul a l op r -> evalMul a l op r
+    EAdd a l op r -> evalAdd a l op r
+    ERel a l op r -> evalRel a l op r
 
 evalNot :: ASTAnots -> ExprA -> (ExprA, ML)
 evalNot a expr = addLit (Not a expr') $ LitBool . not <$> lit

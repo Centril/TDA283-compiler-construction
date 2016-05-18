@@ -119,12 +119,14 @@ checkStm typ stmt = case stmt of
     BStmt    {} -> sPushM contexts >> (sBlock %%~ checkBlock typ $ stmt)
     Decl     {} -> checkDecls stmt
     Ass      {} -> checkAss stmt
+    AssArr   {} -> checkAssArr stmt
     Incr     {} -> checkInc
     Decr     {} -> checkInc
     SExp     {} -> sExpr %%~ fmap fst . inferExp $ stmt
     Ret      {} -> sExpr %%~ checkExp typ $ stmt
     VRet      _ -> checkVoid typ >> return stmt
     While    {} -> checkC stmt
+    For      {} -> checkC stmt -- TODO: Implement properly
     Cond     {} -> checkC stmt
     CondElse {} -> checkC >=> checkS sSe $ stmt
     where checkC   = sExpr %%~ checkExp bool >=> checkS sSi
@@ -135,6 +137,10 @@ checkAss :: StmtA -> TCComp StmtA
 checkAss ass = do
     (ass', typ) <- lookupVarE' ( _sIdent ass) ass
     sExpr %%~ checkExp typ $ ass'
+
+-- TODO: Implement
+checkAssArr :: StmtA -> TCComp StmtA
+checkAssArr = undefined
 
 checkVoid :: TypeA -> TCComp ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)

@@ -123,6 +123,7 @@ compileStmt = \case
     BStmt    _ b       -> compileBlock b
     Decl     _ t is    -> forM_ is $ compileDecl t
     Ass      _ i e     -> compileAss i e
+    AssArr   _ i d e   -> compileAssArr i d e
     Incr     a i       -> compileInDeCr a i (Plus emptyAnot)
     Decr     a i       -> compileInDeCr a i (Minus emptyAnot)
     Ret      _ e       -> compileRet e
@@ -130,6 +131,7 @@ compileStmt = \case
     Cond     _ c si    -> compileCond     c si
     CondElse _ c si se -> compileCondElse c si se
     While    _ c sw    -> compileWhile    c sw
+    For      _ t i e s -> compileFor t i e s
     SExp     _ e       -> void $ compileExpr e
 
 compileInDeCr :: ASTAnots -> Ident -> AddOpA -> LComp ()
@@ -154,6 +156,10 @@ compileAlloca name typ = pushInst $ LAssign (_ident name)
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss = compileExpr >=?> compileStore
+
+-- TODO: Implement
+compileAssArr :: Ident -> [DimEA] -> ExprA -> LComp ()
+compileAssArr = undefined
 
 compileRet :: ExprA -> LComp ()
 compileRet = compileExpr >$> LRet >=> pushInst
@@ -188,9 +194,15 @@ compileCondExpr c _then _else = LCBr <$> compileExpr c >>=
 compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
 compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
 
+-- TODO: Implement
+compileFor :: TypeA -> Ident -> ExprA -> StmtA -> LComp ()
+compileFor = undefined
+
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
-    EVar      a i ds  -> compileEVar a i
+    ENew      a t ds  -> compileENew a t ds
+    EVar      a i _   -> compileEVar a i
+    Length    _ e     -> compileLength e
     ELitInt   _ v     -> compileLInt   sizeofInt   v
     ELitDoub  _ v     -> compileLFloat sizeofFloat v
     EString   _ v     -> compileCString v
@@ -292,11 +304,19 @@ compileLBin l r onLHS prefix = do
     assignTemp boolType $
         LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
+-- TODO: Implement
+compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
+compileENew = undefined
+
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
     let typ = compileAnotType anots
     let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
     assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
+
+-- TODO: Implement
+compileLength :: ExprA -> LComp LTValRef
+compileLength = undefined
 
 compileNot :: ExprA -> LComp LTValRef
 compileNot = compileExpr >=> assignTemp boolType . flip LXor (LVInt 1)
@@ -330,19 +350,24 @@ compileCString v = do
 
 compileType :: TypeA -> LType
 compileType = \case
-    Int      _ -> intType
-    Doub     _ -> doubType
-    Bool     _ -> boolType
-    Void     _ -> LVoid
-    ConstStr _ -> strType
-    Fun     {} -> error "NOT IMPLEMENTED YET"
+    Int      _     -> intType
+    Doub     _     -> doubType
+    Bool     _     -> boolType
+    Void     _     -> LVoid
+    Array    _ _ _ -> arrayType
+    ConstStr _     -> strType
+    Fun      {}    -> error "NOT IMPLEMENTED YET"
 
 boolType, intType, doubType, charType, strType :: LType
-boolType = LInt sizeofBool
-intType  = LInt sizeofInt
-doubType = LFloat sizeofFloat
-charType = LInt sizeofChar
-strType  = LPtr charType
+boolType  = LInt sizeofBool
+intType   = LInt sizeofInt
+doubType  = LFloat sizeofFloat
+charType  = LInt sizeofChar
+strType   = LPtr charType
+
+-- TODO: Implement
+arrayType :: LType
+arrayType = undefined
 
 zeroIndex :: LTIndex
 zeroIndex = (LInt 32, 0)
