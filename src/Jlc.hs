@@ -39,10 +39,11 @@ main = do
     determineTarget opts opts >>= evalCheck
 
 determineTarget :: JlcOptions -> JlcTarget
-determineTarget opts =
-    if _typecheckOnly opts
-    then targetTypeCheck
-    else targetLLVM
+determineTarget      opts
+    | _preOptOnly    opts = targetPreOpt
+    | _aRenameOnly   opts = targetAlphaRename
+    | _typecheckOnly opts = targetTypeCheck
+    | otherwise           = targetLLVM
 
 --------------------------------------------------------------------------------
 -- Helpers:

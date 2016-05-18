@@ -32,7 +32,10 @@ LLVM backend target for Javalette compiler
 
 module Backend.LLVM.LLVM (
     -- * Operations
-    targetLLVM
+    targetLLVM,
+
+    -- TODO: MOVE OUT OF HERE
+    targetPreOpt, targetAlphaRename
 ) where
 
 import Control.Arrow
@@ -80,7 +83,7 @@ compileLL = fkeep (readF >=> rebase . compile) >=> \(orig, ll) -> do
     return ll
 
 compile :: String -> LComp LLVMCode
-compile = flip (changeST . preCodeGen) initialTCEnv >=> compileLLVM
+compile = flip (changeST . compilePO) initialTCEnv >=> compileLLVM
 
 llvmAssemble :: FilePath -> Int -> LLVMCode -> IOLComp FilePath
 llvmAssemble tmp count ll = let fp = bcFile tmp $ show count
@@ -93,14 +96,28 @@ bcFile dir name = dir </> name <.> "bc"
 -- Pre Code Gen:
 --------------------------------------------------------------------------------
 
-preCodeGen :: String -> TCComp ProgramA
-preCodeGen code = do
-    ast1 <- compileFrontend code
-    let ast2 = alphaRename ast1
-    infoP AlphaRenamer "AST after alpha rename" ast2
-    let ast3 = preOptimize ast2
-    infoP PreOptimizer "AST after pre optimizing" ast3
-    return ast3
+-- TODO, MOVE OUT OF HERE.
+
+compileAR, compilePO :: String -> TCComp ProgramA
+compileAR code = (alphaRename <$> compileFrontend code)
+                 <<= infoP AlphaRenamer "AST after alpha rename"
+
+compilePO code = (preOptimize <$> compileAR code)
+                 <<= infoP PreOptimizer "AST after pre optimizing"
+
+targetAlphaRename, targetPreOpt :: JlcTarget
+targetAlphaRename = targetTcX compileAR
+targetPreOpt      = targetTcX compilePO
+
+targetTcX :: (String -> Comp TCEnv a) -> JlcTarget
+targetTcX = targetX initialTCEnv
+
+targetX :: s -> (String -> Comp s a) -> JlcTarget
+targetX ienv cf = flip (evalIOComp $ compileXIO cf) ienv
+
+compileXIO :: (String -> Comp s a) -> IOComp s ()
+compileXIO cf = jlFiles . classifyInputs <$> ask
+                >>= mapM_ (readF >=> rebase . cf)
 
 --------------------------------------------------------------------------------
 -- LLVM: External programs:
