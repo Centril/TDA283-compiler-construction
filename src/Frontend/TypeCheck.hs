@@ -27,6 +27,9 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
+{-# LANGUAGE LambdaCase, TypeSynonymInstances,
+             FlexibleInstances, UndecidableInstances #-}
+
 module Frontend.TypeCheck (
     -- * Modules
     module X,
@@ -41,6 +44,7 @@ import Control.Monad.Reader
 import Control.Lens hiding (contexts, Empty)
 
 import Utils.Monad
+import Utils.Sizeables
 
 import Frontend.Environment as X
 import Frontend.Error
@@ -126,12 +130,30 @@ checkStm typ stmt = case stmt of
     Ret      {} -> sExpr %%~ checkExp typ $ stmt
     VRet      _ -> checkVoid typ >> return stmt
     While    {} -> checkC stmt
-    For      {} -> checkC stmt -- TODO: Implement properly
     Cond     {} -> checkC stmt
     CondElse {} -> checkC >=> checkS sSe $ stmt
+    For      {} -> checkFor typ stmt
     where checkC   = sExpr %%~ checkExp bool >=> checkS sSi
           checkS f = f %%~ checkStm typ
           checkInc = checkIdent [int, doub] stmt
+
+u = undefined
+
+instance Growable TypeA where
+    grow = \case
+        Array a b dts -> arrayT b $ 1 + length dts
+        x             -> arrayT x 1
+
+arrayT :: TypeA -> Int -> TypeA
+arrayT base dim = appConcrete make
+    where make a = Array a base $ replicate dim $ DimenT emptyAnot
+
+checkFor :: TypeA -> StmtA -> TCComp StmtA
+checkFor rtyp for =
+    ((sExpr %%~ checkExp (grow typ) $ for) <* sPushM contexts
+    <* (extendVar' varAlreadyDef $ Var (_sIdent for) typ VSLocal 0)
+    >>= (sSi %%~ checkStm rtyp))           <* sPopM contexts
+    where typ = _sTyp for
 
 checkAss :: StmtA -> TCComp StmtA
 checkAss ass = do
