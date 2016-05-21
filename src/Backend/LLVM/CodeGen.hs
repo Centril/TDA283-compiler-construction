@@ -40,6 +40,7 @@ module Backend.LLVM.CodeGen (
 
 import Safe
 
+import Data.List
 import Data.Tuple
 import Data.Map ((!))
 import Data.Maybe
@@ -49,6 +50,7 @@ import Control.Monad
 import Control.Lens hiding (Empty, op)
 
 import Utils.Monad
+import Utils.Sizeables
 
 import Common.AST
 import Common.Annotations
@@ -304,9 +306,106 @@ compileLBin l r onLHS prefix = do
     assignTemp boolType $
         LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
+aliasFor :: TypeA -> LComp LType
+aliasFor typ = do
+    mref <- getConv typ
+    case mref of
+        Just ref -> return $ LAlias ref
+        Nothing  -> createAlias typ
+
+createAlias :: TypeA -> LComp LType
+createAlias = \case
+    arr@(Array {}) -> do
+        smaller <- aliasFor $ shrink arr
+        struct  <- LAlias <$> bindAlias (LStruct [intType, smaller])
+        LAlias <$> bindAConv arr (LPtr struct)
+    x              -> return $ compileType x
+
+{-
+declare i8* @calloc(i32, i32)
+declare void @free(i8*)
+
+define i32 @main() {
+  ; Allocate 30,000 cells on the heap.
+  %cells = call i8* @calloc(i32 30000, i32 1)
+
+  ; Allocate a stack variable to track the cell index.
+  %cell_index_ptr = alloca i32
+  ; Initialise it to zero.
+  store i32 0, i32* %cell_index_ptr
+
+  ;;;;;;;;;;;;;;;;;;;;
+  ; Our BF code will go here!
+  ;;;;;;;;;;;;;;;;;;;;
+
+  ; Free the memory for the cells.
+  call void @free(i8* %cells)
+  ret i32 0
+}
+-}
+
+--void* calloc (size_t num, size_t size);
+
+u = undefined
+
+{-
+%arr1 = type %struct1*
+%arr2 = type %struct2*
+%struct1 = type {i32, [0 x i32]}
+%struct2 = type {i32, [0 x %arr1]}
+
+%cells = call i8* @calloc(i32 30000, i32 1)
+%p = getelementptr %T* null, i32 1
+%s = ptrtoint %T* %p to i32
+-}
+
+compileSizeof :: LType -> LComp LTValRef
+compileSizeof typ = do
+    LTValRef _ t1 <- assignTemp voidPType $ LGElemPtr typ lNull oneIndex []
+    assignTemp intType $ LPtrToInt typ t1 intType
+
+compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
+compileCalloc nElems sizeof =
+    assignTemp voidPType $ LCall voidPType $ LFunRef "calloc" [nElems, sizeof]
+
+add, mul :: LTValRef -> LTValRef -> LComp LTValRef
+add a (LTValRef _ b) = assignTemp intType $ LAdd a b
+mul a (LTValRef _ b) = assignTemp intType $ LMul a b
+
+intTVR :: Integer -> LTValRef
+intTVR = LTValRef intType . LVInt
+
+lenSize :: LTValRef
+lenSize = LTValRef intType $ LVInt $ sizeofInt `div` 8
+
+compileNewSize :: LType -> [LTValRef] -> LComp LTValRef
+compileNewSize bt []  = compileSizeof bt
+compileNewSize bt [x] = do
+    btSize <- compileSizeof bt
+    t0 <- mul x btSize
+    add t0 lenSize
+compileNewSize bt xs  = do
+    {-
+    logic is:
+    x = a + b + c
+    sizeof = (x + d) * sb + (x + 1) * si
+    -}
+    btSize <- compileSizeof bt
+    let (rhead:rtail) = reverse xs
+    t0 <- foldM add (intTVR 0) rtail
+    t1 <- add rhead      t0 >>= mul btSize
+    t2 <- add (intTVR 1) t0 >>= mul lenSize
+    add t1 t2
+
 -- TODO: Implement
 compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
-compileENew = error "compileENew undefined"
+compileENew anots bt dimes = do
+    accs   <- mapM (compileExpr . _deExpr) dimes
+    t0     <- compileNewSize (compileType bt) accs
+    t1     <- compileCalloc t0 $ intTVR 1
+    let vref = u
+    --return $ LTValRef ltyp vref
+    return u
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
@@ -344,7 +443,7 @@ compileAnotType = compileType . getType
 compileCString :: String -> LComp LTValRef
 compileCString v = do
     ref  <- newConstRef "cstring"
-    let typ   = LArray (1 + length v) charType
+    let typ   = LArray (1 + genericLength v) charType
     pushConst $ LConstGlobal ref typ v
     assignTemp strType $ strPointer (LPtr typ) ref
 
@@ -358,31 +457,36 @@ compileType = \case
     ConstStr _     -> strType
     Fun      {}    -> error "NOT IMPLEMENTED YET"
 
-boolType, intType, doubType, charType, strType :: LType
+boolType, intType, doubType, charType, strType, voidPType :: LType
 boolType  = LInt sizeofBool
 intType   = LInt sizeofInt
 doubType  = LFloat sizeofFloat
 charType  = LInt sizeofChar
 strType   = LPtr charType
+voidPType = LPtr LVoid
 
 -- TODO: Implement
 arrayType :: LType
 arrayType = error "arrayType undefined"
 
-zeroIndex :: LTIndex
-zeroIndex = (LInt 32, 0)
+zeroIndex, oneIndex :: LTIndex
+zeroIndex = (intType, 0)
+oneIndex  = (intType, 1)
 
 strPointer :: LType -> LIdent -> LExpr
 strPointer t i = LGElemPtr t i zeroIndex [zeroIndex]
 
-compileLInt :: Int -> Integer -> LComp LTValRef
+compileLInt :: Integer -> Integer -> LComp LTValRef
 compileLInt s v = return $ LTValRef (LInt s) (LVInt v)
 
-compileLFloat :: Int -> Double -> LComp LTValRef
+compileLFloat :: Integer -> Double -> LComp LTValRef
 compileLFloat s v = return $ LTValRef (LFloat s) (LVFloat v)
 
-sizeofBool, sizeofChar, sizeofInt, sizeofFloat :: Int
+sizeofBool, sizeofChar, sizeofInt, sizeofFloat :: Integer
 sizeofBool  = 1
 sizeofChar  = 8
 sizeofInt   = 32
 sizeofFloat = 64
+
+lNull :: LIdent
+lNull = "null"
