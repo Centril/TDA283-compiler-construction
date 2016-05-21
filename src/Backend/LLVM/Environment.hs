@@ -39,18 +39,23 @@ module Backend.LLVM.Environment (
 
     -- * Operations
     initialLEnv,
+    bindAConv, bindAlias, getConv, getAlias, allAliases,
     resetTemp, newTemp,
     newLabel, newLabels, getLabels, lastLabel,
     newConstRef, pushConst, getConsts,
     pushInst, clearInsts, getInsts
 ) where
 
+import Prelude hiding (insert, lookup)
+
 import Data.Maybe
+import Data.Map (Map, empty, insert, lookup, toList)
 
 import Control.Lens hiding (Context, contexts, pre)
 
 import Utils.Foldable
 
+import Common.Annotations
 import Common.Computation
 import Common.StateOps
 
@@ -60,12 +65,22 @@ import Backend.LLVM.AST
 -- Operating Environment:
 --------------------------------------------------------------------------------
 
+-- | 'LAConvMap': TypeA in Javalette AST -> alias references in LLVM.
+type LAConvMap = Map TypeA LAliasRef
+
+-- | 'LAliasMap': map from a type in Javalette AST to aliases and the
+-- corresponding 'LType'.
+type LATypeMap = Map LAliasRef LType
+
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
     _constants  :: LConstGlobals,   -- ^ Accumulated list of constants.
     _constCount :: Int,             -- ^ Counter for constants.
     _tempCount  :: Int,             -- ^ Counter for temporary SSA in LLVM.
     _labelCount :: Int,             -- ^ Counter for labels.
+    _aliasCount :: Int,             -- ^ Count of aliases.
+    _aliasConvs :: LAConvMap,       -- ^ Alias convertion map.
+    _aliasTypes :: LATypeMap,       -- ^ Alias type map.
     _insts      :: LInsts }         -- ^ Accumulated instructions.
     deriving (Eq, Show, Read)
 
@@ -73,7 +88,7 @@ makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
 initialLEnv :: LEnv
-initialLEnv = LEnv [] 0 0 0 []
+initialLEnv = LEnv [] 0 0 0 0 empty empty []
 
 --------------------------------------------------------------------------------
 -- Environment operations:
@@ -84,6 +99,27 @@ type IOLComp a = IOComp LEnv a
 
 -- | 'LComp': A computation in LLVM code generation using environment 'LEnv'.
 type LComp a = Comp LEnv a
+
+bindAConv :: TypeA -> LType -> LComp LAliasRef
+bindAConv orig conv = do
+    ref <- bindAlias conv
+    aliasConvs %= insert orig ref
+    return ref
+
+bindAlias :: LType -> LComp LAliasRef
+bindAlias typ = do
+    ref <- freshOf "talias" aliasCount
+    aliasTypes %= insert ref typ
+    return ref
+
+getConv :: TypeA -> LComp (Maybe LAliasRef)
+getConv typ = uses aliasConvs $ lookup typ
+
+getAlias :: LAliasRef -> LComp (Maybe LType)
+getAlias ref = uses aliasTypes $ lookup ref
+
+allAliases :: LComp [(LAliasRef, LType)]
+allAliases = uses aliasTypes toList
 
 resetTemp :: LComp ()
 resetTemp = tempCount .= 0
