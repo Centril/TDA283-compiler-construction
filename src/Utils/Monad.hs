@@ -35,8 +35,10 @@ module Utils.Monad (
     (<!>), (<:>), (<++>),
 
     -- * Monad operations
-    (>?=>), (>=?>), (<<=),  maybeErr, unless'
+    (>?=>), (>=?>), (<<=),  maybeErr, unless', foldl1M, foldr1M
 ) where
+
+import Data.Foldable
 
 import Control.Monad
 
@@ -114,3 +116,11 @@ fkeep f a = (\b -> (a, b)) <$> f a
 -- | '<++>': 'mappend' a monoidal value inside a monad to another.
 (<++>) :: (Applicative f, Monoid b) => f b -> f b -> f b
 (<++>) l r = mappend <$> l <*> r
+
+-- | 'foldl1M': variant of 'foldlM' without base case, so non-empty structure.
+foldl1M :: (Foldable t, Monad m) => (a -> a -> m a) -> t a -> m a
+foldl1M f t = let (z:xs) = toList t in foldlM f z xs
+
+-- | 'foldr1M': variant of 'foldrM' without base case, so non-empty structure.
+foldr1M :: (Foldable t, Monad m) => (a -> a -> m a) -> t a -> m a
+foldr1M f t = let (z:xs) = toList t in foldrM f z xs
