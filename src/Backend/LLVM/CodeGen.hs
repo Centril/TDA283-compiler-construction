@@ -359,18 +359,20 @@ u = undefined
 %s = ptrtoint %T* %p to i32
 -}
 
+assignInt = assignTemp intType
+
 compileSizeof :: LType -> LComp LTValRef
 compileSizeof typ = do
-    LTValRef _ t1 <- assignTemp voidPType $ LGElemPtr typ lNull oneIndex []
-    assignTemp intType $ LPtrToInt typ t1 intType
+    t1 <- assignTemp bytePType $ LGElemPtr typ lNull oneIndex []
+    assignInt $ LPtrToInt t1 intType
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
 compileCalloc nElems sizeof =
-    assignTemp voidPType $ LCall voidPType $ LFunRef "calloc" [nElems, sizeof]
+    assignTemp bytePType $ LCall bytePType $ LFunRef "calloc" [nElems, sizeof]
 
 add, mul :: LTValRef -> LTValRef -> LComp LTValRef
-add a (LTValRef _ b) = assignTemp intType $ LAdd a b
-mul a (LTValRef _ b) = assignTemp intType $ LMul a b
+add a (LTValRef _ b) = assignInt $ LAdd a b
+mul a (LTValRef _ b) = assignInt $ LMul a b
 
 intTVR :: Integer -> LTValRef
 intTVR = LTValRef intType . LVInt
@@ -403,8 +405,13 @@ compileENew anots bt dimes = do
     accs   <- mapM (compileExpr . _deExpr) dimes
     t0     <- compileNewSize (compileType bt) accs
     t1     <- compileCalloc t0 $ intTVR 1
-    let vref = u
-    --return $ LTValRef ltyp vref
+    let typ = getType anots
+    ltyp   <- aliasFor typ
+    t2     <- assignTemp ltyp $ LBitcast t1 ltyp
+    initializeLengths t2 accs
+    return t2
+
+initializeLengths ltyp accs = do
     return u
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
@@ -457,12 +464,15 @@ compileType = \case
     ConstStr _     -> strType
     Fun      {}    -> error "NOT IMPLEMENTED YET"
 
-boolType, intType, doubType, charType, strType, voidPType :: LType
+boolType, intType, doubType, charType, strType :: LType
+byteType, bytePType, voidPType :: LType
 boolType  = LInt sizeofBool
 intType   = LInt sizeofInt
 doubType  = LFloat sizeofFloat
 charType  = LInt sizeofChar
 strType   = LPtr charType
+byteType  = LInt sizeofByte
+bytePType = LPtr byteType
 voidPType = LPtr LVoid
 
 -- TODO: Implement
@@ -482,9 +492,10 @@ compileLInt s v = return $ LTValRef (LInt s) (LVInt v)
 compileLFloat :: Integer -> Double -> LComp LTValRef
 compileLFloat s v = return $ LTValRef (LFloat s) (LVFloat v)
 
-sizeofBool, sizeofChar, sizeofInt, sizeofFloat :: Integer
+sizeofBool, sizeofChar, sizeofByte, sizeofInt, sizeofFloat :: Integer
 sizeofBool  = 1
 sizeofChar  = 8
+sizeofByte  = 8
 sizeofInt   = 32
 sizeofFloat = 64
 

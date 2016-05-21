@@ -177,7 +177,7 @@ printExpr = \case
     LLoad r           -> unwords ["load", printTValRef r]
     LAlloca t         -> unwords ["alloca", printType t]
     LCall t fr        -> unwords ["call", printType t, printFunRef fr]
-    LBitcast t1 r t2  -> printToOp "bitcast" t1 r t2
+    LBitcast r1 to    -> printToOp "bitcast" r1 to
     LAdd r1 r2        -> printMathOp "add" r1 r2
     LFAdd r1 r2       -> printMathOp "fadd" r1 r2
     LSub r1 r2        -> printMathOp "sub" r1 r2
@@ -193,7 +193,7 @@ printExpr = \case
     LICmp o r1 r2     -> printCmp "icmp" (printIcmpOp o) r1 r2
     LFCmp o r1 r2     -> printCmp "fcmp" (printFcmpOp o) r1 r2
     LGElemPtr t i x y -> printGetPtr "getelementptr" t i x y
-    LPtrToInt t1 r t2 -> printToOp "ptrtoint" t1 r t2
+    LPtrToInt r1 to   -> printToOp "ptrtoint" r1 to
 
 printPhi :: LType -> LPhiRefs -> String
 printPhi t rs = unwords ["phi", printType t, joinComma $ printPR <$> rs]
@@ -206,9 +206,8 @@ printMathOp c r1 r2 = unwords [c, printTValRef r1 ++ ",", printValRef r2]
 printCmp :: LLVMCode -> LLVMCode -> LTValRef -> LValRef -> LLVMCode
 printCmp c o r1 r2 = unwords [c, o, printTValRef r1 ++ ",", printValRef r2]
 
-printToOp :: LLVMCode -> LType -> LValRef -> LType -> LLVMCode
-printToOp c t1 r t2 = unwords [c, printType t1, printValRef r, "to",
-                                 printType t2]
+printToOp :: LLVMCode -> LTValRef -> LType -> LLVMCode
+printToOp c r1 to = unwords [c, printTValRef r1, "to", printType to]
 
 printGetPtr :: LLVMCode -> LType -> LIdent -> LTIndex -> [LTIndex] -> LLVMCode
 printGetPtr c t i x y = unwords [c, printType t, printIdentFun i ++ ",",

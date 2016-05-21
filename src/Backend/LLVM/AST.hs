@@ -104,8 +104,7 @@ data LExpr
     = LLoad     { _lTValRef :: LTValRef }
     | LAlloca   { _lType    :: LType }
     | LCall     { _lType    :: LType,    _lFunRef  :: LFunRef }
-    | LBitcast  { _lLType   :: LType,    _lValRef  :: LValRef,
-                  _lRType   :: LType }
+    | LBitcast  { _lTValRef :: LTValRef, _lRType   :: LType   }
     | LAdd      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
     | LFAdd     { _lTValRef :: LTValRef, _lValRef  :: LValRef }
     | LSub      { _lTValRef :: LTValRef, _lValRef  :: LValRef }
@@ -124,8 +123,7 @@ data LExpr
                   _lValRef  :: LValRef }
     | LGElemPtr { _lType    :: LType,    _lIdent   :: LIdent,
                   _lTIndex  :: LTIndex,  _lTIndexs :: [LTIndex] }
-    | LPtrToInt { _lLType   :: LType,    _lValRef  :: LValRef,
-                  _lRType   :: LType }
+    | LPtrToInt { _lTValRef :: LTValRef, _lRType   :: LType   }
     deriving (Eq, Ord, Show, Read)
 
 data LPhiRef = LPhiRef LValRef LLabelRef
