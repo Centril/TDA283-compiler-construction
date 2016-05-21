@@ -67,11 +67,13 @@ compileLLVMAst = mapM compileFun . _pTopDefs >=>
 
 predefDecls :: LFunDecls
 predefDecls =
-    [LFunDecl LVoid    "printInt"    [intType],
-     LFunDecl LVoid    "printDouble" [doubType],
-     LFunDecl LVoid    "printString" [strType],
-     LFunDecl intType  "readInt"     [],
-     LFunDecl doubType "readDouble"  []]
+    [ LFunDecl bytePType "calloc"      [intType, intType]
+    , LFunDecl LVoid     "free"        [bytePType]
+    , LFunDecl LVoid     "printInt"    [intType]
+    , LFunDecl LVoid     "printDouble" [doubType]
+    , LFunDecl LVoid     "printString" [strType]
+    , LFunDecl intType   "readInt"     []
+    , LFunDecl doubType  "readDouble"  []]
 
 compileFun :: TopDefA -> LComp LFunDef
 compileFun (FnDef _ rtyp name args block) = do
@@ -326,7 +328,8 @@ assignInt = assignTemp intType
 
 compileSizeof :: LType -> LComp LTValRef
 compileSizeof typ = do
-    t1 <- assignTemp bytePType $ LGElemPtr (LTValRef typ LNull) oneIndex []
+    let typ' = LPtr typ
+    t1 <- assignTemp typ' $ LGElemPtr (LTValRef typ' LNull) oneIndex []
     assignInt $ LPtrToInt t1 intType
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
@@ -367,7 +370,7 @@ compileENew anots bt dimes = do
     let typ = getType anots
     ltyp   <- aliasFor typ
     t2     <- assignTemp ltyp $ LBitcast t1 ltyp
-    _      <- initializeLengths t2 accs
+    --_      <- initializeLengths t2 accs
     return t2
 
 -- TODO: Implement
