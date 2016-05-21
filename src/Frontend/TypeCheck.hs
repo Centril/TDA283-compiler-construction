@@ -100,11 +100,8 @@ checkProg :: ProgramA -> TCComp ProgramA
 checkProg = pTopDefs %%~ mapM checkFunType
 
 checkFunType :: TopDefA -> TCComp TopDefA
-checkFunType fun = sPushM contexts >> collectArgVars (_fArgs fun) >>
+checkFunType fun = sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
                    (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
-
-collectArgVars :: [ArgA] -> TCComp ()
-collectArgVars = mapM_ $ extendVar' argAlreadyDef . argToVar
 
 checkBlock :: TypeA -> BlockA -> TCComp BlockA
 checkBlock rtyp block = (bStmts %%~ mapM (checkStm rtyp) $ block) <*
@@ -135,14 +132,10 @@ checkStm typ stmt = case stmt of
           checkInc = checkIdent [int, doub] stmt
 
 checkFor :: TypeA -> StmtA -> TCComp StmtA
-checkFor rtyp for = do
-    for1 <- sTyp %%~ (inferType >$> fst) $ for
-    let typ = _sTyp for1
-    ((sExpr %%~ checkExp (grow typ)) for1
-        <* sPushM contexts 
-        <* extendVar' varAlreadyDef (Var (_sIdent for) typ VSLocal 0)
-        >>= sSi %%~ checkStm rtyp)
-        <* sPopM contexts
+checkFor rtyp = sTyp %%~ (inferType >$> fst) >=> \for ->
+    let typ = _sTyp for
+    in (sExpr %%~ checkExp (grow typ)) for >>= sInScope contexts .
+        (extendLocal typ (_sIdent for) >>) . (sSi %%~ checkStm rtyp)
 
 -- TODO: combine checkAss & checkAssArr?
 checkAss :: StmtA -> TCComp StmtA
@@ -166,8 +159,7 @@ checkDecls :: StmtA -> TCComp StmtA
 checkDecls decl = do
     (vtyp', _) <- inferType $ _sDTyp decl
     sDItems %%~ mapM (single vtyp') $ decl { _sDTyp = vtyp' }
-    where single vt item = checkDeclItem vt item <*
-                           extendVar' varAlreadyDef (itemToVar vt item)
+    where single vt it = checkDeclItem vt it <* extendLocal vt (_iIdent it)
 
 checkDeclItem :: TypeA -> ItemA -> TCComp ItemA
 checkDeclItem _    item@(NoInit _ _) = return item
@@ -184,8 +176,8 @@ checkIdent types stmt = do
     fst . addTyp stmt' <$> unless' (return typ) (`elem` types)
                                    (wrongIdentTyp name types)
 
-argToVar :: ArgA -> Var
-argToVar a = Var (_aIdent a) (_aTyp a) VSArg 0
+extendArg :: ArgA -> TCComp ()
+extendArg a = extendVar' argAlreadyDef $ Var (_aIdent a) (_aTyp a) VSArg 0
 
-itemToVar :: TypeA -> ItemA -> Var
-itemToVar typ item = Var (_iIdent item) typ VSLocal 0
+extendLocal :: TypeA -> Ident -> TCComp ()
+extendLocal typ name = extendVar' varAlreadyDef $ Var name typ VSLocal 0
