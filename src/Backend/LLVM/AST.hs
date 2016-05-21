@@ -53,11 +53,13 @@ data LFunDef = LFunDef { _lFdRetType :: LType, _lFdIdent :: LIdent,
 
 data LType
     = LVoid
-    | LInt    { _lIBits :: Int }
-    | LFloat  { _lFBits :: Int }
+    | LAlias  { _laRef  :: LAliasRef }
+    | LInt    { _lIBits :: Integer }
+    | LFloat  { _lFBits :: Integer }
     | LPtr    { _lTPtr  :: LType }
-    | LFunPtr { _lTFRet :: LType, _lTFArgs :: [LType] }
-    | LArray  { _lADim  :: Int,   _lAType  :: LType }
+    | LFunPtr { _lTFRet :: LType,   _lTFArgs :: [LType] }
+    | LArray  { _lADim  :: Integer, _lAType  :: LType }
+    | LStruct { _lTypes :: [LType] }
     | LInd
     deriving (Eq, Ord, Show, Read)
 
@@ -130,10 +132,10 @@ data LPhiRef = LPhiRef LValRef LLabelRef
     deriving (Eq, Ord, Show, Read)
 
 type LLabelRef = LIdent
-
+type LAliasRef = LIdent
 type LValue  = String
 type LIdent  = String
-type LIndex  = Int
+type LIndex  = Integer
 type LTIndex = (LType, LIndex)
 
 type LConstGlobals = [LConstGlobal]
