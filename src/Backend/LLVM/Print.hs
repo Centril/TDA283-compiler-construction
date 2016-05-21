@@ -51,9 +51,10 @@ printLLVMAst (LLVMAst g a c d) =
 joinComma :: [String] -> String
 joinComma = intercalate ", "
 
-parens, block, bracket, ws :: String -> String
+parens, block, btype, bracket, ws :: String -> String
 parens  x = "(" ++ x ++ ")"
 block   x = "{\n" ++ x ++ "}\n"
+btype   x = "{" ++ x ++ "}"
 bracket x = "[" ++ x ++ "]"
 ws      x = " " ++ x ++ " "
 
@@ -76,7 +77,10 @@ printConstGlobal (LConstGlobal i t v) =
     unwords [printIdentFun i, "=", "global", printType t, printValue v]
 
 printAlias :: LAlias -> LLVMCode
-printAlias = undefined
+printAlias (r, t) = unwords [printAliasRef r, "=", "type", printType t]
+
+printAliasRef :: LAliasRef -> LLVMCode
+printAliasRef r = "%" ++ r
 
 printFunDecl :: LFunDecl ->  LLVMCode
 printFunDecl (LFunDecl t i ts) =
@@ -91,11 +95,13 @@ printFunDef (LFunDef t i as is) =
 printType :: LType -> LLVMCode
 printType = \case
     LVoid       -> "void"
+    LAlias r    -> "%" ++ r
     LInt i      -> "i" ++ show i
     LFloat _    -> "double"
     LPtr t      -> printType t ++ "*"
     LFunPtr r a -> unwords [printType r, parens (printTypes a) ++ "*"]
     LArray d t  -> bracket $ unwords [show d, "x", printType t]
+    LStruct ts  -> btype $ printTypes ts
     LInd        -> "..."
 
 printTypes :: LTypes -> LLVMCode
