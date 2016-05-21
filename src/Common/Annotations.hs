@@ -139,7 +139,7 @@ data ASTAnot = AType      { _anotType     :: Type (Map AnotKey ASTAnot) }
              | ACExprLit  { _anotCExprLit :: ML          }
              | AKind      { _anotKind     :: Kind        }
              | AVarSource { _anotVS       :: VarSource   }
-    deriving (Eq, Show, Read, Data, Typeable)
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 makePrisms ''ASTAnot
 makeLenses ''ASTAnot
@@ -185,6 +185,13 @@ instance Growable TypeA where
     grow = \case
         Array _ b dts -> arrayT b $ 1 + length dts
         x             -> arrayT x 1
+
+instance Shrinkable TypeA where
+    shrink = \case
+        Array a b dts -> case dts of
+                         (x1:x2:xs) -> Array a b (x2:xs)
+                         _          -> b
+        x             -> x
 
 arrayT :: TypeA -> Int -> TypeA
 arrayT base dim = appConcrete make
