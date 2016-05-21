@@ -36,12 +36,17 @@ import Control.Lens
 type LLVMCode = String
 
 data LLVMAst = LLVMAst {
-    _lGConsts :: LConstGlobals, _lFDecls :: LFunDecls, _lFDefs :: LFunDefs }
+      _lGConsts :: LConstGlobals
+    , _lAliases :: LAliases
+    , _lFDecls  :: LFunDecls
+    , _lFDefs   :: LFunDefs }
     deriving (Eq, Ord, Show, Read)
 
 data LConstGlobal = LConstGlobal {
     _lCGIdent :: LIdent, _lCGType :: LType, _lCFVal :: LValue }
     deriving (Eq, Ord, Show, Read)
+
+type LAlias = (LAliasRef, LType)
 
 data LFunDecl = LFunDecl {
     _lFcRetType :: LType, _lFcIdent :: LIdent, _lFcArgTypes :: LTypes }
@@ -137,6 +142,7 @@ type LIndex  = Integer
 type LTIndex = (LType, LIndex)
 
 type LConstGlobals = [LConstGlobal]
+type LAliases      = [LAlias]
 type LFunDecls     = [LFunDecl]
 type LFunDefs      = [LFunDef]
 type LTValRefs     = [LTValRef]

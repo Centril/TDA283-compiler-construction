@@ -63,7 +63,7 @@ compileLLVM = compileLLVMAst >$> printLLVMAst
 
 compileLLVMAst :: ProgramA -> LComp LLVMAst
 compileLLVMAst = mapM compileFun . _pTopDefs >=>
-    liftM3 LLVMAst getConsts (return predefDecls) . return
+    liftM4 LLVMAst getConsts allAliases (return predefDecls) . return
 
 predefDecls :: LFunDecls
 predefDecls =

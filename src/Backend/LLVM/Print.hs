@@ -42,10 +42,11 @@ import Utils.Pointless
 import Backend.LLVM.AST
 
 printLLVMAst :: LLVMAst -> LLVMCode
-printLLVMAst (LLVMAst g c d) =
-    trim $ unlines [unlineFun printConstGlobal g,
-                    unlineFun printFunDecl c,
-                    unlineFun printFunDef d]
+printLLVMAst (LLVMAst g a c d) =
+    trim $ unlines [unlineFun printConstGlobal g
+                   ,unlineFun printAlias a
+                   ,unlineFun printFunDecl c
+                   ,unlineFun printFunDef d]
 
 joinComma :: [String] -> String
 joinComma = intercalate ", "
@@ -73,6 +74,9 @@ unlineFun = unlines .| (<$>)
 printConstGlobal :: LConstGlobal -> LLVMCode
 printConstGlobal (LConstGlobal i t v) =
     unwords [printIdentFun i, "=", "global", printType t, printValue v]
+
+printAlias :: LAlias -> LLVMCode
+printAlias = undefined
 
 printFunDecl :: LFunDecl ->  LLVMCode
 printFunDecl (LFunDecl t i ts) =

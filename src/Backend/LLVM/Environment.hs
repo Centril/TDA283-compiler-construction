@@ -118,7 +118,7 @@ getConv typ = uses aliasConvs $ lookup typ
 getAlias :: LAliasRef -> LComp (Maybe LType)
 getAlias ref = uses aliasTypes $ lookup ref
 
-allAliases :: LComp [(LAliasRef, LType)]
+allAliases :: LComp LAliases
 allAliases = uses aliasTypes toList
 
 resetTemp :: LComp ()
