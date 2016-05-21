@@ -326,7 +326,7 @@ assignInt = assignTemp intType
 
 compileSizeof :: LType -> LComp LTValRef
 compileSizeof typ = do
-    t1 <- assignTemp bytePType $ LGElemPtr typ lNull oneIndex []
+    t1 <- assignTemp bytePType $ LGElemPtr (LTValRef typ LNull) oneIndex []
     assignInt $ LPtrToInt t1 intType
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
@@ -442,7 +442,7 @@ zeroIndex = (intType, 0)
 oneIndex  = (intType, 1)
 
 strPointer :: LType -> LIdent -> LExpr
-strPointer t i = LGElemPtr t i zeroIndex [zeroIndex]
+strPointer t i = LGElemPtr (LTValRef t $ LConst i) zeroIndex [zeroIndex]
 
 compileLInt :: Integer -> Integer -> LComp LTValRef
 compileLInt s v = return $ LTValRef (LInt s) (LVInt v)
@@ -456,6 +456,3 @@ sizeofChar  = 8
 sizeofByte  = 8
 sizeofInt   = 32
 sizeofFloat = 64
-
-lNull :: LIdent
-lNull = "null"

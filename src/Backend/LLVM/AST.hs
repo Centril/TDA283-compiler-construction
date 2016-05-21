@@ -80,8 +80,9 @@ data LFCmpOp = LFOeq | LFOgt | LFOge | LFOlt | LFOle | LFOne | LFOrd
 
 data LValRef
     = LVInt   { _lVInt   :: Integer }
-    | LVFloat { _lVFloat :: Double }
-    | LRef    { _lRIdent :: LIdent }
+    | LVFloat { _lVFloat :: Double  }
+    | LRef    { _lRIdent :: LIdent  }
+    | LConst  { _lRIdent :: LIdent  }
     | LNull
     deriving (Eq, Ord, Show, Read)
 
@@ -126,7 +127,7 @@ data LExpr
                   _lValRef  :: LValRef }
     | LFCmp     { _lFCmpOp  :: LFCmpOp,  _lTValRef :: LTValRef,
                   _lValRef  :: LValRef }
-    | LGElemPtr { _lType    :: LType,    _lIdent   :: LIdent,
+    | LGElemPtr { _lTValRef :: LTValRef,
                   _lTIndex  :: LTIndex,  _lTIndexs :: [LTIndex] }
     | LPtrToInt { _lTValRef :: LTValRef, _lRType   :: LType   }
     deriving (Eq, Ord, Show, Read)

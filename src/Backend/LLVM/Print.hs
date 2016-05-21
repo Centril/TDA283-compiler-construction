@@ -148,9 +148,10 @@ printFcmpOp = \case
 
 printValRef :: LValRef -> LLVMCode
 printValRef = \case
-    LVInt i   -> show i
+    LVInt   i -> show i
     LVFloat f -> show f
-    LRef r    -> printIdentVar r
+    LRef    r -> printIdentVar r
+    LConst  c -> printIdentFun c
     LNull     -> "null"
 
 printTValRef :: LTValRef -> LLVMCode
@@ -202,7 +203,7 @@ printExpr = \case
     LPhi  t rs        -> printPhi t rs
     LICmp o r1 r2     -> printCmp "icmp" (printIcmpOp o) r1 r2
     LFCmp o r1 r2     -> printCmp "fcmp" (printFcmpOp o) r1 r2
-    LGElemPtr t i x y -> printGetPtr "getelementptr" t i x y
+    LGElemPtr r1 x ys -> printGetPtr "getelementptr" r1 x ys
     LPtrToInt r1 to   -> printToOp "ptrtoint" r1 to
 
 printPhi :: LType -> LPhiRefs -> String
@@ -219,9 +220,9 @@ printCmp c o r1 r2 = unwords [c, o, printTValRef r1 ++ ",", printValRef r2]
 printToOp :: LLVMCode -> LTValRef -> LType -> LLVMCode
 printToOp c r1 to = unwords [c, printTValRef r1, "to", printType to]
 
-printGetPtr :: LLVMCode -> LType -> LIdent -> LTIndex -> [LTIndex] -> LLVMCode
-printGetPtr c t i x y = unwords [c, printType t, printIdentFun i ++ ",",
-                                 printTIndex x ++ ",", printTIndexes y]
+printGetPtr :: LLVMCode -> LTValRef -> LTIndex -> [LTIndex] -> LLVMCode
+printGetPtr c r1 i is =
+    unwords [c, joinComma [printTValRef r1, printTIndexes $ i:is]]
 
 printIdent :: LIdent -> LLVMCode
 printIdent = id
@@ -242,7 +243,7 @@ printTIndex :: (LType, LIndex) -> LLVMCode
 printTIndex (t, i) = printType t ++ " " ++ printIndex i
 
 printTIndexes :: [LTIndex] -> LLVMCode
-printTIndexes t = joinComma $ printTIndex <$> t
+printTIndexes ts = joinComma $ printTIndex <$> ts
 
 printValue :: LValue -> LLVMCode
 printValue str = "c\"" ++  str ++ "\\00\""
