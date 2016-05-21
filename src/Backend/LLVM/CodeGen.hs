@@ -321,44 +321,7 @@ createAlias = \case
         LAlias <$> bindAConv arr (LPtr struct)
     x              -> return $ compileType x
 
-{-
-declare i8* @calloc(i32, i32)
-declare void @free(i8*)
-
-define i32 @main() {
-  ; Allocate 30,000 cells on the heap.
-  %cells = call i8* @calloc(i32 30000, i32 1)
-
-  ; Allocate a stack variable to track the cell index.
-  %cell_index_ptr = alloca i32
-  ; Initialise it to zero.
-  store i32 0, i32* %cell_index_ptr
-
-  ;;;;;;;;;;;;;;;;;;;;
-  ; Our BF code will go here!
-  ;;;;;;;;;;;;;;;;;;;;
-
-  ; Free the memory for the cells.
-  call void @free(i8* %cells)
-  ret i32 0
-}
--}
-
---void* calloc (size_t num, size_t size);
-
-u = undefined
-
-{-
-%arr1 = type %struct1*
-%arr2 = type %struct2*
-%struct1 = type {i32, [0 x i32]}
-%struct2 = type {i32, [0 x %arr1]}
-
-%cells = call i8* @calloc(i32 30000, i32 1)
-%p = getelementptr %T* null, i32 1
-%s = ptrtoint %T* %p to i32
--}
-
+assignInt :: LExpr -> LComp LTValRef
 assignInt = assignTemp intType
 
 compileSizeof :: LType -> LComp LTValRef
@@ -387,11 +350,7 @@ compileNewSize bt [x] = do
     t0 <- mul x btSize
     add t0 lenSize
 compileNewSize bt xs  = do
-    {-
-    logic is:
-    x = a + b + c
-    sizeof = (x + d) * sb + (x + 1) * si
-    -}
+    {- The logic is: x = a + b + c; sizeof = (x + d) * sb + (x + 1) * si -}
     btSize <- compileSizeof bt
     let (rhead:rtail) = reverse xs
     t0 <- foldM add (intTVR 0) rtail
@@ -408,11 +367,12 @@ compileENew anots bt dimes = do
     let typ = getType anots
     ltyp   <- aliasFor typ
     t2     <- assignTemp ltyp $ LBitcast t1 ltyp
-    initializeLengths t2 accs
+    _      <- initializeLengths t2 accs
     return t2
 
-initializeLengths ltyp accs = do
-    return u
+-- TODO: Implement
+initializeLengths :: LTValRef -> [LTValRef] -> LComp LTValRef
+initializeLengths = return undefined
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
@@ -464,8 +424,7 @@ compileType = \case
     ConstStr _     -> strType
     Fun      {}    -> error "NOT IMPLEMENTED YET"
 
-boolType, intType, doubType, charType, strType :: LType
-byteType, bytePType, voidPType :: LType
+boolType, intType, doubType, charType, strType, byteType, bytePType :: LType
 boolType  = LInt sizeofBool
 intType   = LInt sizeofInt
 doubType  = LFloat sizeofFloat
@@ -473,7 +432,6 @@ charType  = LInt sizeofChar
 strType   = LPtr charType
 byteType  = LInt sizeofByte
 bytePType = LPtr byteType
-voidPType = LPtr LVoid
 
 -- TODO: Implement
 arrayType :: LType

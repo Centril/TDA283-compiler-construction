@@ -46,7 +46,7 @@ module Backend.LLVM.Environment (
     pushInst, clearInsts, getInsts
 ) where
 
-import Prelude hiding (insert, lookup)
+import Prelude hiding (lookup)
 
 import Data.Maybe
 import Data.Map (Map, empty, insert, lookup, toList)

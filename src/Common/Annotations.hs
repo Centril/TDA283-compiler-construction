@@ -189,7 +189,7 @@ instance Growable TypeA where
 instance Shrinkable TypeA where
     shrink = \case
         Array a b dts -> case dts of
-                         (x1:x2:xs) -> Array a b (x2:xs)
+                         (_:x2:xs) -> Array a b (x2:xs)
                          _          -> b
         x             -> x
 
