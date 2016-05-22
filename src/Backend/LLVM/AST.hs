@@ -98,8 +98,8 @@ data LInst
     | LIExpr  { _lExpr      :: LExpr }
     | LVCall  { _lIFunRef   :: LFunRef }
     | LABr    { _lLabelRef  :: LLabelRef }
-    | LCBr    { _lLLabelRef :: LLabelRef, _lRLabelRef :: LLabelRef,
-                _lITValRef  :: LTValRef }
+    | LCBr    { _lITValRef  :: LTValRef,   _lLLabelRef :: LLabelRef,
+                _lRLabelRef :: LLabelRef }
     | LVRet
     | LRet    { _lITValRef  :: LTValRef }
     | LStore  { _lILTValRef :: LTValRef,   _lIRTValRef :: LTValRef }

@@ -59,8 +59,6 @@ import Common.Annotations
 import Backend.LLVM.Environment
 import Backend.LLVM.Print
 
-u = undefined
-
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 
@@ -174,14 +172,14 @@ compileRet = compileExpr >$> LRet >=> pushInst
 compileCond :: ExprA -> StmtA -> LComp ()
 compileCond c si = do
     [_then, _cont] <- newLabels "if" ["then", "cont"]
-    compileCondExpr    _then _cont c
+    compileCondExpr c  _then _cont
     compileCondStmt si _then _cont
     compileLabel             _cont
 
 compileCondElse :: ExprA -> StmtA -> StmtA -> LComp ()
 compileCondElse c si se = do
     [_then, _else, _cont] <- newLabels "ifelse" ["then", "else", "cont"]
-    compileCondExpr    _then _else c
+    compileCondExpr c  _then _else
     compileCondStmt si _then _cont
     compileCondStmt se _else _cont
     compileLabel             _cont
@@ -190,15 +188,15 @@ compileWhile :: ExprA -> StmtA -> LComp ()
 compileWhile c sw = do
     [_check, _then, _cont] <- newLabels "while" ["check", "then", "cont"]
     compileLabelJmp          _check
-    compileCondExpr    _then _cont c
+    compileCondExpr c  _then _cont
     compileCondStmt sw _then _check
     compileLabel             _cont
 
-pushLCBr :: LLabelRef -> LLabelRef -> LTValRef -> LComp ()
-pushLCBr _then _else = pushInst . LCBr _then _else
+pushLCBr :: LTValRef -> LLabelRef -> LLabelRef -> LComp ()
+pushLCBr r _then _else = pushInst $ LCBr r _then _else
 
-compileCondExpr :: LLabelRef -> LLabelRef -> ExprA -> LComp ()
-compileCondExpr _then _else = compileExpr >=> pushLCBr _then _else
+compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
+compileCondExpr c _then _else = compileExpr c >>= \e -> pushLCBr e _then _else
 
 compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
 compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
@@ -301,7 +299,8 @@ compileRelOpF = \case
 compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
-    (uncurry compileCondExpr $ (if onLHS == 0 then id else swap) (lRhs, lEnd)) l
+    uncurry (compileCondExpr l) $
+        (if onLHS == 0 then id else swap) (lRhs, lEnd)
     lLhs          <- lastLabel
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
     lRhs'         <- lastLabel
@@ -348,7 +347,6 @@ compileNewSize bt = \case
         t2 <- add ione  t0 >>= mul lenSize
         add t1 t2
 
--- TODO: Implement
 compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
 compileENew anots bt dimes = do
     accs <- mapM (compileExpr . _deExpr) dimes
@@ -368,7 +366,6 @@ initializeLengths typ accs arr = case accs of
 lengthRef :: LTValRef -> LComp LTValRef
 lengthRef arr = assignIntP $ LGElemPtr arr izero [izero]
 
--- TODO: Implement
 compileFor :: TypeA -> Ident -> ExprA -> StmtA -> LComp ()
 compileFor typ name eArr si = do
     let eArrT = getType $ extract eArr
@@ -384,12 +381,13 @@ forLoop :: LLabelRef -> TypeA -> LTValRef -> LComp LTValRef
 forLoop prefix typ arr lengthInit handler = do
     [_check, _then, _cont] <- newLabels prefix ["check", "then", "cont"]
     -- set: i = 0, load: arr.length
-    l <- lengthInit
-    i <- assignIntP (LAlloca intType) <<= pushInst . LStore izero
+    l     <- lengthInit
+    i     <- assignIntP (LAlloca intType) <<= pushInst . LStore izero
     compileLabelJmp _check
     -- check: i < arr.length
     iload <- assignInt $ LLoad i
-    assignTemp boolType (LICmp LSlt iload $ _lTVRef l) >>= pushLCBr _then _cont
+    ref   <- assignTemp boolType (LICmp LSlt iload $ _lTVRef l)
+    pushLCBr ref _then _cont
     -- load: arr[i] + body:
     xInLabel _then _check $ do
         (smaller, ltyp) <- fkeep aliasFor (shrink typ)
@@ -405,7 +403,6 @@ compileEVar anots name = do
     let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
     assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
 
--- TODO: Implement
 compileLength :: ExprA -> LComp LTValRef
 compileLength = compileExpr >=> lengthRef >=> assignInt . LLoad
 

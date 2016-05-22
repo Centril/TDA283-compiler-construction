@@ -167,7 +167,7 @@ printInst = \case
     LIExpr e     -> printExpr e
     LVCall fr    -> "call void " ++ printFunRef fr
     LABr i       -> "br " ++ printLabel i
-    LCBr i1 i2 r -> "br " ++ joinComma [printTValRef r, printLabel i1,
+    LCBr r i1 i2 -> "br " ++ joinComma [printTValRef r, printLabel i1,
                                         printLabel i2]
     LVRet        -> "ret void"
     LRet r       -> "ret " ++ printTValRef r
