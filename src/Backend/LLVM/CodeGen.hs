@@ -78,10 +78,10 @@ predefDecls =
 
 compileFun :: TopDefA -> LComp LFunDef
 compileFun (FnDef _ rtyp name args block) = do
-    let name' = compileFName name
-    let rtyp' = compileFRTyp rtyp
-    let args' = compileFArg <$> args
-    insts <- compileFBlock args block
+    let name'  = compileFName name
+    rtyp'     <- compileFRTyp rtyp
+    args'     <- mapM compileFArg args
+    insts     <- compileFBlock args block
     let insts' = insts ++ unreachableMay block
     return $ LFunDef rtyp' name' args' insts'
 
@@ -92,18 +92,21 @@ unreachableMay block = maybe [LUnreachable] (const []) $
 compileFName :: Ident -> LIdent
 compileFName = _ident
 
-compileFRTyp :: TypeA -> LType
+compileFRTyp :: TypeA -> LComp LType
 compileFRTyp = compileType
 
-compileFArg :: ArgA -> LArg
-compileFArg arg = LArg (compileType $ _aTyp arg) (_ident $ _aIdent arg)
+compileFArg :: ArgA -> LComp LArg
+compileFArg arg = do
+    typ <- compileType $ _aTyp arg
+    return $ LArg typ (_ident $ _aIdent arg)
 
 allocArgs :: ArgA -> LComp ()
 allocArgs arg = do
     let name = _aIdent arg
     let (name', typ) = (Ident $ "p" ++ _ident name, _aTyp arg)
+    ltyp <- compileType typ
     compileAlloca name' typ
-    compileStore name' (LTValRef (compileType typ) (LRef $ _ident name))
+    compileStore name' (LTValRef ltyp (LRef $ _ident name))
 
 compileFBlock :: [ArgA] -> BlockA -> LComp LInsts
 compileFBlock args block = compileLabel "entry" >>
@@ -150,18 +153,15 @@ compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
                                                          (LRef $ _ident name)
 
 compileDecl :: TypeA -> ItemA -> LComp ()
-compileDecl typ item = case typ of
-    (Array {}) -> do
-        _ <- compileExpr $ fromMaybe (undefined) (item ^? iExpr)
-        return ()
-    _          -> do
-        let name = _iIdent item
-        compileAlloca name typ
-        compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
+compileDecl typ item = do
+    let name = _iIdent item
+    compileAlloca name typ
+    compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAlloca :: Ident -> TypeA -> LComp ()
-compileAlloca name typ = pushInst $ LAssign (_ident name)
-                                  $ LAlloca (compileType typ)
+compileAlloca name typ = do
+    ltyp <- compileType typ
+    pushInst $ LAssign (_ident name) $ LAlloca ltyp
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss = compileExpr >=?> compileStore
@@ -215,6 +215,7 @@ compileExpr = \case
     EString   _ v     -> compileCString v
     ELitTrue  _       -> compileLInt   sizeofBool  1
     ELitFalse _       -> compileLInt   sizeofBool  0
+    ECastNull _ t     -> compileCastNull t
     EApp      a i es  -> compileApp a i es
     Neg       _ e     -> compileNeg e
     Not       _ e     -> compileNot e
@@ -223,6 +224,9 @@ compileExpr = \case
     ERel      _ l o r -> compileLRel o l r
     EAnd      _ l   r -> compileLBin l r 0 "land"
     EOr       _ l   r -> compileLBin l r 1 "lor"
+
+compileCastNull :: TypeA -> LComp LTValRef
+compileCastNull = compileType >$> flip LTValRef LNull
 
 switchType :: t -> t -> LType -> t
 switchType onI onF = \case
@@ -311,17 +315,6 @@ compileLBin l r onLHS prefix = do
     compileLabel lEnd
     assignBool $ LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
-aliasFor :: TypeA -> LComp LType
-aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
-
-createAlias :: TypeA -> LComp LType
-createAlias = \case
-    arr@(Array {}) -> do
-        smaller <- aliasFor $ shrink arr
-        struct  <- LAlias <$> bindAlias (LStruct [intType, LArray 0 smaller])
-        LAlias <$> bindAConv arr (LPtr struct)
-    x              -> return $ compileType x
-
 compileSizeof :: LType -> LComp LTValRef
 compileSizeof typ = let typ' = LPtr typ
                     in assignTemp typ' (LGElemPtr (LTValRef typ' LNull) ione [])
@@ -353,8 +346,9 @@ compileNewSize bt = \case
 compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
 compileENew anots bt dimes = do
     accs <- mapM (compileExpr . _deExpr) dimes
-    t1   <- compileNewSize (compileType bt) accs >>= flip compileCalloc ione
-    (typ, ltyp) <- fkeep aliasFor $ getType anots
+    lbt  <- compileType bt
+    t1   <- compileNewSize lbt accs >>= flip compileCalloc ione
+    (typ, ltyp) <- fkeep compileType $ getType anots
     assignTemp ltyp (LBitcast t1 ltyp) <<= initializeLengths typ accs
 
 initializeLengths :: TypeA -> LTValRefs -> LTValRef -> LComp ()
@@ -363,8 +357,7 @@ initializeLengths typ accs arr = case accs of
     [x]    -> initLen x
     (x:xs) -> forLoop "init.length" typ arr (initLen x >> return x) (handler xs)
     where initLen len = lengthRef arr >>= pushInst . LStore len
-          handler xs ltyp smaller _elemp = assignTemp ltyp (LLoad _elemp) >>=
-                                           initializeLengths smaller xs
+          handler xs _ smaller = initializeLengths smaller xs
 
 lengthRef :: LTValRef -> LComp LTValRef
 lengthRef arr = assignIntP $ LGElemPtr arr izero [izero]
@@ -375,9 +368,9 @@ compileFor typ name eArr si = do
     compileAlloca name typ
     lArr <- compileExpr eArr
     forLoop "for" eArrT lArr (lengthRef lArr >>= assignInt . LLoad) $
-        \ltyp _ _elemp -> do
-            assignTemp ltyp (LLoad _elemp) >>= compileStore name
-            compileStmt si
+        \ltyp _ _elemp -> assignTemp ltyp (LLoad $ lTType %~ LPtr $ _elemp)
+                          >>= compileStore name
+                          >>  compileStmt si
 
 forLoop :: LLabelRef -> TypeA -> LTValRef -> LComp LTValRef
         -> (LType -> TypeA -> LTValRef -> LComp ()) -> LComp ()
@@ -393,8 +386,8 @@ forLoop prefix typ arr lengthInit handler = do
     pushLCBr ref _then _cont
     -- load: arr[i] + body:
     xInLabel _then _check $ do
-        (smaller, ltyp) <- fkeep aliasFor (shrink typ)
-        assignTemp (LPtr ltyp) (LGElemPtr arr izero [ione, iload])
+        (smaller, ltyp) <- fkeep compileType (shrink typ)
+        assignTemp ltyp (LGElemPtr arr izero [ione, iload])
             >>= handler ltyp smaller
         -- store: i++
         add iload ione >>= pushInst . flip LStore i
@@ -402,7 +395,7 @@ forLoop prefix typ arr lengthInit handler = do
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
-    let typ = compileAnotType anots
+    typ   <- compileAnotType anots
     let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
     assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
 
@@ -414,8 +407,9 @@ compileNot = compileExpr >=> assignBool . flip LXor (LVInt 1)
 
 compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
 compileApp anots name es = do
-    fr <- LFunRef (_ident name) <$> mapM compileExpr es
-    case compileAnotType anots of
+    fr   <- LFunRef (_ident name) <$> mapM compileExpr es
+    ltyp <- compileAnotType anots
+    case ltyp of
         LVoid -> pushInst (LVCall fr) >> return (LTValRef LVoid LNull)
         rtyp  -> assignTemp rtyp $ LCall rtyp fr
 
@@ -434,7 +428,7 @@ getVS anots = let AVarSource vs = anots ! AKVarSource in vs
 getType :: ASTAnots -> TypeA
 getType anots = let AType typ = anots ! AKType in typ
 
-compileAnotType :: ASTAnots -> LType
+compileAnotType :: ASTAnots -> LComp LType
 compileAnotType = compileType . getType
 
 compileCString :: String -> LComp LTValRef
@@ -444,15 +438,30 @@ compileCString v = do
     pushConst $ LConstGlobal ref typ v
     assignTemp strType $ strPointer (LPtr typ) ref
 
-compileType :: TypeA -> LType
+compileType :: TypeA -> LComp LType
 compileType = \case
-    Int      _     -> intType
-    Doub     _     -> doubType
-    Bool     _     -> boolType
-    Void     _     -> LVoid
-    Array    {}    -> error "compileType Array is invalid."
-    ConstStr _     -> strType
+    Int      _     -> return intType
+    Doub     _     -> return doubType
+    Bool     _     -> return boolType
+    Void     _     -> return LVoid
+    arr@(Array {}) -> aliasFor arr
+    ConstStr _     -> return strType
     Fun      {}    -> error "compileType Fun not implemented."
+
+aliasFor :: TypeA -> LComp LType
+aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
+
+createAlias :: TypeA -> LComp LType
+createAlias = \case
+    arr@(Array {}) -> do
+        -- TODO: REFACTOR
+        smaller  <- aliasFor $ shrink arr
+        smallers <- case smaller of
+            LAlias x -> _lTPtr . fromJust <$> getAlias x
+            x        -> return x
+        struct <- LAlias <$> bindAlias (LStruct [intType, LArray 0 smallers])
+        LAlias <$> bindAConv arr (LPtr struct)
+    x              -> compileType x
 
 boolType, intType, doubType, charType, strType, byteType, bytePType :: LType
 boolType  = LInt sizeofBool
