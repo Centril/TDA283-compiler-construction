@@ -105,6 +105,7 @@ data Expr a
     | EString   { _eAnot :: a, _eLSVal :: String  }
     | ELitTrue  { _eAnot :: a }
     | ELitFalse { _eAnot :: a }
+    | ECastNull { _eAnot :: a, _eTyp   :: Type a }
     | EApp      { _eAnot :: a, _eIdent :: Ident, _eAppExprs :: [Expr a] }
     | Neg       { _eAnot :: a, _eExpr  :: Expr a  }
     | Not       { _eAnot :: a, _eExpr  :: Expr a  }
@@ -222,6 +223,7 @@ instance Functor Expr where
         ELitDoub  a v      -> ELitDoub  (f a) v
         ELitTrue  a        -> ELitTrue  (f a)
         ELitFalse a        -> ELitFalse (f a)
+        ECastNull a t      -> ECastNull (f a) (f <$> t)
         EString   a v      -> EString   (f a) v
         EApp      a i es   -> EApp      (f a) i (f <$$> es)
         Neg       a e      -> Neg       (f a) (f <$> e)
@@ -310,6 +312,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           ce  (J.EString   a v)       = EString   a v
           ce  (J.ELitTrue  a)         = ELitTrue  a
           ce  (J.ELitFalse a)         = ELitFalse a
+          ce  (J.ECastNull a t)       = ECastNull a (ct t)
           ce  (J.EApp      a i es)    = EApp      a (ci i) (ce <$> es)
           ce  (J.Neg       a e)       = Neg       a (ce e)
           ce  (J.Not       a e)       = Not       a (ce e)

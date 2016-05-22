@@ -74,6 +74,7 @@ inferExp expr = case expr of
     ELitDoub  {} -> addTyp' expr doub
     ELitTrue  _  -> addTyp' expr bool
     ELitFalse _  -> addTyp' expr bool
+    ECastNull {} -> inferCastNull expr
     EApp      {} -> inferFun expr
     Neg       {} -> inferUnary expr [int, doub]
     Not       {} -> inferUnary expr [bool]
@@ -83,6 +84,17 @@ inferExp expr = case expr of
     EAnd      {} -> ib [bool]
     EOr       {} -> ib [bool]
     where ib = inferBin id expr
+
+inferCastNull :: ExprA -> TCComp (ExprA, TypeA)
+inferCastNull expr = do
+    (typ, _) <- inferType $ _eTyp expr
+    unless (isPointable typ) $ nullNotCastable typ
+    addTyp' expr { _eTyp = typ } typ
+
+isPointable :: TypeA -> Bool
+isPointable = \case
+    Array {} -> True
+    _        -> False
 
 -- TODO: lenses...
 notArray :: TypeA -> Bool

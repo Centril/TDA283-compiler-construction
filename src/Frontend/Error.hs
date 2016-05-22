@@ -122,3 +122,8 @@ typeNotNewable :: TypeA -> TCComp a
 typeNotNewable typ =
     terr' ["Illegal use of base type", show typ,
            "in new, which is not a primitive type."]
+
+nullNotCastable :: TypeA -> TCComp a
+nullNotCastable typ =
+    terr' ["Illegal attempt to cast null to the type", show typ,
+           ", which is not a pointer type."]

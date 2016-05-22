@@ -171,11 +171,12 @@ tvoid    = appConcrete Void
 
 -- TODO: Fix the annotations and move maybe
 defaultVal :: TypeA -> ExprA
-defaultVal typ = case typ of
-    Int  _ -> ELitInt   emptyAnot 0
-    Doub _ -> ELitDoub  emptyAnot 0
-    Bool _ -> ELitFalse emptyAnot
-    x      -> error $ "default value not defined for type " ++ show x
+defaultVal typ = fst $ flip addTyp typ $ case typ of
+    Int  _   -> ELitInt   emptyAnot 0
+    Doub _   -> ELitDoub  emptyAnot 0
+    Bool _   -> ELitFalse emptyAnot
+    Array {} -> ECastNull emptyAnot typ
+    x        -> error $ "defaultVal is not defined for type " ++ show x
 
 --------------------------------------------------------------------------------
 -- Arrays & related:

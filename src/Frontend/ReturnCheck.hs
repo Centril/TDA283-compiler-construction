@@ -127,6 +127,7 @@ evalConstExpr expr = case expr of
     ELitInt   _ v -> addLit' expr $ LitInt    v
     ELitDoub  _ v -> addLit' expr $ LitDouble v
     EString   _ v -> addLit' expr $ LitString v
+    ECastNull {}  -> addLit  expr Nothing
     Not  a e      -> evalNot a e
     Neg  a e      -> evalNeg a e
     EOr  a l r    -> evaLitBoolOp (||) EOr  a l r
