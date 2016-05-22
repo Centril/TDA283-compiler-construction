@@ -49,6 +49,7 @@ import Control.Monad
 
 import Control.Lens hiding (Empty, op)
 
+import Utils.Shallow
 import Utils.Monad
 import Utils.Sizeables
 
@@ -57,6 +58,8 @@ import Common.Annotations
 
 import Backend.LLVM.Environment
 import Backend.LLVM.Print
+
+u = undefined
 
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
@@ -171,14 +174,14 @@ compileRet = compileExpr >$> LRet >=> pushInst
 compileCond :: ExprA -> StmtA -> LComp ()
 compileCond c si = do
     [_then, _cont] <- newLabels "if" ["then", "cont"]
-    compileCondExpr c  _then _cont
+    compileCondExpr    _then _cont c
     compileCondStmt si _then _cont
     compileLabel             _cont
 
 compileCondElse :: ExprA -> StmtA -> StmtA -> LComp ()
 compileCondElse c si se = do
     [_then, _else, _cont] <- newLabels "ifelse" ["then", "else", "cont"]
-    compileCondExpr c  _then _else
+    compileCondExpr    _then _else c
     compileCondStmt si _then _cont
     compileCondStmt se _else _cont
     compileLabel             _cont
@@ -187,20 +190,18 @@ compileWhile :: ExprA -> StmtA -> LComp ()
 compileWhile c sw = do
     [_check, _then, _cont] <- newLabels "while" ["check", "then", "cont"]
     compileLabelJmp          _check
-    compileCondExpr c  _then _cont
+    compileCondExpr    _then _cont c
     compileCondStmt sw _then _check
     compileLabel             _cont
 
-compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
-compileCondExpr c _then _else = LCBr <$> compileExpr c >>=
-                                \f -> pushInst $ f _then _else
+pushLCBr :: LLabelRef -> LLabelRef -> LTValRef -> LComp ()
+pushLCBr _then _else = pushInst . LCBr _then _else
+
+compileCondExpr :: LLabelRef -> LLabelRef -> ExprA -> LComp ()
+compileCondExpr _then _else = compileExpr >=> pushLCBr _then _else
 
 compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
 compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
-
--- TODO: Implement
-compileFor :: TypeA -> Ident -> ExprA -> StmtA -> LComp ()
-compileFor = error "compileFor undefined"
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
@@ -300,7 +301,7 @@ compileRelOpF = \case
 compileLBin :: ExprA -> ExprA -> Integer -> String -> LComp LTValRef
 compileLBin l r onLHS prefix = do
     [lRhs, lEnd] <- newLabels prefix ["rhs", "end"]
-    uncurry (compileCondExpr l) $ (if onLHS == 0 then id else swap) (lRhs, lEnd)
+    (uncurry compileCondExpr $ (if onLHS == 0 then id else swap) (lRhs, lEnd)) l
     lLhs          <- lastLabel
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
     lRhs'         <- lastLabel
@@ -309,28 +310,20 @@ compileLBin l r onLHS prefix = do
         LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
 aliasFor :: TypeA -> LComp LType
-aliasFor typ = do
-    mref <- getConv typ
-    case mref of
-        Just ref -> return $ LAlias ref
-        Nothing  -> createAlias typ
+aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
 
 createAlias :: TypeA -> LComp LType
 createAlias = \case
     arr@(Array {}) -> do
         smaller <- aliasFor $ shrink arr
-        struct  <- LAlias <$> bindAlias (LStruct [intType, smaller])
+        struct  <- LAlias <$> bindAlias (LStruct [intType, LArray 0 smaller])
         LAlias <$> bindAConv arr (LPtr struct)
     x              -> return $ compileType x
 
-assignInt :: LExpr -> LComp LTValRef
-assignInt = assignTemp intType
-
 compileSizeof :: LType -> LComp LTValRef
-compileSizeof typ = do
-    let typ' = LPtr typ
-    t1 <- assignTemp typ' $ LGElemPtr (LTValRef typ' LNull) oneIndex []
-    assignInt $ LPtrToInt t1 intType
+compileSizeof typ = let typ' = LPtr typ
+                    in assignTemp typ' (LGElemPtr (LTValRef typ' LNull) ione [])
+                        >>= assignInt . flip LPtrToInt intType
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
 compileCalloc nElems sizeof =
@@ -340,42 +333,71 @@ add, mul :: LTValRef -> LTValRef -> LComp LTValRef
 add a (LTValRef _ b) = assignInt $ LAdd a b
 mul a (LTValRef _ b) = assignInt $ LMul a b
 
-intTVR :: Integer -> LTValRef
-intTVR = LTValRef intType . LVInt
-
 lenSize :: LTValRef
-lenSize = LTValRef intType $ LVInt $ sizeofInt `div` 8
+lenSize = intTVR $ sizeofInt `div` 8
 
 compileNewSize :: LType -> [LTValRef] -> LComp LTValRef
-compileNewSize bt []  = compileSizeof bt
-compileNewSize bt [x] = do
-    btSize <- compileSizeof bt
-    t0 <- mul x btSize
-    add t0 lenSize
-compileNewSize bt xs  = do
-    {- The logic is: x = a + b + c; sizeof = (x + d) * sb + (x + 1) * si -}
-    btSize <- compileSizeof bt
-    let (rhead:rtail) = reverse xs
-    t0 <- foldM add (intTVR 0) rtail
-    t1 <- add rhead      t0 >>= mul btSize
-    t2 <- add (intTVR 1) t0 >>= mul lenSize
-    add t1 t2
+compileNewSize bt = \case
+    [ ] -> compileSizeof bt
+    [x] -> compileSizeof bt >>= mul x >>= add lenSize
+    xs -> do {- Logic is: x = a + b + c; sizeof = (x + d) * sb + (x + 1) * si -}
+        btSize <- compileSizeof bt
+        let (rhead:rtail) = reverse xs
+        t0 <- foldl1M add rtail
+        t1 <- add rhead t0 >>= mul btSize
+        t2 <- add ione  t0 >>= mul lenSize
+        add t1 t2
 
 -- TODO: Implement
 compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
 compileENew anots bt dimes = do
-    accs   <- mapM (compileExpr . _deExpr) dimes
-    t0     <- compileNewSize (compileType bt) accs
-    t1     <- compileCalloc t0 $ intTVR 1
-    let typ = getType anots
-    ltyp   <- aliasFor typ
-    t2     <- assignTemp ltyp $ LBitcast t1 ltyp
-    --_      <- initializeLengths t2 accs
-    return t2
+    accs <- mapM (compileExpr . _deExpr) dimes
+    t1   <- compileNewSize (compileType bt) accs >>= flip compileCalloc ione
+    (typ, ltyp) <- fkeep aliasFor $ getType anots
+    assignTemp ltyp (LBitcast t1 ltyp) <<= initializeLengths typ accs
+
+initializeLengths :: TypeA -> LTValRefs -> LTValRef -> LComp ()
+initializeLengths typ accs arr = case accs of
+    [ ]    -> return ()
+    [x]    -> initLen x
+    (x:xs) -> forLoop "init.length" typ arr (initLen x >> return x) (handler xs)
+    where initLen len = lengthRef arr >>= pushInst . LStore len
+          handler xs ltyp smaller _elemp = assignTemp ltyp (LLoad _elemp) >>=
+                                           initializeLengths smaller xs
+
+lengthRef :: LTValRef -> LComp LTValRef
+lengthRef arr = assignIntP $ LGElemPtr arr izero [izero]
 
 -- TODO: Implement
-initializeLengths :: LTValRef -> [LTValRef] -> LComp LTValRef
-initializeLengths = return undefined
+compileFor :: TypeA -> Ident -> ExprA -> StmtA -> LComp ()
+compileFor typ name eArr si = do
+    let eArrT = getType $ extract eArr
+    compileAlloca name typ
+    lArr <- compileExpr eArr
+    forLoop "for" eArrT lArr (lengthRef lArr >>= assignInt . LLoad) $
+        \ltyp _ _elemp -> do
+            assignTemp ltyp (LLoad _elemp) >>= compileStore name
+            compileStmt si
+
+forLoop :: LLabelRef -> TypeA -> LTValRef -> LComp LTValRef
+        -> (LType -> TypeA -> LTValRef -> LComp ()) -> LComp ()
+forLoop prefix typ arr lengthInit handler = do
+    [_check, _then, _cont] <- newLabels prefix ["check", "then", "cont"]
+    -- set: i = 0, load: arr.length
+    l <- lengthInit
+    i <- assignIntP (LAlloca intType) <<= pushInst . LStore izero
+    compileLabelJmp _check
+    -- check: i < arr.length
+    iload <- assignInt $ LLoad i
+    assignTemp boolType (LICmp LSlt iload $ _lTVRef l) >>= pushLCBr _then _cont
+    -- load: arr[i] + body:
+    xInLabel _then _check $ do
+        (smaller, ltyp) <- fkeep aliasFor (shrink typ)
+        assignTemp (LPtr ltyp) (LGElemPtr arr izero [ione, iload])
+            >>= handler ltyp smaller
+        -- store: i++
+        add iload ione >>= pushInst . flip LStore i
+    compileLabel _cont
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
@@ -385,7 +407,7 @@ compileEVar anots name = do
 
 -- TODO: Implement
 compileLength :: ExprA -> LComp LTValRef
-compileLength = error "compileLength undefined"
+compileLength = compileExpr >=> lengthRef >=> assignInt . LLoad
 
 compileNot :: ExprA -> LComp LTValRef
 compileNot = compileExpr >=> assignTemp boolType . flip LXor (LVInt 1)
@@ -396,6 +418,12 @@ compileApp anots name es = do
     case compileAnotType anots of
         LVoid -> pushInst (LVCall fr) >> return (LTValRef LVoid LNull)
         rtyp  -> assignTemp rtyp $ LCall rtyp fr
+
+assignInt :: LExpr -> LComp LTValRef
+assignInt = assignTemp intType
+
+assignIntP :: LExpr -> LComp LTValRef
+assignIntP = assignTemp $ LPtr intType
 
 assignTemp :: LType -> LExpr -> LComp LTValRef
 assignTemp rtyp expr =
@@ -440,12 +468,15 @@ bytePType = LPtr byteType
 arrayType :: LType
 arrayType = error "arrayType undefined"
 
-zeroIndex, oneIndex :: LTIndex
-zeroIndex = (intType, 0)
-oneIndex  = (intType, 1)
+intTVR :: Integer -> LTValRef
+intTVR = LTValRef intType . LVInt
+
+izero, ione :: LTValRef
+izero = intTVR 0
+ione  = intTVR 1
 
 strPointer :: LType -> LIdent -> LExpr
-strPointer t i = LGElemPtr (LTValRef t $ LConst i) zeroIndex [zeroIndex]
+strPointer t i = LGElemPtr (LTValRef t $ LConst i) izero [izero]
 
 compileLInt :: Integer -> Integer -> LComp LTValRef
 compileLInt s v = return $ LTValRef (LInt s) (LVInt v)

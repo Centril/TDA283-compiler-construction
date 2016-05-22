@@ -167,7 +167,7 @@ printInst = \case
     LIExpr e     -> printExpr e
     LVCall fr    -> "call void " ++ printFunRef fr
     LABr i       -> "br " ++ printLabel i
-    LCBr r i1 i2 -> "br " ++ joinComma [printTValRef r, printLabel i1,
+    LCBr i1 i2 r -> "br " ++ joinComma [printTValRef r, printLabel i1,
                                         printLabel i2]
     LVRet        -> "ret void"
     LRet r       -> "ret " ++ printTValRef r
@@ -220,9 +220,8 @@ printCmp c o r1 r2 = unwords [c, o, printTValRef r1 ++ ",", printValRef r2]
 printToOp :: LLVMCode -> LTValRef -> LType -> LLVMCode
 printToOp c r1 to = unwords [c, printTValRef r1, "to", printType to]
 
-printGetPtr :: LLVMCode -> LTValRef -> LTIndex -> [LTIndex] -> LLVMCode
-printGetPtr c r1 i is =
-    unwords [c, joinComma [printTValRef r1, printTIndexes $ i:is]]
+printGetPtr :: LLVMCode -> LTValRef -> LTValRef -> LTValRefs -> LLVMCode
+printGetPtr c r1 i is = unwords [c, joinComma $ printTValRef <$> (r1:i:is)]
 
 printIdent :: LIdent -> LLVMCode
 printIdent = id
@@ -235,15 +234,6 @@ printLabRef lr = "%" ++ lr
 
 printIdentFun :: LIdent -> LLVMCode
 printIdentFun i = "@" ++ i
-
-printIndex :: LIndex -> LLVMCode
-printIndex = show
-
-printTIndex :: (LType, LIndex) -> LLVMCode
-printTIndex (t, i) = printType t ++ " " ++ printIndex i
-
-printTIndexes :: [LTIndex] -> LLVMCode
-printTIndexes ts = joinComma $ printTIndex <$> ts
 
 printValue :: LValue -> LLVMCode
 printValue str = "c\"" ++  str ++ "\\00\""

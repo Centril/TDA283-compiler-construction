@@ -98,8 +98,8 @@ data LInst
     | LIExpr  { _lExpr      :: LExpr }
     | LVCall  { _lIFunRef   :: LFunRef }
     | LABr    { _lLabelRef  :: LLabelRef }
-    | LCBr    { _lITValRef  :: LTValRef,   _lLLabelRef :: LLabelRef,
-                _lRLabelRef :: LLabelRef }
+    | LCBr    { _lLLabelRef :: LLabelRef, _lRLabelRef :: LLabelRef,
+                _lITValRef  :: LTValRef }
     | LVRet
     | LRet    { _lITValRef  :: LTValRef }
     | LStore  { _lILTValRef :: LTValRef,   _lIRTValRef :: LTValRef }
@@ -128,7 +128,7 @@ data LExpr
     | LFCmp     { _lFCmpOp  :: LFCmpOp,  _lTValRef :: LTValRef,
                   _lValRef  :: LValRef }
     | LGElemPtr { _lTValRef :: LTValRef,
-                  _lTIndex  :: LTIndex,  _lTIndexs :: [LTIndex] }
+                  _lTIndex  :: LTValRef, _lTIndexs :: LTValRefs }
     | LPtrToInt { _lTValRef :: LTValRef, _lRType   :: LType   }
     deriving (Eq, Ord, Show, Read)
 
@@ -139,8 +139,6 @@ type LLabelRef = LIdent
 type LAliasRef = LIdent
 type LValue  = String
 type LIdent  = String
-type LIndex  = Integer
-type LTIndex = (LType, LIndex)
 
 type LConstGlobals = [LConstGlobal]
 type LAliases      = [LAlias]
