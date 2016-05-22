@@ -150,10 +150,14 @@ compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
                                                          (LRef $ _ident name)
 
 compileDecl :: TypeA -> ItemA -> LComp ()
-compileDecl typ item = do
-    let name = _iIdent item
-    compileAlloca name typ
-    compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
+compileDecl typ item = case typ of
+    (Array {}) -> do
+        _ <- compileExpr $ fromMaybe (undefined) (item ^? iExpr)
+        return ()
+    _          -> do
+        let name = _iIdent item
+        compileAlloca name typ
+        compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAlloca :: Ident -> TypeA -> LComp ()
 compileAlloca name typ = pushInst $ LAssign (_ident name)
@@ -448,9 +452,9 @@ compileType = \case
     Doub     _     -> doubType
     Bool     _     -> boolType
     Void     _     -> LVoid
-    Array    _ _ _ -> arrayType
+    Array    {}    -> error "compileType Array is invalid."
     ConstStr _     -> strType
-    Fun      {}    -> error "NOT IMPLEMENTED YET"
+    Fun      {}    -> error "compileType Fun not implemented."
 
 boolType, intType, doubType, charType, strType, byteType, bytePType :: LType
 boolType  = LInt sizeofBool
@@ -460,10 +464,6 @@ charType  = LInt sizeofChar
 strType   = LPtr charType
 byteType  = LInt sizeofByte
 bytePType = LPtr byteType
-
--- TODO: Implement
-arrayType :: LType
-arrayType = error "arrayType undefined"
 
 intTVR :: Integer -> LTValRef
 intTVR = LTValRef intType . LVInt
