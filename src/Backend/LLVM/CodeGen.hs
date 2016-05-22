@@ -309,8 +309,7 @@ compileLBin l r onLHS prefix = do
     LTValRef _ r' <- xInLabel lRhs lEnd $ compileExpr r
     lRhs'         <- lastLabel
     compileLabel lEnd
-    assignTemp boolType $
-        LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
+    assignBool $ LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
 aliasFor :: TypeA -> LComp LType
 aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
@@ -390,7 +389,7 @@ forLoop prefix typ arr lengthInit handler = do
     compileLabelJmp _check
     -- check: i < arr.length
     iload <- assignInt $ LLoad i
-    ref   <- assignTemp boolType (LICmp LSlt iload $ _lTVRef l)
+    ref   <- assignBool (LICmp LSlt iload $ _lTVRef l)
     pushLCBr ref _then _cont
     -- load: arr[i] + body:
     xInLabel _then _check $ do
@@ -411,7 +410,7 @@ compileLength :: ExprA -> LComp LTValRef
 compileLength = compileExpr >=> lengthRef >=> assignInt . LLoad
 
 compileNot :: ExprA -> LComp LTValRef
-compileNot = compileExpr >=> assignTemp boolType . flip LXor (LVInt 1)
+compileNot = compileExpr >=> assignBool . flip LXor (LVInt 1)
 
 compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
 compileApp anots name es = do
@@ -420,10 +419,9 @@ compileApp anots name es = do
         LVoid -> pushInst (LVCall fr) >> return (LTValRef LVoid LNull)
         rtyp  -> assignTemp rtyp $ LCall rtyp fr
 
-assignInt :: LExpr -> LComp LTValRef
-assignInt = assignTemp intType
-
-assignIntP :: LExpr -> LComp LTValRef
+assignBool, assignInt, assignIntP :: LExpr -> LComp LTValRef
+assignBool = assignTemp boolType
+assignInt  = assignTemp intType
 assignIntP = assignTemp $ LPtr intType
 
 assignTemp :: LType -> LExpr -> LComp LTValRef
