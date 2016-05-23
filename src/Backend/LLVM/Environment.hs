@@ -54,6 +54,7 @@ import Data.Map (Map, empty, insert, lookup, toList)
 import Control.Lens hiding (Context, contexts, pre)
 
 import Utils.Foldable
+import Utils.Monad
 
 import Common.Annotations
 import Common.Computation
@@ -101,22 +102,17 @@ type IOLComp a = IOComp LEnv a
 type LComp a = Comp LEnv a
 
 bindAConv :: TypeA -> LType -> LComp LAliasRef
-bindAConv orig conv = do
-    ref <- bindAlias conv
-    aliasConvs %= insert orig ref
-    return ref
+bindAConv orig conv = bindAlias conv <<= (aliasConvs %=) . insert orig
 
 bindAlias :: LType -> LComp LAliasRef
-bindAlias typ = do
-    ref <- freshOf "talias" aliasCount
-    aliasTypes %= insert ref typ
-    return ref
+bindAlias typ = freshOf "talias" aliasCount <<=
+                (aliasTypes %=) . flip insert typ
 
 getConv :: TypeA -> LComp (Maybe LAliasRef)
-getConv typ = uses aliasConvs $ lookup typ
+getConv = uses aliasConvs . lookup
 
 getAlias :: LAliasRef -> LComp (Maybe LType)
-getAlias ref = uses aliasTypes $ lookup ref
+getAlias = uses aliasTypes . lookup
 
 allAliases :: LComp LAliases
 allAliases = uses aliasTypes toList
