@@ -42,14 +42,13 @@ import Safe
 
 import Data.List
 import Data.Tuple
-import Data.Map ((!))
 import Data.Maybe
 
 import Control.Monad
 
-import Control.Lens hiding (Empty, op)
+import Control.Lens hiding (Empty, op, uncons, to)
 
-import Utils.Shallow
+import Utils.Pointless
 import Utils.Monad
 import Utils.Sizeables
 
@@ -58,6 +57,8 @@ import Common.Annotations
 
 import Backend.LLVM.Environment
 import Backend.LLVM.Print
+
+u = undefined
 
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
@@ -96,9 +97,7 @@ compileFRTyp :: TypeA -> LComp LType
 compileFRTyp = compileType
 
 compileFArg :: ArgA -> LComp LArg
-compileFArg arg = do
-    typ <- compileType $ _aTyp arg
-    return $ LArg typ (_ident $ _aIdent arg)
+compileFArg arg = flip LArg (_ident $ _aIdent arg) <$> compileType (_aTyp arg)
 
 allocArgs :: ArgA -> LComp ()
 allocArgs arg = do
@@ -112,15 +111,6 @@ compileFBlock :: [ArgA] -> BlockA -> LComp LInsts
 compileFBlock args block = compileLabel "entry" >>
                            mapM allocArgs args >> compileBlock block >>
                            getInsts <* clearInsts <* resetTemp
-
-compileLabel :: LLabelRef -> LComp ()
-compileLabel l = pushInst $ LLabel l
-
-compileLabelJmp :: LLabelRef -> LComp ()
-compileLabelJmp l = pushInst (LABr l) >> compileLabel l
-
-xInLabel :: LLabelRef -> LLabelRef -> LComp b -> LComp b
-xInLabel _lab _cont x = compileLabel _lab >> x <* pushInst (LABr _cont)
 
 compileBlock :: BlockA -> LComp ()
 compileBlock = mapM_ compileStmt . _bStmts
@@ -149,8 +139,8 @@ compileInDeCr anots name op = do
         >>= compileStore name
 
 compileStore :: Ident -> LTValRef -> LComp ()
-compileStore name tvr = pushInst $ LStore tvr $ LTValRef (LPtr $ _lTType tvr)
-                                                         (LRef $ _ident name)
+compileStore name tvr = store tvr $ LTValRef (LPtr $ _lTType tvr)
+                                             (LRef $ _ident name)
 
 compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
@@ -159,9 +149,7 @@ compileDecl typ item = do
     compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAlloca :: Ident -> TypeA -> LComp ()
-compileAlloca name typ = do
-    ltyp <- compileType typ
-    pushInst $ LAssign (_ident name) $ LAlloca ltyp
+compileAlloca name = compileType >=> alloc (_ident name)
 
 compileAss :: Ident -> ExprA -> LComp ()
 compileAss = compileExpr >=?> compileStore
@@ -196,25 +184,16 @@ compileWhile c sw = do
     compileCondStmt sw _then _check
     compileLabel             _cont
 
-pushLCBr :: LTValRef -> LLabelRef -> LLabelRef -> LComp ()
-pushLCBr r _then _else = pushInst $ LCBr r _then _else
-
-compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
-compileCondExpr c _then _else = compileExpr c >>= \e -> pushLCBr e _then _else
-
-compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
-compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
-
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
-    ENew      a t ds  -> compileENew a t ds
+    ENew      a _ ds  -> compileENew a ds
     EVar      a i _   -> compileEVar a i
     Length    _ e     -> compileLength e
-    ELitInt   _ v     -> compileLInt   sizeofInt   v
-    ELitDoub  _ v     -> compileLFloat sizeofFloat v
-    EString   _ v     -> compileCString v
-    ELitTrue  _       -> compileLInt   sizeofBool  1
-    ELitFalse _       -> compileLInt   sizeofBool  0
+    ELitInt   _ v     -> return $ intTVR  v
+    ELitDoub  _ v     -> return $ doubTVR v
+    EString   _ v     -> compileCString   v
+    ELitTrue  _       -> return ltrue
+    ELitFalse _       -> return lfalse
     ECastNull _ t     -> compileCastNull t
     EApp      a i es  -> compileApp a i es
     Neg       _ e     -> compileNeg e
@@ -236,10 +215,8 @@ switchType onI onF = \case
 
 compileNeg :: ExprA -> LComp LTValRef
 compileNeg e = do
-    LTValRef t e'  <- compileExpr e
-    let (ctor, tvr) = switchType (LSub,  flip LTValRef $ LVInt   0)
-                                 (LFSub, flip LTValRef $ LVFloat 0) t
-    assignTemp t $ ctor (tvr t) e'
+    LTValRef t e' <- compileExpr e
+    assignTemp t $ switchType (LSub izero) (LFSub dzero) t e'
 
 compileBArith :: (LType -> LType)
               -> (LType -> LTValRef -> LValRef -> LExpr) -> ExprA -> ExprA
@@ -315,121 +292,48 @@ compileLBin l r onLHS prefix = do
     compileLabel lEnd
     assignBool $ LPhi boolType [LPhiRef (LVInt onLHS) lLhs, LPhiRef r' lRhs']
 
-compileSizeof :: LType -> LComp LTValRef
-compileSizeof typ = let typ' = LPtr typ
-                    in assignTemp typ' (LGElemPtr (LTValRef typ' LNull) ione [])
-                        >>= assignInt . flip LPtrToInt intType
+compileENew :: ASTAnots -> [DimEA] -> LComp LTValRef
+compileENew = compileNew . getType
 
-compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
-compileCalloc nElems sizeof =
-    assignTemp bytePType $ LCall bytePType $ LFunRef "calloc" [nElems, sizeof]
+compileNew :: TypeA -> [DimEA] -> LComp LTValRef
+compileNew bt  []     = compileType bt >>= \lbt -> salloc lbt return lbt
+compileNew typ (d:ds) = do
+    (bt, lbt) <- fkeep compileType $ shrink typ
+    l         <- compileExpr $ _deExpr d
+    (compileType typ >>= salloc lbt (imul l >=> iadd lenSize)) <<= setLength l
+        <<= \newed -> unless (null ds) $ basicFor "newSubArr" lbt newed l $
+            (compileNew bt ds >>=) . flip store
 
-add, mul :: LTValRef -> LTValRef -> LComp LTValRef
-add a (LTValRef _ b) = assignInt $ LAdd a b
-mul a (LTValRef _ b) = assignInt $ LMul a b
-
-lenSize :: LTValRef
-lenSize = intTVR $ sizeofInt `div` 8
-
-compileNewSize :: LType -> [LTValRef] -> LComp LTValRef
-compileNewSize bt = \case
-    [ ] -> compileSizeof bt
-    [x] -> compileSizeof bt >>= mul x >>= add lenSize
-    xs -> do {- Logic is: x = a + b + c; sizeof = (x + d) * sb + (x + 1) * si -}
-        btSize <- compileSizeof bt
-        let (rhead:rtail) = reverse xs
-        t0 <- foldl1M add rtail
-        t1 <- add rhead t0 >>= mul btSize
-        t2 <- add ione  t0 >>= mul lenSize
-        add t1 t2
-
-compileENew :: ASTAnots -> TypeA -> [DimEA] -> LComp LTValRef
-compileENew anots bt dimes = do
-    accs <- mapM (compileExpr . _deExpr) dimes
-    lbt  <- compileType bt
-    t1   <- compileNewSize lbt accs >>= flip compileCalloc ione
-    (typ, ltyp) <- fkeep compileType $ getType anots
-    assignTemp ltyp (LBitcast t1 ltyp) <<= initializeLengths typ accs
-
-initializeLengths :: TypeA -> LTValRefs -> LTValRef -> LComp ()
-initializeLengths typ accs arr = case accs of
-    [ ]    -> return ()
-    [x]    -> initLen x
-    (x:xs) -> forLoop "init.length" typ arr (initLen x >> return x) (handler xs)
-    where initLen len = lengthRef arr >>= pushInst . LStore len
-          handler xs _ smaller = initializeLengths smaller xs
-
-lengthRef :: LTValRef -> LComp LTValRef
-lengthRef arr = assignIntP $ LGElemPtr arr izero [izero]
+salloc :: LType -> (LTValRef -> LComp LTValRef) -> LType -> LComp LTValRef
+salloc et sc rt = compileSizeof et >>= sc >>= flip compileCalloc ione
+                                          >>= bitcast rt
 
 compileFor :: TypeA -> Ident -> ExprA -> StmtA -> LComp ()
 compileFor typ name eArr si = do
-    let eArrT = getType $ extract eArr
     compileAlloca name typ
-    lArr <- compileExpr eArr
-    forLoop "for" eArrT lArr (lengthRef lArr >>= assignInt . LLoad) $
-        \ltyp _ _elemp -> assignTemp ltyp (LLoad $ lTType %~ LPtr $ _elemp)
-                          >>= compileStore name
-                          >>  compileStmt si
-
-forLoop :: LLabelRef -> TypeA -> LTValRef -> LComp LTValRef
-        -> (LType -> TypeA -> LTValRef -> LComp ()) -> LComp ()
-forLoop prefix typ arr lengthInit handler = do
-    [_check, _then, _cont] <- newLabels prefix ["check", "then", "cont"]
-    -- set: i = 0, load: arr.length
-    l     <- lengthInit
-    i     <- assignIntP (LAlloca intType) <<= pushInst . LStore izero
-    compileLabelJmp _check
-    -- check: i < arr.length
-    iload <- assignInt $ LLoad i
-    ref   <- assignBool (LICmp LSlt iload $ _lTVRef l)
-    pushLCBr ref _then _cont
-    -- load: arr[i] + body:
-    xInLabel _then _check $ do
-        (smaller, ltyp) <- fkeep compileType (shrink typ)
-        assignTemp ltyp (LGElemPtr arr izero [ione, iload])
-            >>= handler ltyp smaller
-        -- store: i++
-        add iload ione >>= pushInst . flip LStore i
-    compileLabel _cont
+    lbt <- compileType typ
+    arr <- compileExpr eArr
+    l   <- loadLength arr
+    basicFor "for" lbt arr l $ load lbt >=> compileStore name .>> compileStmt si
 
 compileEVar :: ASTAnots -> Ident -> LComp LTValRef
 compileEVar anots name = do
     typ   <- compileAnotType anots
     let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
-    assignTemp typ $ LLoad $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
+    load typ $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
 
 compileLength :: ExprA -> LComp LTValRef
-compileLength = compileExpr >=> lengthRef >=> assignInt . LLoad
+compileLength = compileExpr >=> loadLength
 
 compileNot :: ExprA -> LComp LTValRef
 compileNot = compileExpr >=> assignBool . flip LXor (LVInt 1)
 
 compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
 compileApp anots name es = do
-    fr   <- LFunRef (_ident name) <$> mapM compileExpr es
-    ltyp <- compileAnotType anots
-    case ltyp of
-        LVoid -> pushInst (LVCall fr) >> return (LTValRef LVoid LNull)
-        rtyp  -> assignTemp rtyp $ LCall rtyp fr
-
-assignBool, assignInt, assignIntP :: LExpr -> LComp LTValRef
-assignBool = assignTemp boolType
-assignInt  = assignTemp intType
-assignIntP = assignTemp $ LPtr intType
-
-assignTemp :: LType -> LExpr -> LComp LTValRef
-assignTemp rtyp expr =
-    LTValRef rtyp . LRef <$> newTemp <<= pushInst . flip LAssign expr
-
-getVS :: ASTAnots -> VarSource
-getVS anots = let AVarSource vs = anots ! AKVarSource in vs
-
-getType :: ASTAnots -> TypeA
-getType anots = let AType typ = anots ! AKType in typ
-
-compileAnotType :: ASTAnots -> LComp LType
-compileAnotType = compileType . getType
+    fr <- LFunRef (_ident name) <$> mapM compileExpr es
+    compileAnotType anots >>= \case
+        LVoid -> vcall fr
+        rtyp  -> assignCall rtyp fr
 
 compileCString :: String -> LComp LTValRef
 compileCString v = do
@@ -437,6 +341,149 @@ compileCString v = do
     let typ   = LArray (1 + genericLength v) charType
     pushConst $ LConstGlobal ref typ v
     assignTemp strType $ strPointer (LPtr typ) ref
+
+strPointer :: LType -> LIdent -> LExpr
+strPointer t = deref [izero] . LTValRef t . LConst
+
+--------------------------------------------------------------------------------
+-- Pointers, Structs, Arrays:
+--------------------------------------------------------------------------------
+
+compileSizeof :: LType -> LComp LTValRef
+compileSizeof t = assignPtr t (LGElemPtr (LTValRef (LPtr t) LNull) ione [])
+                  >>= ptrToInt
+
+compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
+compileCalloc n sizeof = assignCall bytePType $ LFunRef "calloc" [n, sizeof]
+
+lenSize :: LTValRef
+lenSize = intTVR $ sizeofInt `div` 8
+
+loadLength :: LTValRef -> LComp LTValRef
+loadLength = lengthRef >=> loadi
+
+setLength :: LTValRef -> LTValRef -> LComp ()
+setLength len = lengthRef >=> store len
+
+lengthRef :: LTValRef -> LComp LTValRef
+lengthRef = assignIntP . deref [izero]
+
+basicFor :: LLabelRef -> LType -> LTValRef -> LTValRef
+        -> (LTValRef -> LComp ()) -> LComp ()
+basicFor prefix lbt arr len handler = do
+    [_check, _then, _cont] <- newLabels prefix ["check", "then", "cont"]
+    -- set: i = 0
+    i     <- alloci <<= store izero
+    compileLabelJmp _check
+    -- check: i < arr.length
+    iload <- loadi i
+    assignBool (LICmp LSlt iload $ _lTVRef len) >>= condBr _then _cont
+    -- load: arr[i] + body + store: i++
+    xInLabel _then _check $
+        assignTemp (LPtr lbt) (deref [ione, iload] arr) >>= handler >>
+        iadd iload ione >>= flip store i
+    compileLabel _cont
+
+deref :: LTValRefs -> LTValRef -> LExpr
+deref = flip $ flip LGElemPtr izero
+
+--------------------------------------------------------------------------------
+-- Branching, Labels:
+--------------------------------------------------------------------------------
+
+compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
+compileCondExpr c _then _else = compileExpr c >>= condBr _then _else
+
+compileCondStmt :: StmtA -> LLabelRef -> LLabelRef -> LComp ()
+compileCondStmt stmt _then _cont = xInLabel _then _cont $ compileStmt stmt
+
+compileLabel :: LLabelRef -> LComp ()
+compileLabel l = pushInst $ LLabel l
+
+compileLabelJmp :: LLabelRef -> LComp ()
+compileLabelJmp l = aBr l >> compileLabel l
+
+xInLabel :: LLabelRef -> LLabelRef -> LComp b -> LComp b
+xInLabel _lab _cont x = compileLabel _lab >> x <* aBr _cont
+
+condBr :: LLabelRef -> LLabelRef -> LTValRef -> LComp ()
+condBr _then _else r = pushInst $ LCBr r _then _else
+
+aBr :: LLabelRef -> LComp ()
+aBr = pushInst . LABr
+
+--------------------------------------------------------------------------------
+-- Constant values + Constructors:
+--------------------------------------------------------------------------------
+
+izero, ione, dzero, ltrue, lfalse :: LTValRef
+izero  = intTVR 0
+ione   = intTVR 1
+dzero  = doubTVR 0
+ltrue  = boolTVR True
+lfalse = boolTVR False
+
+intTVR :: Integer -> LTValRef
+intTVR = LTValRef intType . LVInt
+
+boolTVR :: Bool -> LTValRef
+boolTVR = LTValRef boolType . LVInt . toInteger . fromEnum
+
+doubTVR :: Double -> LTValRef
+doubTVR = LTValRef doubType . LVFloat
+
+--------------------------------------------------------------------------------
+-- Basic operations:
+--------------------------------------------------------------------------------
+
+iadd, imul :: LTValRef -> LTValRef -> LComp LTValRef
+iadd a (LTValRef _ b) = assignInt $ LAdd a b
+imul a (LTValRef _ b) = assignInt $ LMul a b
+
+ptrToInt :: LTValRef -> LComp LTValRef
+ptrToInt = assignInt . flip LPtrToInt intType
+
+bitcast :: LType -> LTValRef -> LComp LTValRef
+bitcast to ptr = assignTemp to (LBitcast ptr to)
+
+alloci :: LComp LTValRef
+alloci = assignIntP $ LAlloca intType
+
+loadi :: LTValRef -> LComp LTValRef
+loadi = assignInt . LLoad
+
+load :: LType -> LTValRef -> LComp LTValRef
+load typ = assignTemp typ . LLoad
+
+assignBool, assignInt, assignIntP :: LExpr -> LComp LTValRef
+assignBool = assignTemp boolType
+assignInt  = assignTemp intType
+assignIntP = assignPtr  intType
+
+assignPtr :: LType -> LExpr -> LComp LTValRef
+assignPtr = assignTemp . LPtr
+
+assignCall :: LType -> LFunRef -> LComp LTValRef
+assignCall rtyp = assignTemp rtyp . LCall rtyp
+
+vcall :: LFunRef -> LComp LTValRef
+vcall fr = pushInst (LVCall fr) >> return (LTValRef LVoid LNull)
+
+assignTemp :: LType -> LExpr -> LComp LTValRef
+assignTemp rtyp expr = LTValRef rtyp . LRef <$> newTemp <<= flip assignE expr
+
+alloc :: LIdent -> LType -> LComp ()
+alloc n = assignE n . LAlloca
+
+assignE :: LIdent -> LExpr -> LComp ()
+assignE n = pushInst . LAssign n
+
+store :: LTValRef -> LTValRef -> LComp ()
+store = pushInst .| LStore
+
+--------------------------------------------------------------------------------
+-- LType related:
+--------------------------------------------------------------------------------
 
 compileType :: TypeA -> LComp LType
 compileType = \case
@@ -448,21 +495,6 @@ compileType = \case
     ConstStr _     -> return strType
     Fun      {}    -> error "compileType Fun not implemented."
 
-aliasFor :: TypeA -> LComp LType
-aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
-
-createAlias :: TypeA -> LComp LType
-createAlias = \case
-    arr@(Array {}) -> do
-        -- TODO: REFACTOR
-        smaller  <- aliasFor $ shrink arr
-        smallers <- case smaller of
-            LAlias x -> _lTPtr . fromJust <$> getAlias x
-            x        -> return x
-        struct <- LAlias <$> bindAlias (LStruct [intType, LArray 0 smallers])
-        LAlias <$> bindAConv arr (LPtr struct)
-    x              -> compileType x
-
 boolType, intType, doubType, charType, strType, byteType, bytePType :: LType
 boolType  = LInt sizeofBool
 intType   = LInt sizeofInt
@@ -472,25 +504,25 @@ strType   = LPtr charType
 byteType  = LInt sizeofByte
 bytePType = LPtr byteType
 
-intTVR :: Integer -> LTValRef
-intTVR = LTValRef intType . LVInt
-
-izero, ione :: LTValRef
-izero = intTVR 0
-ione  = intTVR 1
-
-strPointer :: LType -> LIdent -> LExpr
-strPointer t i = LGElemPtr (LTValRef t $ LConst i) izero [izero]
-
-compileLInt :: Integer -> Integer -> LComp LTValRef
-compileLInt s v = return $ LTValRef (LInt s) (LVInt v)
-
-compileLFloat :: Integer -> Double -> LComp LTValRef
-compileLFloat s v = return $ LTValRef (LFloat s) (LVFloat v)
-
 sizeofBool, sizeofChar, sizeofByte, sizeofInt, sizeofFloat :: Integer
 sizeofBool  = 1
 sizeofChar  = 8
 sizeofByte  = 8
 sizeofInt   = 32
 sizeofFloat = 64
+
+compileAnotType :: ASTAnots -> LComp LType
+compileAnotType = compileType . getType
+
+--------------------------------------------------------------------------------
+-- Aliases:
+--------------------------------------------------------------------------------
+
+aliasFor :: TypeA -> LComp LType
+aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
+
+createAlias :: TypeA -> LComp LType
+createAlias typ = if notArray typ then compileType typ else
+    (>>=) (aliasFor $ shrink typ) $
+    bindAlias . LStruct . (intType:) . return . LArray 0 >$> LAlias >=>
+    bindAConv typ . LPtr >$> LAlias

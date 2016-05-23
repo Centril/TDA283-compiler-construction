@@ -27,35 +27,58 @@ Portability : ALL
 
 AST Annotations in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, LambdaCase, TupleSections,
+{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TupleSections,
              TypeSynonymInstances, FlexibleInstances #-}
 
 module Common.Annotations (
     -- * Types
+
+    -- ** Annotations
     ASTAnot(..), AnotKey (..), ASTAnots,
     Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
 
+    -- ** AST Aliases
     ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
     TypeA, DimTA, ExprA, DimEA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
-    toWillExecute, showKind, emptyAnot, showVS,
+
+    -- ** General
+    toWillExecute, showKind, showVS,
+    emptyAnot, appConcrete, defaultVal,
+
+    -- ** Prisms, Lenses
     _LitBool, _LitInt, _LitDouble, _LitString,
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
-    appConcrete, int, conststr, doub, bool, tvoid, defaultVal,
+
+    -- ** Primitive types
+    int, conststr, doub, bool, tvoid,
+
+    -- ** Arrays
     arrayT, notArray, isPointable,
 
+    -- ** Addition
     (+@),
     addTyp, addTyp', addKind,
     addWE, addWE', always, addLit, addLit',
-    addSource
+    addSource,
+
+    -- ** Extraction
+    extractType, extractWE, extractCELit, extractKind, extractVS,
+    getType, getWE, getCELit, getKind, getVS,
+    mayType, mayWE, mayCELit, mayKind, mayVS
 ) where
 
-import Data.Data
+import Prelude hiding (lookup)
 
-import Data.Map (Map, empty, singleton, alter)
+import Data.Data
+import Data.Maybe
+import Data.Monoid
+import Data.Map (Map, empty, singleton, alter, lookup)
+
+import Control.Monad
 
 import Control.Lens hiding (Context, contexts, Empty)
 import Control.Lens.Extras
@@ -297,3 +320,55 @@ addTyp' x = pure . addTyp x
 
 addSource :: Shallowable f => f ASTAnots -> VarSource -> f ASTAnots
 addSource x s = (AKVarSource, AVarSource s) +@ x
+
+--------------------------------------------------------------------------------
+-- AST Annotations, Fetching:
+--------------------------------------------------------------------------------
+
+extractType :: Extractable f => f ASTAnots -> TypeA
+extractType = getType . extract
+
+extractWE :: Extractable f => f ASTAnots -> Maybe WillExecute
+extractWE = mayWE . extract
+
+extractCELit :: Extractable f => f ASTAnots -> ML
+extractCELit = mayCELit . extract
+
+extractKind :: Extractable f => f ASTAnots -> Kind
+extractKind = getKind . extract
+
+extractVS :: Extractable f => f ASTAnots -> VarSource
+extractVS = getVS . extract
+
+getType :: ASTAnots -> TypeA
+getType = fromJust . mayType
+
+getWE :: ASTAnots -> WillExecute
+getWE =  fromJust . mayWE
+
+getCELit :: ASTAnots -> Literal
+getCELit = fromJust . mayCELit
+
+getKind :: ASTAnots -> Kind
+getKind = fromJust . mayKind
+
+getVS :: ASTAnots -> VarSource
+getVS = fromJust . mayVS
+
+mayType :: ASTAnots -> Maybe TypeA
+mayType = mayAnot AKType _AType
+
+mayWE :: ASTAnots -> Maybe WillExecute
+mayWE = mayAnot AKWillExec _AWillExec
+
+mayCELit :: ASTAnots -> ML
+mayCELit = join . mayAnot AKCExprLit _ACExprLit
+
+mayKind :: ASTAnots -> Maybe Kind
+mayKind = mayAnot AKKind _AKind
+
+mayVS :: ASTAnots -> Maybe VarSource
+mayVS = mayAnot AKVarSource _AVarSource
+
+mayAnot :: Ord k => k -> Getting (First a) b a -> Map k b -> Maybe a
+mayAnot key _prism = lookup key >=> (^? _prism)
