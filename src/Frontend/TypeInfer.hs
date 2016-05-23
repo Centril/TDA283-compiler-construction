@@ -91,23 +91,12 @@ inferCastNull expr = do
     unless (isPointable typ) $ nullNotCastable typ
     addTyp' expr { _eTyp = typ } typ
 
-isPointable :: TypeA -> Bool
-isPointable = \case
-    Array {} -> True
-    _        -> False
-
--- TODO: lenses...
-notArray :: TypeA -> Bool
-notArray = \case
-    Array {} -> False
-    _        -> True
-
 inferENew :: ExprA -> TCComp (ExprA, TypeA)
 inferENew expr = do
     (bt, _)  <- inferType $ _eTyp expr
     unless (notArray bt) $ typeNotNewable bt
     dims     <- inferAccInts $ _eDimEs expr
-    (typ, _) <- inferType $ arrayT bt $ length dims
+    (typ, _) <- inferType $ arrayT (bt, length dims)
     addTyp' (expr { _eDimEs = dims, _eTyp = bt }) typ
 
 inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)

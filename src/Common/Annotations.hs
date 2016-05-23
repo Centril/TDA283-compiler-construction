@@ -44,7 +44,8 @@ module Common.Annotations (
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
     anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
-    appConcrete, int, conststr, doub, bool, tvoid, defaultVal, arrayT,
+    appConcrete, int, conststr, doub, bool, tvoid, defaultVal,
+    arrayT, notArray, isPointable,
 
     (+@),
     addTyp, addTyp', addKind,
@@ -57,6 +58,7 @@ import Data.Data
 import Data.Map (Map, empty, singleton, alter)
 
 import Control.Lens hiding (Context, contexts, Empty)
+import Control.Lens.Extras
 
 import Utils.Shallow
 import Utils.Sizeables
@@ -183,20 +185,23 @@ defaultVal typ = fst $ flip addTyp typ $ case typ of
 --------------------------------------------------------------------------------
 
 instance Growable TypeA where
-    grow = \case
-        Array _ b dts -> arrayT b $ 1 + length dts
-        x             -> arrayT x 1
+    grow x = arrayT $ maybe (x, 1) (\(_, b, c) -> (b, 1 + length c)) $
+                            x ^? _Array
+
+arrayT :: (TypeA, Int) -> TypeA
+arrayT (base, dim) = appConcrete make
+    where make a = Array a base $ replicate dim $ DimenT emptyAnot
 
 instance Shrinkable TypeA where
-    shrink = \case
-        Array a b dts -> case dts of
-                         (_:x2:xs) -> Array a b (x2:xs)
-                         _          -> b
-        x             -> x
+    shrink x = maybe x sarray $ x ^? _Array
+        where sarray (a, b, dst) = if length dst > 1 then Array a b $ tail dst
+                                   else b
 
-arrayT :: TypeA -> Int -> TypeA
-arrayT base dim = appConcrete make
-    where make a = Array a base $ replicate dim $ DimenT emptyAnot
+isPointable :: Type a -> Bool
+isPointable = is _Array
+
+notArray :: Type a -> Bool
+notArray = isn't _Array
 
 --------------------------------------------------------------------------------
 -- AST Annotations, Aliases:
