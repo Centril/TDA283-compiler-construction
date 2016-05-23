@@ -35,7 +35,7 @@ module Utils.Monad (
     (<!>), (<:>), (<++>),
 
     -- * Monad operations
-    (>?=>), (>=?>), (<<=), (.>>), maybeErr, unless', foldl1M, foldr1M
+    (>?=>), (>=?>), (<<=), (.>>), (>>.), maybeErr, unless', foldl1M, foldr1M
 ) where
 
 import Data.Foldable
@@ -64,10 +64,15 @@ infixr 1 >?=>
 (>=?>) m1 m2 x = m1 >=> m2 x
 infixr 1 >=?>
 
--- | '.>>': blinding left to right Kleisli composition of monads.
+-- | '.>>': blinding left to right Kleisli post-composition of monads.
 -- Is to '>=>' what '>>' is to '>>='.
 (.>>) :: Monad m => (a -> m b) -> m c -> a -> m c
 (.>>) fb c a = fb a >> c
+
+-- | '>>.': blinding left to right Kleisli pre-composition of monads.
+-- Is to '>=>' what '>>' is to '>>='.
+(>>.) :: Monad m => m a -> (b -> m c) -> b -> m c
+(>>.) ma fc b = ma >> fc b
 
 -- | '<<=': sequentially compose two actions, passing value produced by first as
 -- an argument to the second, but returning the value of produced by first.
