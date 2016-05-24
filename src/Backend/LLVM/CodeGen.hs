@@ -156,7 +156,25 @@ compileAss = compileExpr >=?> compileStore
 
 -- TODO: Implement
 compileAssArr :: Ident -> [DimEA] -> ExprA -> LComp ()
-compileAssArr = error "compileAssArr undefined"
+compileAssArr name dims expr = do
+    typ   <- extractType expr
+    rhs   <- compileExpr expr
+    lhs   <- return u
+    store rhs lhs
+    error "compileAssArr undefined"
+
+compileLVal :: TypeA -> Ident -> [DimEA]
+compileLVal typ name dimes = do
+    let (topT, types) = reverse $ take (1 + length dimes) (growInf typ)
+    let top = LTValRef topT (LRef $ _ident name)
+    let tdimes = zip dimes types
+    return u
+
+{-
+abc arr dime = do
+    index <- compileExpr $ _deExpr dime
+    assignTemp (LPtr lbt) (deref [ione, index] arr)
+-}
 
 compileRet :: ExprA -> LComp ()
 compileRet = compileExpr >$> LRet >=> pushInst
