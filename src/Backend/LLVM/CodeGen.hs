@@ -120,8 +120,8 @@ compileStmt = \case
     Empty    _         -> return ()
     BStmt    _ b       -> compileBlock b
     Decl     _ t is    -> forM_ is $ compileDecl t
-    Ass      _ i e     -> compileAss i e
-    AssArr   _ i d e   -> compileAssArr i d e
+    Ass      _ i e     -> compileAssign i [] e
+    AssArr   _ i d e   -> compileAssign i d e
     Incr     a i       -> compileInDeCr a i (Plus emptyAnot)
     Decr     a i       -> compileInDeCr a i (Minus emptyAnot)
     Ret      _ e       -> compileRet e
@@ -146,35 +146,30 @@ compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
     let name = _iIdent item
     compileAlloca name typ
-    compileAss name $ fromMaybe (defaultVal typ) (item ^? iExpr)
+    compileAssign name [] $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAlloca :: Ident -> TypeA -> LComp ()
 compileAlloca name = compileType >=> alloc (_ident name)
 
-compileAss :: Ident -> ExprA -> LComp ()
-compileAss = compileExpr >=?> compileStore
+-- TODO: refactor Ident -> [DimEA] as LValue
+compileAssign :: Ident -> [DimEA] -> ExprA -> LComp ()
+compileAssign name dims expr = do
+    rhs <- compileExpr expr
+    compileLVal (extractType expr) name dims >>= store rhs
 
--- TODO: Implement
-compileAssArr :: Ident -> [DimEA] -> ExprA -> LComp ()
-compileAssArr name dims expr = do
-    typ   <- extractType expr
-    rhs   <- compileExpr expr
-    lhs   <- return u
-    store rhs lhs
-    error "compileAssArr undefined"
-
-compileLVal :: TypeA -> Ident -> [DimEA]
+compileLVal :: TypeA -> Ident -> [DimEA] -> LComp LTValRef
 compileLVal typ name dimes = do
-    let (topT, types) = reverse $ take (1 + length dimes) (growInf typ)
-    let top = LTValRef topT (LRef $ _ident name)
-    let tdimes = zip dimes types
-    return u
+    let types@(topT:bts) = reverse $ take (1 + length dimes) (growInf typ)
+    ltopT     <- compileType topT
+    let top    = LTValRef (LPtr ltopT) (LRef $ _ident name)
+    let tdimes = zip3 dimes bts types
+    foldM arrAcc top tdimes
 
-{-
-abc arr dime = do
-    index <- compileExpr $ _deExpr dime
-    assignTemp (LPtr lbt) (deref [ione, index] arr)
--}
+arrAcc :: LTValRef -> (DimEA, TypeA, TypeA) -> LComp LTValRef
+arrAcc top (dime, bT, topT) = do
+    idx <- compileExpr $ _deExpr dime
+    lbT <- compileType bT
+    compileType topT >>= flip load top >>= assignPtr lbT . deref [ione, idx]
 
 compileRet :: ExprA -> LComp ()
 compileRet = compileExpr >$> LRet >=> pushInst
