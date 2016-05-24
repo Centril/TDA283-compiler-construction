@@ -132,9 +132,10 @@ compileStmt = \case
     For      _ t i e s -> compileFor t i e s
     SExp     _ e       -> void $ compileExpr e
 
+-- TODO: Fix for arrays!
 compileInDeCr :: ASTAnots -> Ident -> AddOpA -> LComp ()
 compileInDeCr anots name op = do
-    x@(LTValRef t _) <- compileEVar anots name
+    x@(LTValRef t _) <- compileEVar anots name []
     assignTemp t (switchAdd op t x $ switchType (LVInt 1) (LVFloat 1) t)
         >>= compileStore name
 
@@ -200,7 +201,7 @@ compileWhile c sw = do
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
     ENew      a _ ds  -> compileENew a ds
-    EVar      a i _   -> compileEVar a i
+    EVar      a i ds  -> compileEVar a i ds
     Length    _ e     -> compileLength e
     ELitInt   _ v     -> return $ intTVR  v
     ELitDoub  _ v     -> return $ doubTVR v
@@ -329,11 +330,14 @@ compileFor typ name eArr si = do
     l   <- loadLength arr
     basicFor "for" lbt arr l $ load lbt >=> compileStore name .>> compileStmt si
 
-compileEVar :: ASTAnots -> Ident -> LComp LTValRef
-compileEVar anots name = do
-    typ   <- compileAnotType anots
+compileEVar :: ASTAnots -> Ident -> [DimEA] -> LComp LTValRef
+compileEVar anots name des = do
+    let typ = getType anots
     let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
-    load typ $ LTValRef (LPtr typ) (LRef $ vs ++ _ident name)
+    let name' = ident %~ (vs++) $ name
+    lval <- compileLVal typ name' des
+    ltyp <- compileType typ
+    load ltyp lval
 
 compileLength :: ExprA -> LComp LTValRef
 compileLength = compileExpr >=> loadLength
