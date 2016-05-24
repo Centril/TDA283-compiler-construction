@@ -108,7 +108,7 @@ inferEVar' name expr dims = do
     (bt, dimst)  <- inferArray (accOfNotArr name) typ
     let dimDiff = length dimst - length dims
     unless (dimDiff >= 0) $ accArrOverDimen name (length dimst) (length dims)
-    (, growN dimDiff bt) <$> (eDimEs %%~ inferAccInts $ expr')
+    flip addTyp (growN dimDiff bt) <$> (eDimEs %%~ inferAccInts $ expr')
 
 inferArray :: (TypeA -> TCComp (TypeA, [DimTA]))
            ->  TypeA -> TCComp (TypeA, [DimTA])
