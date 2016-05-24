@@ -99,6 +99,7 @@ inferENew expr = do
     (typ, _) <- inferType $ arrayT (bt, length dims)
     addTyp' (expr { _eDimEs = dims, _eTyp = bt }) typ
 
+-- TODO: UNIFY! (LValue)
 inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)
 inferEVar name = lookupVarE' name >$> uncurry addTyp
 
