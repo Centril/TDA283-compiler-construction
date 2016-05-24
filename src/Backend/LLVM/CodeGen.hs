@@ -119,9 +119,9 @@ compileStmt :: StmtA -> LComp ()
 compileStmt = \case
     Empty    _         -> return ()
     BStmt    _ b       -> compileBlock b
-    Decl     _ t is    -> forM_ is $ compileDecl t
-    Ass      _ i e     -> compileAssign i [] e
-    AssArr   _ i d e   -> compileAssign i d e
+    Decl     a t is    -> forM_ is $ compileDecl a t
+    Ass      a i e     -> compileAssign a i [] e
+    AssArr   a i d e   -> compileAssign a i d e
     Incr     a i       -> compileInDeCr a i (Plus emptyAnot)
     Decr     a i       -> compileInDeCr a i (Minus emptyAnot)
     Ret      _ e       -> compileRet e
@@ -143,28 +143,31 @@ compileStore :: Ident -> LTValRef -> LComp ()
 compileStore name tvr = store tvr $ LTValRef (LPtr $ _lTType tvr)
                                              (LRef $ _ident name)
 
-compileDecl :: TypeA -> ItemA -> LComp ()
-compileDecl typ item = do
+compileDecl :: ASTAnots -> TypeA -> ItemA -> LComp ()
+compileDecl anots typ item = do
     let name = _iIdent item
     compileAlloca name typ
-    compileAssign name [] $ fromMaybe (defaultVal typ) (item ^? iExpr)
+    compileAssign anots name [] $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAlloca :: Ident -> TypeA -> LComp ()
 compileAlloca name = compileType >=> alloc (_ident name)
 
 -- TODO: refactor Ident -> [DimEA] as LValue
-compileAssign :: Ident -> [DimEA] -> ExprA -> LComp ()
-compileAssign name dims expr = do
+compileAssign :: ASTAnots -> Ident -> [DimEA] -> ExprA -> LComp ()
+compileAssign anots name dims expr = do
     rhs <- compileExpr expr
-    compileLVal (extractType expr) name dims >>= store rhs
+    compileLVal anots (extractType expr) name dims >>= store rhs
 
-compileLVal :: TypeA -> Ident -> [DimEA] -> LComp LTValRef
-compileLVal typ name dimes = do
+compileLVal :: ASTAnots -> TypeA -> Ident -> [DimEA] -> LComp LTValRef
+compileLVal anots typ name dimes = do
     let types@(topT:bts) = reverse $ take (1 + length dimes) (growInf typ)
     ltopT     <- compileType topT
-    let top    = LTValRef (LPtr ltopT) (LRef $ _ident name)
+    let top    = LTValRef (LPtr ltopT) (LRef $ _ident $ markIfArg anots name)
     let tdimes = zip3 dimes bts types
     foldM arrAcc top tdimes
+
+markIfArg :: ASTAnots -> Ident -> Ident
+markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)
 
 arrAcc :: LTValRef -> (DimEA, TypeA, TypeA) -> LComp LTValRef
 arrAcc top (dime, bT, topT) = do
@@ -333,9 +336,7 @@ compileFor typ name eArr si = do
 compileEVar :: ASTAnots -> Ident -> [DimEA] -> LComp LTValRef
 compileEVar anots name des = do
     let typ = getType anots
-    let vs = case getVS anots of VSLocal -> ""; VSArg -> "p"
-    let name' = ident %~ (vs++) $ name
-    lval <- compileLVal typ name' des
+    lval <- compileLVal anots typ name des
     ltyp <- compileType typ
     load ltyp lval
 
