@@ -1,15 +1,17 @@
 -- programs ------------------------------------------------
 
 entrypoints Program ;
-
 Program.   Program ::= [TopDef] ;
 
+StructDef. TopDef ::= "struct" Ident "{" [SField] "}" ";" ;
+TypeDef.   TopDef ::= "typedef" Type Ident ";" ;
 FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
-
 separator nonempty TopDef "" ;
 
-Arg. 	   Arg ::= Type Ident;
+SField.    SField ::= Type Ident ;
+terminator SField ";" ;
 
+Arg. 	   Arg ::= Type Ident ;
 separator  Arg "," ;
 
 -- statements ----------------------------------------------
@@ -25,13 +27,12 @@ BStmt.     Stmt ::= Block ;
 Decl.      Stmt ::= Type [Item] ";" ;
 
 NoInit.    Item ::= Ident ;
-
 Init.      Item ::= Ident "=" Expr ;
-
 separator nonempty Item "," ;
 
 Ass.       Stmt ::= Ident "=" Expr ";" ;
 
+-- shift reduce!
 AssArr.    Stmt ::= Ident [DimE] "=" Expr ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
@@ -44,6 +45,7 @@ VRet.      Stmt ::= "return" ";" ;
 
 Cond.      Stmt ::= "if" "(" Expr ")" Stmt ;
 
+-- shift reduce!
 CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt ;
 
 While.     Stmt ::= "while" "(" Expr ")" Stmt ;
@@ -55,97 +57,83 @@ SExp.      Stmt ::= Expr  ";" ;
 -- Types ---------------------------------------------------
 
 Int.       Type ::= "int" ;
-
 Doub.      Type ::= "double" ;
-
 Bool.      Type ::= "boolean" ;
-
 Void.      Type ::= "void" ;
-
+-- shift reduce!
 Array.     Type ::= Type [DimT] ;
+TStruct.   Type ::= "struct" Ident "*" ;
+TRef.      Type ::= Ident ;
 
 internal   ConstStr. Type ::= "String" ;
-
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
 separator  Type "," ;
 
 DimenT.    DimT ::= "[]" ;
-
 separator  nonempty DimT "" ;
+
+-- L-Values ------------------------------------------------
+
+LValueV.   LValue ::= Ident [DimE] ;
+LValueS.   LValue ::= Ident [DimE] "->" LValue ;
 
 -- Expressions ---------------------------------------------
 
+-- shift reduce! x2
+Length.    Expr6 ::= Expr6 "." "length";
+
+-- shift reduce!
+ECastNullX. Expr7 ::= "(" Ident              ")" "null" ;
+ECastNullA. Expr7 ::= "(" Type [DimT]        ")" "null" ;
+ECastNullS. Expr7 ::= "(" "struct" Ident "*" ")" "null" ;
+
 ENew.      Expr6 ::= "new" Type [DimE] ;
 
-EVar.      Expr6 ::= Ident [DimE] ;
+EVar.      Expr6 ::= LValue ;
 
 ELitInt.   Expr6 ::= Integer ;
-
 ELitDoub.  Expr6 ::= Double;
-
 ELitTrue.  Expr6 ::= "true" ;
-
 ELitFalse. Expr6 ::= "false" ;
-
-ECastNull. Expr5 ::= "(" Type ")" "null" ;
+EString.   Expr6 ::= String ;
 
 EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
 
-EString.   Expr6 ::= String ;
-
 Neg.       Expr5 ::= "-" Expr6 ;
-
 Not.       Expr5 ::= "!" Expr6 ;
 
-Length.    Expr5 ::= Expr6 "." "length";
-
 EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
-
 EAdd.      Expr3 ::= Expr3 AddOp Expr4 ;
 
 ERel.      Expr2 ::= Expr2 RelOp Expr3 ;
-
 EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
+EOr.       Expr  ::= Expr1 "||" Expr ;
 
-EOr.       Expr ::= Expr1 "||" Expr ;
-
-coercions  Expr 6 ;
-
+coercions  Expr 7 ;
 separator  Expr "," ;
 
 DimenE.    DimE ::= "[" Expr "]" ;
-
 separator  DimE "" ;
 
 -- operators -----------------------------------------------
 
 Plus.      AddOp ::= "+" ;
-
 Minus.     AddOp ::= "-" ;
 
 Times.     MulOp ::= "*" ;
-
 Div.       MulOp ::= "/" ;
-
 Mod.       MulOp ::= "%" ;
 
 LTH.       RelOp ::= "<" ;
-
 LE.        RelOp ::= "<=" ;
-
 GTH.       RelOp ::= ">" ;
-
 GE.        RelOp ::= ">=" ;
-
 EQU.       RelOp ::= "==" ;
-
 NE.        RelOp ::= "!=" ;
 
 -- comments ------------------------------------------------
 
 comment    "#" ;
-
 comment    "//" ;
-
 comment    "/*" "*/" ;
