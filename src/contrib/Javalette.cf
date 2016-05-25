@@ -3,6 +3,36 @@
 entrypoints Program ;
 Program.   Program ::= [TopDef] ;
 
+-- algebraic data types ------------------------------------
+
+DataDef.   TopDef ::= "data" Ident "=" [DSummand] ";" ;
+
+DUnit.     DSummand ::= UIdent ;
+DProduct.  DSummand ::= UIdent "(" [DField] ")" ;
+separator nonempty DSummand "|" ;
+
+DField.   DField   ::= Type ;
+separator nonempty DField   "," ;
+
+EMatch.     Expr  ::= "case" Expr1 "of" [MatchCase] ;
+
+MatchCase. MatchCase ::= MatchPattern "->" Expr ;
+terminator nonempty MatchCase ";" ;
+
+MatchUnit.    MatchPattern ::= MatchField ;
+MatchProduct. MatchPattern ::= UIdent "(" [MatchNested] ")" ;
+
+MatchIgnore.  MatchField   ::= "_" ;
+MatchCtor.    MatchField   ::= UIdent ;
+MatchVar.     MatchField   ::= LIdent ;
+
+MatchField.   MatchNested  ::= MatchField ;
+MatchComplex. MatchNested  ::= UIdent "(" [MatchNested] ")" ;
+separator nonempty MatchNested "," ;
+
+token UIdent (upper (letter | digit | '_')*) ;
+token LIdent (lower (letter | digit | '_')*) ;
+
 -- classes -------------------------------------------------
 
 ClassDef.  TopDef ::= "class" Ident ClassHierarchy "{" [ClassPart] "}" ;
