@@ -32,10 +32,6 @@ separator nonempty Item "," ;
 
 Assign.    Stmt ::= LValue "=" Expr ";" ;
 
-Incr.      Stmt ::= Ident "++"  ";" ;
-
-Decr.      Stmt ::= Ident "--"  ";" ;
-
 Ret.       Stmt ::= "return" Expr ";" ;
 
 VRet.      Stmt ::= "return" ";" ;
@@ -96,6 +92,11 @@ ELitFalse. Expr6 ::= "false" ;
 EString.   Expr6 ::= String ;
 
 EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+
+Incr.      Expr6 ::= LValue "++" ;
+Decr.      Expr6 ::= LValue "--" ;
+PreIncr.   Expr6 ::= "++" LValue ;
+PreDecr.   Expr6 ::= "--" LValue ;
 
 Neg.       Expr5 ::= "-" Expr6 ;
 Not.       Expr5 ::= "!" Expr6 ;
