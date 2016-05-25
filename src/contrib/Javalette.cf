@@ -30,10 +30,7 @@ NoInit.    Item ::= Ident ;
 Init.      Item ::= Ident "=" Expr ;
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= Ident "=" Expr ";" ;
-
--- shift reduce!
-AssArr.    Stmt ::= Ident [DimE] "=" Expr ";" ;
+Assign.    Stmt ::= LValue "=" Expr ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
