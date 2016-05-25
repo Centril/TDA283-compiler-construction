@@ -3,16 +3,37 @@
 entrypoints Program ;
 Program.   Program ::= [TopDef] ;
 
+-- classes -------------------------------------------------
+
+ClassDef.  TopDef ::= "class" Ident ClassHierarchy "{" [ClassPart] "}" ;
+
+MethodDef. ClassPart ::= FnDef ;
+ClassProp. ClassPart ::= Type Ident ";" ;
+separator  ClassPart "" ;
+
+HExtend.   ClassHierarchy ::= "extend" Ident ;
+HBase.     ClassHierarchy ::= ;
+
+-- structs -------------------------------------------------
+
 StructDef. TopDef ::= "struct" Ident "{" [SField] "}" ";" ;
-TypeDef.   TopDef ::= "typedef" Type Ident ";" ;
-FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
-separator nonempty TopDef "" ;
 
 SField.    SField ::= Type Ident ;
 terminator SField ";" ;
 
-Arg. 	   Arg ::= Type Ident ;
+-- typedefs ------------------------------------------------
+
+TypeDef.   TopDef ::= "typedef" Type Ident ";" ;
+
+-- functions -----------------------------------------------
+
+TFnDef.    TopDef ::= FnDef ;
+FnDef.     FnDef ::= Type Ident "(" [Arg] ")" Block ;
+
+Arg.       Arg ::= Type Ident ;
 separator  Arg "," ;
+
+separator nonempty TopDef "" ;
 
 -- statements ----------------------------------------------
 
@@ -89,6 +110,7 @@ ELitFalse. Expr6 ::= "false" ;
 EString.   Expr6 ::= String ;
 
 EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+EMApp.     Expr6 ::= Expr6 "." Ident "(" [Expr] ")" ;
 
 Incr.      Expr6 ::= LValue "++" ;
 Decr.      Expr6 ::= LValue "--" ;
