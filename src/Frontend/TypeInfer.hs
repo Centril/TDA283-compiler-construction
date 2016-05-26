@@ -35,10 +35,12 @@ module Frontend.TypeInfer (
     inferExp, inferType, inferLVal
 ) where
 
+import Data.List
+
+import Control.Arrow
 import Control.Monad
 
 import Control.Lens
-import Control.Lens.Extras
 
 import Utils.Monad
 import Utils.Sizeables
@@ -69,25 +71,28 @@ inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
     ENew      {} -> inferENew expr
     EVar      {} -> inferEVar expr
-    EString   {} -> addTyp' expr conststr
-    ELitInt   {} -> addTyp' expr int
-    ELitDoub  {} -> addTyp' expr doub
-    ELitTrue  _  -> addTyp' expr bool
-    ELitFalse _  -> addTyp' expr bool
+    EString   {} -> lit conststr
+    ELitInt   {} -> lit int
+    ELitDoub  {} -> lit doub
+    ELitTrue  _  -> lit bool
+    ELitFalse _  -> lit bool
     ECastNull {} -> inferCastNull expr
     EApp      {} -> inferFun expr
-    Incr      {} -> inferIncrDecr expr
-    Decr      {} -> inferIncrDecr expr
-    PreIncr   {} -> inferIncrDecr expr
-    PreDecr   {} -> inferIncrDecr expr
-    Neg       {} -> inferUnary expr [int, doub]
-    Not       {} -> inferUnary expr [bool]
+    Incr      {} -> iid
+    Decr      {} -> iid
+    PreIncr   {} -> iid
+    PreDecr   {} -> iid
+    Neg       {} -> iu [int, doub]
+    Not       {} -> iu [bool]
     EMul      {} -> ib (mulOp $ _eMOp expr)
     EAdd      {} -> ib [int, doub]
     ERel      {} -> inferBin (const bool) expr (relOp $ _eROp expr)
     EAnd      {} -> ib [bool]
     EOr       {} -> ib [bool]
-    where ib = inferBin id expr
+    where ib accept = inferBin id expr (`elem` accept)
+          iid = inferIncrDecr expr
+          lit = addTyp' expr
+          iu  = inferUnary expr
 
 inferCastNull :: ExprA -> TCComp (ExprA, TypeA)
 inferCastNull expr = do
@@ -100,7 +105,7 @@ inferENew expr = do
     (bt, _)  <- inferType $ _eTyp expr
     unless (notArray bt) $ typeNotNewable bt
     dims     <- inferAccInts $ _eDimEs expr
-    (typ, _) <- inferType $ arrayT (bt, length dims)
+    (typ, _) <- inferType $ growN (length dims) bt
     addTyp' (expr { _eDimEs = dims, _eTyp = bt }) typ
 
 inferEVar :: ExprA -> TCComp (ExprA, TypeA)
@@ -119,24 +124,38 @@ inferIncrDecr = checkEVar [int, doub]
 
 inferLVal :: LValueA -> TCComp (LValueA, TypeA)
 inferLVal lval = case lval of
-    LValueS _ lvl lvr    -> do
-        (lvl', typ) <- inferLVal lvl
-        if is _Array typ then do
-            unless (isLVLength lvr) (arrayNotStruct typ)
-            addTyp' lval { _lvLLVal = lvl' } int
-        else if is _TStruct typ then
-            -- TODO: ensure typ is a struct
-            -- TODO: ensure lvr exists in struct.
-            return u
-        else primNoAccProps typ
-    LValueV _ name []    -> uncurry addTyp <$> lookupVarE' name lval
-    LValueV _ name dimes -> do
-        (lval', typ) <- lookupVarE' name lval
-        (bt, dimst)  <- inferArray (accOfNotArr name) typ
-        let (ldts, ldes) = (length dimst, length dimes)
-        let dimDiff = ldts - ldes
-        unless (dimDiff >= 0) $ accArrOverDimen name ldts ldes
-        flip addTyp (growN dimDiff bt) <$> (lvDimEs %%~ inferAccInts $ lval')
+    LValueS _ lvl lvr -> do
+        (lvl', ltyp) <- inferLVal lvl
+        case ltyp of
+            Array   {}      -> do
+                unless (isLVLength lvr) (arrayNotStruct ltyp)
+                addTyp' lval { _lvLLVal = lvl' } int
+            TStruct _ sname -> do
+                -- Works because the LValue tree is left associative:
+                let LValueV _ rname dimes = lvr
+                SField _ typ _ idx <- lookupField sname rname
+                (lvr', rtyp) <- case dimes of
+                    [] -> addTyp' lvr typ
+                    _  -> inferLValArr lvr typ
+                addTyp' lval { _lvLLVal = lvl', _lvRLVal = lvr' } rtyp
+            _         -> primNoAccProps ltyp
+    LValueV _ name [] -> uncurry addTyp <$> lookupVarE' name lval
+    LValueV _ name _  -> lookupVarE' name lval >>= uncurry inferLValArr
+
+inferLValArr :: LValueA -> TypeA -> TCComp (LValueA, TypeA)
+inferLValArr lv typ = do
+    let (name, dimes) = _lvIdent &&& _lvDimEs $ lv
+    (bt, dimst) <- inferArray (accOfNotArr name) typ
+    let (ldts, ldes) = (length dimst, length dimes)
+    let dimDiff = ldts - ldes
+    unless (dimDiff >= 0) $ accArrOverDimen name ldts ldes
+    flip addTyp (growN dimDiff bt) <$> (lvDimEs %%~ inferAccInts $ lv)
+
+lookupField :: Ident -> Ident -> TCComp SFieldA
+lookupField sname rname = do
+    fields <- lookupStruct noSuchTypeName sname
+    typ    <- lookupTypeName noSuchTypeName sname
+    maybeErr (propNotExists rname typ) $ find ((rname ==) . _sfIdent) fields
 
 isLVLength :: LValueA -> Bool
 isLVLength = \case
@@ -156,19 +175,19 @@ inferAccInt expr = do
     (expr', typ) <- inferExp expr
     unless (typ == int) (accArrNotInt typ) >> return expr'
 
-relOp :: RelOpA -> [TypeA]
-relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = [int, doub, bool]
-           | otherwise                                 = [int, doub]
+relOp :: RelOpA -> TypeA -> Bool
+relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = const True
+           | otherwise                                 = (`elem` [int, doub])
 
 mulOp :: MulOpA -> [TypeA]
 mulOp oper | oper == Mod emptyAnot = [int]
            | otherwise             = [int, doub]
 
-inferBin :: (TypeA -> TypeA) -> ExprA -> [TypeA] -> TCComp (ExprA, TypeA)
-inferBin mTyp expr accept = do
+inferBin :: (TypeA -> TypeA) -> ExprA -> (TypeA -> Bool) -> TCComp (ExprA, TypeA)
+inferBin mTyp expr acceptf = do
     (exprl', typl) <- inferExp $ _eLExpr expr
     (exprr', typr) <- inferExp $ _eRExpr expr
-    if typl == typr && typl `elem` accept
+    if typl == typr && acceptf typl
         then addTyp' (expr { _eLExpr = exprl', _eRExpr = exprr'}) (mTyp typl)
         else wrongBinExp (_eLExpr expr) (_eRExpr expr) typl typr
 

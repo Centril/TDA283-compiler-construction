@@ -37,6 +37,8 @@ module Frontend.TypeCheck (
     typeCheck, compileFrontend, targetTypeCheck
 ) where
 
+import Data.Data(Data)
+
 import Control.Monad
 import Control.Monad.Reader
 
@@ -115,21 +117,27 @@ collectTypedefs prog = forM_ (_pTopDefs prog) $ \td -> case td of
     TypeDef _ typ alias -> do
         (typ', _) <- inferType typ
         extendTypeDef typeIsReserved alias typ'
-    x                   -> return ()
+    _                   -> return ()
 
 expandTypedefs :: ProgramA -> TCComp ProgramA
-expandTypedefs = U.transformBiM $ \case
-    typ@(TRef _ alias) -> expandTD typ alias
-    x                  -> return x
+expandTypedefs = expandInStructs >>. expandTDs
 
-nukeTypedefs :: ProgramA -> TCComp ProgramA
-nukeTypedefs = pTopDefs %%~ return . (>>= \case TypeDef {} -> []; x -> [x])
+expandInStructs :: TCComp ()
+expandInStructs = use structs >>= expandTDs >>= (structs .=)
+
+expandTDs :: Data from => from -> TCComp from
+expandTDs = U.transformBiM $ \case
+    typ@(TRef _ alias)   -> expandTD typ alias
+    x                    -> return x
 
 expandTD :: TypeA -> Ident -> TCComp TypeA
 expandTD typ alias = lookupTypeName noSuchTypeName alias >>= \case
     typ'@(TRef _ alias') -> if typ == typ' then return typ
                             else expandTD typ' alias'
     x                    -> return x
+
+nukeTypedefs :: ProgramA -> TCComp ProgramA
+nukeTypedefs = pTopDefs %%~ return . (>>= \case TypeDef {} -> []; x -> [x])
 
 --------------------------------------------------------------------------------
 -- Structs, Classes:
@@ -138,8 +146,9 @@ expandTD typ alias = lookupTypeName noSuchTypeName alias >>= \case
 collectComplex :: ProgramA -> TCComp ()
 collectComplex prog = forM_ (_pTopDefs prog) $ \x -> case x of
     StructDef _ name fields -> do
-        let typ = appConcrete $ flip TStruct name
-        extendStruct typeIsReserved typ name fields
+        let typ  = appConcrete $ flip TStruct name
+        fields' <- forM fields $ sfType %%~ (inferType >$> fst)
+        extendStruct typeIsReserved typ name fields'
     _                       -> return ()
 
 --------------------------------------------------------------------------------

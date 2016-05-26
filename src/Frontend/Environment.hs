@@ -43,7 +43,7 @@ module Frontend.Environment (
     lookupVar', lookupFun', currUnused,
     extendVar', extendFun',
     extendTypeDef, lookupTypeName,
-    extendStruct
+    extendStruct, lookupStruct, structs
 ) where
 
 import Prelude hiding (lookup)
@@ -150,6 +150,9 @@ extendStruct onErr typ name fields = do
     checkNotReserved onErr name
     reserved %= insert name typ
     structs  %= insert name fields
+
+lookupStruct :: (Ident -> TCComp [SFieldA]) -> Ident -> TCComp [SFieldA]
+lookupStruct = lookupX structs
 
 -- | 'extendTypeDef': Extends current list of typedefs with the one given,
 -- or fails with onErr if the type name already exists.
