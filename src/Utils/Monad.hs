@@ -35,7 +35,8 @@ module Utils.Monad (
     (<!>), (<:>), (<++>),
 
     -- * Monad operations
-    (>?=>), (>=?>), (<<=), (.>>), (>>.), maybeErr, unless', foldl1M, foldr1M
+    (>?=>), (>=?>), (<<=), (.>>), (>>.),
+    maybeErr, unless', foldl1M, foldr1M, untilEqM, untilMatchM
 ) where
 
 import Data.Foldable
@@ -134,3 +135,11 @@ foldl1M f t = let (z:xs) = toList t in foldlM f z xs
 -- | 'foldr1M': variant of 'foldrM' without base case, so non-empty structure.
 foldr1M :: (Foldable t, Monad m) => (a -> a -> m a) -> t a -> m a
 foldr1M f t = let (z:xs) = toList t in foldrM f z xs
+
+-- | 'untilEqM': same as 'untilEq' but in a monadic context.
+untilEqM :: (Eq a, Monad m) => (a -> m a) -> m a -> m a
+untilEqM = untilMatchM (==)
+
+-- | 'untilMatchM': same as 'untilMatch' but in a monadic context.
+untilMatchM :: Monad m => (a -> a -> Bool) -> (a -> m a) -> m a -> m a
+untilMatchM p f = (>>= \x -> unless' (f x) (p x) (untilMatchM p f . return))
