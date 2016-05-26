@@ -70,11 +70,9 @@ separator  nonempty DimT "" ;
 
 LValueV.   LValue ::= Ident [DimE] ;
 LValueS.   LValue ::= Ident [DimE] "->" LValue ;
+LValueS.   LValue ::= Ident [DimE] "."  LValue ;
 
 -- Expressions ---------------------------------------------
-
--- shift reduce! x2
-Length.    Expr6 ::= Expr6 "." "length";
 
 -- shift reduce!
 ECastNullX. Expr7 ::= "(" Ident              ")" "null" ;
@@ -82,7 +80,6 @@ ECastNullA. Expr7 ::= "(" Type [DimT]        ")" "null" ;
 ECastNullS. Expr7 ::= "(" "struct" Ident "*" ")" "null" ;
 
 ENew.      Expr6 ::= "new" Type [DimE] ;
-
 EVar.      Expr6 ::= LValue ;
 
 ELitInt.   Expr6 ::= Integer ;
