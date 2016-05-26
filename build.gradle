@@ -105,10 +105,10 @@ project(':grade') { p ->
         description "Runs grader program for jlc."
         if ( isWin() )
             commandLine file("Grade.exe"), "-s", "jlc.exe", "-b", "LLVM",
-                "-x", "arrays1", "-x", "arrays2", ".", "../submission"
+                "-x", "arrays1", "-x", "arrays2", "-x", "pointers", ".", "../submission"
         else
             commandLine "./Grade", "-b", "LLVM",
-                "-x", "arrays1", "-x", "arrays2", ".", "../submission"
+                "-x", "arrays1", "-x", "arrays2", "-x", "pointers", ".", "../submission"
     }
 }
 
