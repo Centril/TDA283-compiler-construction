@@ -40,13 +40,13 @@ terr' :: [String] -> TCComp a
 terr' = err' TypeChecker
 
 xAlreadyDef :: String -> Ident -> TCComp a
-xAlreadyDef what x = terr' ["The", what, _ident x, "is already defined"]
+xAlreadyDef what x = terr' ["The", what, _ident x, "is already defined."]
 
 xNotDef :: String -> Ident -> TCComp a
 xNotDef what x = terr' ["The", what, _ident x, " is not defined."]
 
 wrongMainSig :: TCComp a
-wrongMainSig = terr "The function: main has the wrong signature"
+wrongMainSig = terr "The function: main has the wrong signature."
 
 funNotDef, varNotDef :: Ident -> TCComp a
 funNotDef = xNotDef "function"
@@ -72,11 +72,11 @@ wrongExpTyp expr texpected tactual =
           "expected the type:", show texpected, ",",
                 "actual type:", show tactual]
 
-wrongIdentTyp :: Show b => Ident -> [Type b] -> Type b -> TCComp a
-wrongIdentTyp expr types tactual =
-    terr' ["The expression", _ident expr,
-          "expected one of the types:", show types, ",",
-                        "actual type:", show tactual]
+wrongExprTyp :: Show b => ExprA -> [Type b] -> Type b -> TCComp a
+wrongExprTyp lval types tactual =
+    terr' ["The expression", show lval,
+           "was expected to be one of the types:", show types, ",",
+                                   "actual type:", show tactual]
 
 wrongUnaryExp :: Show b => Expr b -> [Type b] -> Type b -> TCComp a
 wrongUnaryExp expr types tactual =
@@ -97,12 +97,17 @@ wrongArgsTyp fun texpected tactual =
           "but was applied with actual types:", show tactual]
 
 insufficientFunRet :: Ident -> TCComp a
-insufficientFunRet fun = terr' ["The function", _ident fun, "might not return"]
+insufficientFunRet fun = terr' ["The function", _ident fun, "might not return."]
 
-lengthOfNotArr :: TypeA -> TCComp a
-lengthOfNotArr typ =
-    terr' ["The expression of type", show typ, "is not an array",
-           "and thus length can not be used on it."]
+propNotExists :: Ident -> TypeA -> TCComp a
+propNotExists prop typ = 
+    terr' ["The type", show typ, "does not have a property", _ident prop ++ "."]
+
+arrayNotStruct :: TypeA -> TCComp a
+arrayNotStruct typ = terr' ["The array type", show typ, "is not a struct."]
+
+primNoAccProps :: TypeA -> TCComp a
+primNoAccProps typ = terr' ["The type", show typ, "has no accessable properties."]
 
 accArrOverDimen :: Ident -> Int -> Int -> TCComp a
 accArrOverDimen name arr attempt =
@@ -127,3 +132,11 @@ nullNotCastable :: TypeA -> TCComp a
 nullNotCastable typ =
     terr' ["Illegal attempt to cast null to the type", show typ,
            ", which is not a pointer type."]
+
+noSuchTypeName :: Ident -> TCComp a
+noSuchTypeName alias = terr' ["The type", _ident alias, "is not defined."]
+
+typeIsReserved :: Ident -> TypeA -> TCComp a
+typeIsReserved name typ =
+    terr' ["Type name", _ident name,
+           "has already been defined as", show typ ++ "."]
