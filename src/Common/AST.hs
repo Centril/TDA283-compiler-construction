@@ -57,7 +57,8 @@ data TopDef a = StructDef { _tdAnot :: a, _stIdent :: Ident,
                             _fArgs  :: [Arg a], _fBlock :: Block a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data SField a = SField { _sfAnot :: a, _sfType :: Type a, _sfIdent :: Ident }
+data SField a = SField { _sfAnot :: a, _sfType :: Type a, _sfIdent :: Ident,
+                         _sfIndex :: Integer }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data Arg a = Arg { _aAnot :: a, _aTyp :: Type a, _aIdent :: Ident }
@@ -197,7 +198,7 @@ instance Functor TopDef where
         FnDef a r i ps b -> FnDef     (f a) (f <$> r) i (f <$$> ps) (f <$> b)
 
 instance Functor SField where
-    fmap f (SField a t i) = SField (f a) (f <$> t) i
+    fmap f (SField a t n i) = SField (f a) (f <$> t) n i
 
 instance Functor Arg where
     fmap f (Arg a t i)        = Arg     (f a) (f <$> t) i
@@ -297,11 +298,12 @@ instance Overable RelOp   where overF = rAnot
 
 convert :: J.Program a -> Program a
 convert (J.Program anot fns)          = Program anot $ ctd <$> fns
-    where ctd (J.StructDef a i sf)    = StructDef a (ci i) (csf <$> sf)
-          ctd (J.TypeDef   a t i)     = TypeDef   a (ct t) (ci i)
+    where ctd (J.TypeDef   a t i)     = TypeDef   a (ct t) (ci i)
           ctd (J.FnDef a r i p b)     = FnDef     a (ct r) (ci i)
                                                     (ca <$> p) (cb b)
-          csf (J.SField    a t i)     = SField    a (ct t) (ci i)
+          ctd (J.StructDef a i sf)    = StructDef a (ci i)
+                                                    (zipWith csf [0..] sf)
+          csf i (J.SField  a t n)     = SField    a (ct t) (ci n) i
           ca  (J.Arg       a t i)     = Arg       a (ct t) (ci i)
           ct  (J.Int       a)         = Int       a
           ct  (J.Doub      a)         = Doub      a
@@ -330,7 +332,7 @@ convert (J.Program anot fns)          = Program anot $ ctd <$> fns
           cs  (J.Empty     a)         = Empty     a
           cs  (J.BStmt     a b)       = BStmt     a (cb b)
           cs  (J.Decl      a t is)    = Decl      a (ct t) (cit <$> is)
-          cs  (J.Assign    a lv e)    = Assign    a (clv lv) (ce e)
+          cs  (J.Assign    a lv e)    = Assign    a (cLV lv) (ce e)
           cs  (J.Ret       a e)       = Ret       a (ce e)
           cs  (J.VRet      a)         = VRet      a
           cs  (J.Cond      a c i)     = Cond      a (ce c) (cs i)
@@ -339,7 +341,7 @@ convert (J.Program anot fns)          = Program anot $ ctd <$> fns
           cs  (J.For       a t i e s) = For       a (ct t) (ci i) (ce e) (cs s)
           cs  (J.SExp      a e)       = SExp      a (ce e)
           ce  (J.ENew      a t des)   = ENew      a (ct t) (cde <$> des)
-          ce  (J.EVar      a lv)      = EVar      a (clv lv)
+          ce  (J.EVar      a lv)      = EVar      a (cLV lv)
           ce  (J.ELitInt   a v)       = ELitInt   a v
           ce  (J.ELitDoub  a v)       = ELitDoub  a v
           ce  (J.EString   a v)       = EString   a v
@@ -351,10 +353,10 @@ convert (J.Program anot fns)          = Program anot $ ctd <$> fns
           ce  (J.EApp      a i es)    = EApp      a (ci i) (ce <$> es)
           ce  (J.Neg       a e)       = Neg       a (ce e)
           ce  (J.Not       a e)       = Not       a (ce e)
-          ce  (J.Incr      a lv)      = Incr      a (clv lv)
-          ce  (J.Decr      a lv)      = Decr      a (clv lv)
-          ce  (J.PreIncr   a lv)      = PreIncr   a (clv lv)
-          ce  (J.PreDecr   a lv)      = PreDecr   a (clv lv)
+          ce  (J.Incr      a lv)      = Incr      a (cLV lv)
+          ce  (J.Decr      a lv)      = Decr      a (cLV lv)
+          ce  (J.PreIncr   a lv)      = PreIncr   a (cLV lv)
+          ce  (J.PreDecr   a lv)      = PreDecr   a (cLV lv)
           ce  (J.EMul      a l o r)   = EMul      a (ce l) (cmo o) (ce r)
           ce  (J.EAdd      a l o r)   = EAdd      a (ce l) (cao o) (ce r)
           ce  (J.ERel      a l o r)   = ERel      a (ce l) (cro o) (ce r)
@@ -362,7 +364,18 @@ convert (J.Program anot fns)          = Program anot $ ctd <$> fns
           ce  (J.EOr       a l   r)   = EOr       a (ce l)         (ce r)
           cdt (J.DimenT    a)         = DimenT    a
           cde (J.DimenE    a e)       = DimenE    a (ce e)
+          cLV                         = leftifyLVal . clv
           clv (J.LValueV   a i d)     = LValueV   a (ci i) (cde <$> d)
           clv (J.LValueS   a i d lv)  = LValueS   a
                                                   (LValueV a (ci i) (cde <$> d))
                                                   (clv lv)
+
+leftifyLVal :: LValue a -> LValue a
+leftifyLVal = rebuildLVal . reverse . flattenLVal
+    where rebuildLVal = \case
+            [ ]    -> error "rebuildLVal: can't rebuild empty LValue tree."
+            [x]    -> x
+            (x:xs) -> LValueS (_lvAnot x) (rebuildLVal xs) x
+          flattenLVal lv = case lv of
+            LValueV {}    -> [lv]
+            LValueS _ l r -> flattenLVal l ++ flattenLVal r
