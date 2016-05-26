@@ -27,6 +27,8 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
+{-# LANGUAGE LambdaCase #-}
+
 module Frontend.TypeCheck (
     -- * Modules
     module X,
@@ -40,12 +42,13 @@ import Control.Monad.Reader
 
 import Control.Lens hiding (contexts, Empty)
 
+import qualified Data.Generics.Uniplate.Data as U
+
 import Utils.Monad
 import Utils.Sizeables
 
 import Frontend.Environment as X
 import Frontend.Error
-import Frontend.Common
 import Frontend.TypeFunSig
 import Frontend.TypeInfer
 import Frontend.ReturnCheck
@@ -53,6 +56,8 @@ import Frontend.ParseLex
 
 import Common.AST
 import Common.FileOps
+
+u = undefined
 
 --------------------------------------------------------------------------------
 -- TARGET, Typecheck:
@@ -77,31 +82,78 @@ compileFrontend code = do
 typeCheck :: Program () -> TCComp ProgramA
 typeCheck prog0 = do
     let prog1 = fmap (const emptyAnot) prog0
-    -- Part 1: Collect all functions
+    -- Part 1: Collect all typedefs
+    info TypeChecker   "Collecting typedefs"
+    collectTypedefs prog1
+    -- Part 2: Collect all structs + classes
+    info TypeChecker   "Collecting structs and classes"
+    collectComplex prog1
+    -- Part 3: Expand typedefs
+    info TypeChecker   "Expanding typedefs"
+    prog2 <- expandTypedefs >=> nukeTypedefs $ prog1
+    -- Part 4: Collect all functions
     info TypeChecker   "Collecting all functions"
-    prog2 <- allFunctions prog1
+    prog3 <- allFunctions prog2
     info TypeChecker   "AST after collect"
-    info TypeChecker $ show prog2
-    -- Part 2: Check for the correctness of the main definition
-    info TypeChecker   "Checking existence of main"
+    info TypeChecker $ show prog3
+    -- Part 5: Check for the correctness of the main definition
+    info TypeChecker   "Checking existence of int main()"
     mainCorrect
-    -- Part 3: Type check the program
+    -- Part 6: Type check the program
     info TypeChecker   "Type checking the program"
-    prog3 <- checkProg prog2
-    -- Part 4: Return check the program.
+    prog4 <- checkProg prog3
+    -- Part 7: Return check the program.
     info ReturnChecker "Return checking the program"
-    returnCheck prog3
+    returnCheck prog4
+
+--------------------------------------------------------------------------------
+-- Typedefs:
+--------------------------------------------------------------------------------
+
+collectTypedefs :: ProgramA -> TCComp ()
+collectTypedefs prog = forM_ (_pTopDefs prog) $ \td -> case td of
+    TypeDef _ typ alias -> do
+        (typ', _) <- inferType typ
+        extendTypeDef typeIsReserved alias typ'
+    x                   -> return ()
+
+expandTypedefs :: ProgramA -> TCComp ProgramA
+expandTypedefs = U.transformBiM $ \case
+    typ@(TRef _ alias) -> expandTD typ alias
+    x                  -> return x
+
+nukeTypedefs :: ProgramA -> TCComp ProgramA
+nukeTypedefs = pTopDefs %%~ return . (>>= \case TypeDef {} -> []; x -> [x])
+
+expandTD :: TypeA -> Ident -> TCComp TypeA
+expandTD typ alias = lookupTypeName noSuchTypeName alias >>= \case
+    typ'@(TRef _ alias') -> if typ == typ' then return typ
+                            else expandTD typ' alias'
+    x                    -> return x
+
+--------------------------------------------------------------------------------
+-- Structs, Classes:
+--------------------------------------------------------------------------------
+
+collectComplex :: ProgramA -> TCComp ()
+collectComplex prog = forM_ (_pTopDefs prog) $ \x -> case x of
+    StructDef _ name fields -> do
+        let typ = appConcrete $ flip TStruct name
+        extendStruct typeIsReserved typ name fields
+    _                       -> return ()
 
 --------------------------------------------------------------------------------
 -- Type checking:
 --------------------------------------------------------------------------------
 
 checkProg :: ProgramA -> TCComp ProgramA
-checkProg = pTopDefs %%~ mapM checkFunType
+checkProg = pTopDefs %%~ mapM checkFunction
 
-checkFunType :: TopDefA -> TCComp TopDefA
-checkFunType fun = sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
+checkFunction :: TopDefA -> TCComp TopDefA
+checkFunction fun = case fun of
+    FnDef {} -> sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
                    (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
+    _        -> return fun
 
 checkBlock :: TypeA -> BlockA -> TCComp BlockA
 checkBlock rtyp block = (bStmts %%~ mapM (checkStm rtyp) $ block) <*
@@ -116,10 +168,7 @@ checkStm typ stmt = case stmt of
     Empty     _ -> return stmt
     BStmt    {} -> sPushM contexts >> (sBlock %%~ checkBlock typ $ stmt)
     Decl     {} -> checkDecls stmt
-    Ass      {} -> checkAss stmt
-    AssArr   {} -> checkAssArr stmt
-    Incr     {} -> checkInc
-    Decr     {} -> checkInc
+    Assign   {} -> checkAssign stmt
     SExp     {} -> sExpr %%~ fmap fst . inferExp $ stmt
     Ret      {} -> sExpr %%~ checkExp typ $ stmt
     VRet      _ -> checkVoid typ >> return stmt
@@ -129,7 +178,6 @@ checkStm typ stmt = case stmt of
     For      {} -> checkFor typ stmt
     where checkC   = sExpr %%~ checkExp bool >=> checkS sSi
           checkS f = f %%~ checkStm typ
-          checkInc = checkIdent [int, doub] stmt
 
 checkFor :: TypeA -> StmtA -> TCComp StmtA
 checkFor rtyp = sTyp %%~ (inferType >$> fst) >=> \for ->
@@ -137,20 +185,10 @@ checkFor rtyp = sTyp %%~ (inferType >$> fst) >=> \for ->
     in (sExpr %%~ checkExp (grow typ)) for >>= sInScope contexts .
         (extendLocal typ (_sIdent for) >>) . (sSi %%~ checkStm rtyp)
 
--- TODO: combine checkAss & checkAssArr?
-checkAss :: StmtA -> TCComp StmtA
-checkAss ass = do
-    (ass', typ) <- lookupVarE' (_sIdent ass) ass
-    sExpr %%~ checkExp typ $ ass'
-
-checkAssArr :: StmtA -> TCComp StmtA
-checkAssArr ass = do
-    let dimsl = _sDimEs ass
-    let name  = _sIdent ass
-    (ass1, typ) <- lookupVarE' name ass
-    (bt, dimst) <- inferArray (accOfNotArr name) typ
-    sExpr %%~ checkExp (growN (length dimst - length dimsl) bt) >=>
-        sDimEs %%~ inferAccInts $ ass1
+checkAssign :: StmtA -> TCComp StmtA
+checkAssign ass = do
+    (lval, ltyp) <- inferLVal $ _sLVal ass
+    sExpr %%~ checkExp ltyp $ ass { _sLVal = lval }
 
 checkVoid :: TypeA -> TCComp ()
 checkVoid frtyp = unless (frtyp == tvoid) (wrongRetTyp tvoid frtyp)
@@ -168,13 +206,6 @@ checkDeclItem vtyp item              = iExpr %%~ checkExp vtyp $ item
 checkExp :: TypeA -> ExprA -> TCComp ExprA
 checkExp texpected expr = fst <$> unless' (inferExp expr) ((texpected ==) . snd)
                                   (wrongExpTyp expr texpected . snd)
-
-checkIdent :: [TypeA] -> StmtA -> TCComp StmtA
-checkIdent types stmt = do
-    let name = _sIdent stmt
-    (stmt', typ) <- lookupVarE' name stmt
-    fst . addTyp stmt' <$> unless' (return typ) (`elem` types)
-                                   (wrongIdentTyp name types)
 
 extendArg :: ArgA -> TCComp ()
 extendArg a = extendVar' argAlreadyDef $ Var (_aIdent a) (_aTyp a) VSArg 0

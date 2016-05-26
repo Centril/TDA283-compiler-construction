@@ -27,6 +27,8 @@ Portability : ALL
 
 Collecting function signatures & checking main.
 -}
+{-# LANGUAGE LambdaCase#-}
+
 module Frontend.TypeFunSig (
     -- * Operations
     mainCorrect, allFunctions
@@ -61,15 +63,18 @@ mainCorrect = lookupFunE mainId >>=
 --------------------------------------------------------------------------------
 
 allFunctions :: ProgramA -> TCComp ProgramA
-allFunctions = pTopDefs %%~ (<<= collectFuns . (predefFuns ++) . fmap toFnSigId)
+allFunctions = pTopDefs %%~ (<<= collectFuns . (predefFuns ++) .
+                                 (>>= toFnSigIds))
                             . mapM checkFunSignature
 
-checkFunSignature :: TopDef ASTAnots -> TCComp TopDefA
-checkFunSignature fun = do args'      <- mapM checkArgTypes $ _fArgs fun
-                           (ret',  _) <- inferType $ _fRetTyp fun
-                           return $ fun { _fRetTyp = ret', _fArgs = args' } 
+checkFunSignature :: TopDefA -> TCComp TopDefA
+checkFunSignature fun = case fun of
+    FnDef {} -> do args' <- mapM checkArgTypes $ _fArgs fun
+                   (ret',  _) <- inferType $ _fRetTyp fun
+                   return $ fun { _fRetTyp = ret', _fArgs = args' }
+    x        -> return x
 
-checkArgTypes :: Arg ASTAnots -> TCComp ArgA
+checkArgTypes :: ArgA -> TCComp ArgA
 checkArgTypes = aTyp %%~ (fmap fst . inferType)
 
 collectFuns :: [FunId] -> TCComp ()
@@ -83,5 +88,7 @@ predefFuns = map toFunId
      ("readInt",     ([        ], int )),
      ("readDouble",  ([        ], doub))]
 
-toFnSigId :: TopDefA -> FunId
-toFnSigId (FnDef _ ret name args _) = FunId name $ FunSig (_aTyp <$> args) ret
+toFnSigIds :: TopDefA -> [FunId]
+toFnSigIds = \case
+    FnDef _ ret name args _ -> [FunId name $ FunSig (_aTyp <$> args) ret]
+    _                       -> []

@@ -46,7 +46,8 @@ import Data.Maybe
 
 import Control.Monad
 
-import Control.Lens hiding (Empty, op, uncons, to)
+import Control.Lens hiding (Empty, op, uncons, to, pre)
+import Control.Lens.Extras
 
 import Utils.Pointless
 import Utils.Monad
@@ -78,6 +79,7 @@ predefDecls =
     , LFunDecl doubType  "readDouble"  []]
 
 compileFun :: TopDefA -> LComp LFunDef
+-- TODO Pattern match(es) are non-exhaustive
 compileFun (FnDef _ rtyp name args block) = do
     let name'  = compileFName name
     rtyp'     <- compileFRTyp rtyp
@@ -119,11 +121,8 @@ compileStmt :: StmtA -> LComp ()
 compileStmt = \case
     Empty    _         -> return ()
     BStmt    _ b       -> compileBlock b
-    Decl     a t is    -> forM_ is $ compileDecl a t
-    Ass      a i e     -> compileAssign a i [] e
-    AssArr   a i d e   -> compileAssign a i d e
-    Incr     a i       -> compileInDeCr a i (Plus emptyAnot)
-    Decr     a i       -> compileInDeCr a i (Minus emptyAnot)
+    Decl     _ t is_   -> forM_ is_ $ compileDecl t
+    Assign   _ lv e    -> compileAssign lv e
     Ret      _ e       -> compileRet e
     VRet     _         -> pushInst LVRet
     Cond     _ c si    -> compileCond     c si
@@ -132,48 +131,24 @@ compileStmt = \case
     For      _ t i e s -> compileFor t i e s
     SExp     _ e       -> void $ compileExpr e
 
--- TODO: Fix for arrays!
-compileInDeCr :: ASTAnots -> Ident -> AddOpA -> LComp ()
-compileInDeCr anots name op = do
-    x@(LTValRef t _) <- compileEVar anots name []
-    assignTemp t (switchAdd op t x $ switchType (LVInt 1) (LVFloat 1) t)
-        >>= compileStore name
-
 compileStore :: Ident -> LTValRef -> LComp ()
 compileStore name tvr = store tvr $ LTValRef (LPtr $ _lTType tvr)
                                              (LRef $ _ident name)
 
-compileDecl :: ASTAnots -> TypeA -> ItemA -> LComp ()
-compileDecl anots typ item = do
+compileDecl :: TypeA -> ItemA -> LComp ()
+compileDecl typ item = do
     let name = _iIdent item
     compileAlloca name typ
-    compileAssign anots name [] $ fromMaybe (defaultVal typ) (item ^? iExpr)
+    let lval = fst $ addTyp (LValueV emptyAnot name []) typ
+    compileAssign lval $ fromMaybe (defaultVal typ) (item ^? iExpr)
 
 compileAlloca :: Ident -> TypeA -> LComp ()
 compileAlloca name = compileType >=> alloc (_ident name)
 
--- TODO: refactor Ident -> [DimEA] as LValue
-compileAssign :: ASTAnots -> Ident -> [DimEA] -> ExprA -> LComp ()
-compileAssign anots name dims expr = do
+compileAssign :: LValueA -> ExprA -> LComp ()
+compileAssign lval expr = do
     rhs <- compileExpr expr
-    compileLVal anots (extractType expr) name dims >>= store rhs
-
-compileLVal :: ASTAnots -> TypeA -> Ident -> [DimEA] -> LComp LTValRef
-compileLVal anots typ name dimes = do
-    let types@(topT:bts) = reverse $ take (1 + length dimes) (growInf typ)
-    ltopT     <- compileType topT
-    let top    = LTValRef (LPtr ltopT) (LRef $ _ident $ markIfArg anots name)
-    let tdimes = zip3 dimes bts types
-    foldM arrAcc top tdimes
-
-markIfArg :: ASTAnots -> Ident -> Ident
-markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)
-
-arrAcc :: LTValRef -> (DimEA, TypeA, TypeA) -> LComp LTValRef
-arrAcc top (dime, bT, topT) = do
-    idx <- compileExpr $ _deExpr dime
-    lbT <- compileType bT
-    compileType topT >>= flip load top >>= assignPtr lbT . deref [ione, idx]
+    compileLVal lval >>= store rhs
 
 compileRet :: ExprA -> LComp ()
 compileRet = compileExpr >$> LRet >=> pushInst
@@ -204,8 +179,8 @@ compileWhile c sw = do
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
     ENew      a _ ds  -> compileENew a ds
-    EVar      a i ds  -> compileEVar a i ds
-    Length    _ e     -> compileLength e
+    EVar      a lval  -> compileEVar a lval
+    --ELength   _ e     -> compileLength e
     ELitInt   _ v     -> return $ intTVR  v
     ELitDoub  _ v     -> return $ doubTVR v
     EString   _ v     -> compileCString   v
@@ -213,6 +188,10 @@ compileExpr = \case
     ELitFalse _       -> return lfalse
     ECastNull _ t     -> compileCastNull t
     EApp      a i es  -> compileApp a i es
+    Incr      _ lval  -> compileInDeCr lval Plus  False
+    Decr      _ lval  -> compileInDeCr lval Minus False
+    PreIncr   _ lval  -> compileInDeCr lval Plus  True
+    PreDecr   _ lval  -> compileInDeCr lval Minus True
     Neg       _ e     -> compileNeg e
     Not       _ e     -> compileNot e
     EMul      _ l o r -> compileMul  o l r
@@ -333,15 +312,21 @@ compileFor typ name eArr si = do
     l   <- loadLength arr
     basicFor "for" lbt arr l $ load lbt >=> compileStore name .>> compileStmt si
 
-compileEVar :: ASTAnots -> Ident -> [DimEA] -> LComp LTValRef
-compileEVar anots name des = do
-    let typ = getType anots
-    lval <- compileLVal anots typ name des
-    ltyp <- compileType typ
-    load ltyp lval
+compileEVar :: ASTAnots -> LValueA -> LComp LTValRef
+compileEVar anots lval = do
+    ltyp <- compileType $ getType anots
+    compileLVal lval >>= load ltyp
 
-compileLength :: ExprA -> LComp LTValRef
-compileLength = compileExpr >=> loadLength
+compileInDeCr :: LValueA -> (ASTAnots -> AddOpA) -> Bool -> LComp LTValRef
+compileInDeCr lval op isPre = do
+    let typ = extractType lval
+    mem  <- compileLVal lval
+    ltyp <- compileType typ
+    pre  <- load ltyp mem
+    post <- assignTemp ltyp $ switchAdd (op emptyAnot) ltyp pre $
+                              switchType (LVInt 1) (LVFloat 1) ltyp
+    store post mem
+    return $ if isPre then pre else post
 
 compileNot :: ExprA -> LComp LTValRef
 compileNot = compileExpr >=> assignBool . flip LXor (LVInt 1)
@@ -362,6 +347,39 @@ compileCString v = do
 
 strPointer :: LType -> LIdent -> LExpr
 strPointer t = deref [izero] . LTValRef t . LConst
+
+--------------------------------------------------------------------------------
+-- LValues:
+--------------------------------------------------------------------------------
+
+compileLVal :: LValueA -> LComp LTValRef
+compileLVal = \case
+    LValueS _ lvl lvr    -> do
+        let lvlT = extractType lvl
+        if is _Array lvlT then do
+            llvl <- compileLVal lvl
+            ltyp <- compileType lvlT
+            l    <- load ltyp llvl
+            lengthRef l
+        else
+            -- TODO: structs
+            return u
+    LValueV a name dimes -> do
+        let typ = getType a
+        let types@(topT:bts) = reverse $ take (1 + length dimes) (growInf typ)
+        ltopT     <- compileType topT
+        let top    = LTValRef (LPtr ltopT) (LRef $ _ident $ markIfArg a name)
+        let tdimes = zip3 dimes bts types
+        foldM arrAcc top tdimes
+
+markIfArg :: ASTAnots -> Ident -> Ident
+markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)
+
+arrAcc :: LTValRef -> (DimEA, TypeA, TypeA) -> LComp LTValRef
+arrAcc top (dime, bT, topT) = do
+    idx <- compileExpr $ _deExpr dime
+    lbT <- compileType bT
+    compileType topT >>= flip load top >>= assignPtr lbT . deref [ione, idx]
 
 --------------------------------------------------------------------------------
 -- Pointers, Structs, Arrays:
@@ -510,6 +528,8 @@ compileType = \case
     Bool     _     -> return boolType
     Void     _     -> return LVoid
     arr@(Array {}) -> aliasFor arr
+    s@(TStruct {}) -> return u -- TODO
+    r@(TRef    {}) -> return u -- TODO (classes)
     ConstStr _     -> return strType
     Fun      {}    -> error "compileType Fun not implemented."
 

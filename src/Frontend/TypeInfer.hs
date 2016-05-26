@@ -32,13 +32,13 @@ Type inference for Javalette compiler.
 
 module Frontend.TypeInfer (
     -- * Operations
-    inferExp, inferType,
-    inferArray, inferAccInts
+    inferExp, inferType, inferLVal
 ) where
 
 import Control.Monad
 
 import Control.Lens
+import Control.Lens.Extras
 
 import Utils.Monad
 import Utils.Sizeables
@@ -48,6 +48,8 @@ import Common.AST
 import Frontend.Environment
 import Frontend.Error
 import Frontend.Common
+
+u = undefined
 
 --------------------------------------------------------------------------------
 -- Kind inference:
@@ -66,9 +68,7 @@ inferType typ = do
 inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
     ENew      {} -> inferENew expr
-    EVar _ n  [] -> inferEVar n expr
-    EVar _ n  ds -> inferEVar' n expr ds
-    Length    {} -> inferLength expr
+    EVar      {} -> inferEVar expr
     EString   {} -> addTyp' expr conststr
     ELitInt   {} -> addTyp' expr int
     ELitDoub  {} -> addTyp' expr doub
@@ -76,6 +76,10 @@ inferExp expr = case expr of
     ELitFalse _  -> addTyp' expr bool
     ECastNull {} -> inferCastNull expr
     EApp      {} -> inferFun expr
+    Incr      {} -> inferIncrDecr expr
+    Decr      {} -> inferIncrDecr expr
+    PreIncr   {} -> inferIncrDecr expr
+    PreDecr   {} -> inferIncrDecr expr
     Neg       {} -> inferUnary expr [int, doub]
     Not       {} -> inferUnary expr [bool]
     EMul      {} -> ib (mulOp $ _eMOp expr)
@@ -99,17 +103,45 @@ inferENew expr = do
     (typ, _) <- inferType $ arrayT (bt, length dims)
     addTyp' (expr { _eDimEs = dims, _eTyp = bt }) typ
 
--- TODO: UNIFY! (LValue)
-inferEVar :: Ident -> ExprA -> TCComp (ExprA, TypeA)
-inferEVar name = lookupVarE' name >$> uncurry addTyp
+inferEVar :: ExprA -> TCComp (ExprA, TypeA)
+inferEVar expr = do
+    (lval, typ) <- inferLVal $ _eLVal expr
+    addTyp' expr { _eLVal = lval } typ
 
-inferEVar' :: Ident -> ExprA -> [DimEA] -> TCComp (ExprA, TypeA)
-inferEVar' name expr dims = do
-    (expr', typ) <- lookupVarE' name expr
-    (bt, dimst)  <- inferArray (accOfNotArr name) typ
-    let dimDiff = length dimst - length dims
-    unless (dimDiff >= 0) $ accArrOverDimen name (length dimst) (length dims)
-    flip addTyp (growN dimDiff bt) <$> (eDimEs %%~ inferAccInts $ expr')
+checkEVar :: [TypeA] -> ExprA -> TCComp (ExprA, TypeA)
+checkEVar allowed expr = do
+    r@(_, typ) <- inferEVar expr
+    unless (typ `elem` allowed) (wrongExprTyp expr allowed typ)
+    return r
+
+inferIncrDecr :: ExprA -> TCComp (ExprA, TypeA)
+inferIncrDecr = checkEVar [int, doub]
+
+inferLVal :: LValueA -> TCComp (LValueA, TypeA)
+inferLVal lval = case lval of
+    LValueS _ lvl lvr    -> do
+        (lvl', typ) <- inferLVal lvl
+        if is _Array typ then do
+            unless (isLVLength lvr) (arrayNotStruct typ)
+            addTyp' lval { _lvLLVal = lvl' } int
+        else if is _TStruct typ then
+            -- TODO: ensure typ is a struct
+            -- TODO: ensure lvr exists in struct.
+            return u
+        else primNoAccProps typ
+    LValueV _ name []    -> uncurry addTyp <$> lookupVarE' name lval
+    LValueV _ name dimes -> do
+        (lval', typ) <- lookupVarE' name lval
+        (bt, dimst)  <- inferArray (accOfNotArr name) typ
+        let (ldts, ldes) = (length dimst, length dimes)
+        let dimDiff = ldts - ldes
+        unless (dimDiff >= 0) $ accArrOverDimen name ldts ldes
+        flip addTyp (growN dimDiff bt) <$> (lvDimEs %%~ inferAccInts $ lval')
+
+isLVLength :: LValueA -> Bool
+isLVLength = \case
+    LValueV _ (Ident "length") [] -> True
+    _                             -> False
 
 inferArray :: (TypeA -> TCComp (TypeA, [DimTA]))
            ->  TypeA -> TCComp (TypeA, [DimTA])
@@ -123,10 +155,6 @@ inferAccInt :: ExprA -> TCComp ExprA
 inferAccInt expr = do
     (expr', typ) <- inferExp expr
     unless (typ == int) (accArrNotInt typ) >> return expr'
-
-inferLength :: ExprA -> TCComp (ExprA, TypeA)
-inferLength = eExpr %%~ csub >$> (, int)
-    where csub e = fst <$> inferExp e <<= inferArray lengthOfNotArr . snd
 
 relOp :: RelOpA -> [TypeA]
 relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = [int, doub, bool]

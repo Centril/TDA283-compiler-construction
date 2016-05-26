@@ -38,8 +38,6 @@ module Backend.AlphaRename (
 import Data.Maybe
 import Data.Map (Map, insert)
 
-import qualified Data.Generics.Uniplate.Data as U
-
 import Control.Monad
 import Control.Monad.State
 
@@ -93,10 +91,7 @@ arStmt :: StmtA -> ARComp StmtA
 arStmt stmt = case stmt of
     BStmt    {} -> sPushM substs >> (sBlock %%~ arBlock $ stmt)
     Decl     {} -> sDItems %%~ mapM arItem $ stmt
-    Ass      {} -> arI >=> arE $ stmt
-    AssArr   {} -> arI >=> arE >=> sDimEs %%~ mapM (deExpr %%~ arExpr) $ stmt
-    Incr     {} -> arI stmt
-    Decr     {} -> arI stmt
+    Assign   {} -> sLVal %%~ arLVal >=> arE $ stmt
     SExp     {} -> arE stmt
     Ret      {} -> arE stmt
     While    {} -> arC stmt
@@ -104,15 +99,46 @@ arStmt stmt = case stmt of
     CondElse {} -> arC >=> sSe %%~ arStmt $ stmt
     For      {} -> arE >=> sInScope substs . (sIdent %%~ newSub >=> arSi) $ stmt
     _           -> return stmt
-    where arC = arE >=> arSi
+    where arC  = arE >=> arSi
           arSi = sSi %%~ arStmt
-          arE = sExpr %%~ arExpr
-          arI = sIdent %%~ arRef
+          arE  = sExpr %%~ arExpr
 
 arItem :: ItemA -> ARComp ItemA
 arItem i = (case i of Init {} -> iExpr %%~ arExpr $ i; _ -> return i) >>=
            (iIdent %%~ newSub)
 
+u = undefined
+
 arExpr :: ExprA -> ARComp ExprA
-arExpr = U.transformM $ \case EVar a i ds -> flip (EVar a) ds <$> arRef i
-                              x           -> return x
+arExpr expr = case expr of
+    ENew      {} -> eDimEs %%~ mapM (deExpr %%~ arExpr) $ expr
+    EVar      {} -> arL
+    ELitInt   {} -> r
+    ELitDoub  {} -> r
+    EString   {} -> r
+    ELitTrue  {} -> r
+    ELitFalse {} -> r
+    ECastNull {} -> r
+    EApp      {} -> eAppExprs %%~ mapM arExpr $ expr
+    Incr      {} -> arL
+    Decr      {} -> arL
+    PreIncr   {} -> arL
+    PreDecr   {} -> arL
+    Neg       {} -> arE
+    Not       {} -> arE
+    EMul      {} -> arB
+    EAdd      {} -> arB
+    ERel      {} -> arB
+    EAnd      {} -> arB
+    EOr       {} -> arB
+    where arE = eExpr  %%~ arExpr $ expr
+          arB = eLExpr %%~ arExpr >=> eRExpr %%~ arExpr $ expr
+          arL = eLVal  %%~ arLVal $ expr
+          r   = return expr
+
+arLVal :: LValueA -> ARComp LValueA
+arLVal lv = case lv of
+    LValueV {} -> lvIdent %%~ arRef >=>
+                  lvDimEs %%~ mapM (deExpr %%~ arExpr) $ lv
+    LValueS {} -> -- TODO alpha rename ONLY expressions on rhs.
+                  lvLLVal %%~ arLVal $ lv

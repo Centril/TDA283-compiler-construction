@@ -42,11 +42,15 @@ module Frontend.Environment (
     initialTCEnv, functions, contexts, toFunId,
     lookupVar', lookupFun', currUnused,
     extendVar', extendFun',
+    extendTypeDef, lookupTypeName,
+    extendStruct
 ) where
 
 import Prelude hiding (lookup)
 
 import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
+
+import Control.Monad
 
 import Control.Lens hiding (Context, contexts, uncons)
 
@@ -93,20 +97,35 @@ toFunId :: (String, ([TypeA], TypeA)) -> FunId
 toFunId (name, sig) = FunId (Ident name) $ uncurry FunSig sig
 
 --------------------------------------------------------------------------------
+-- Type names:
+--------------------------------------------------------------------------------
+
+-- | 'ReservedTypes': Map of type names -> actual types.
+type ReservedTypes = Map Ident TypeA
+
+--------------------------------------------------------------------------------
+-- Structs:
+--------------------------------------------------------------------------------
+
+type StructDefMap = Map Ident [SFieldA]
+
+--------------------------------------------------------------------------------
 -- Operating Environment:
 --------------------------------------------------------------------------------
 
 -- | 'TCEnv': The operating environment of an 'TCComp' computation.
 data TCEnv = TCEnv {
-    _functions :: FnSigMap,  -- ^ Map of ident -> function signatures.
-    _contexts  :: Contexts } -- ^ Stack of contexts.
+      _reserved  :: ReservedTypes
+    , _structs   :: StructDefMap
+    , _functions :: FnSigMap  -- ^ Map of ident -> function signatures.
+    , _contexts  :: Contexts } -- ^ Stack of contexts.
     deriving (Eq, Show, Read)
 
 makeLenses ''TCEnv
 
 -- | 'initialTCEnv': The initial empty typechecker environment.
 initialTCEnv :: TCEnv
-initialTCEnv = TCEnv empty [empty]
+initialTCEnv = TCEnv empty empty empty [empty]
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:
@@ -121,6 +140,30 @@ type TCComp a = Comp TCEnv a
 --------------------------------------------------------------------------------
 -- Environment operations:
 --------------------------------------------------------------------------------
+
+checkNotReserved :: (Ident -> TypeA -> TCComp ()) -> Ident -> TCComp ()
+checkNotReserved onErr name = do
+    rts <- use reserved
+    maybe (return ()) (onErr name) (lookup name rts)
+
+extendStruct :: (Ident -> TypeA -> TCComp ())
+             -> TypeA -> Ident -> [SFieldA] -> TCComp ()
+extendStruct onErr typ name fields = do
+    checkNotReserved onErr name
+    reserved %= insert name typ
+    structs  %= insert name fields
+
+-- | 'extendTypeDef': Extends current list of typedefs with the one given,
+-- or fails with onErr if the type name already exists.
+extendTypeDef :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
+extendTypeDef onErr alias typ = do
+    checkNotReserved onErr alias
+    reserved %= insert alias typ
+
+-- | 'lookupTypeName': If name is bound, returns the corresponding type.
+-- Fails with an error otherwise.
+lookupTypeName :: (Ident -> TCComp TypeA) -> Ident -> TCComp TypeA
+lookupTypeName = lookupX reserved
 
 -- | 'currUnused': yields all unused variables in most local scope.
 currUnused :: TCComp [Var]
@@ -141,7 +184,7 @@ ctxLookup name ctx = case updateLookupWithKey incUses name ctx of
 -- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
 -- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
 lookupFun' :: (Ident -> TCComp FunSig) -> Ident -> TCComp FunSig
-lookupFun' onErr fun = uses functions (lookup fun) >>= maybeErr (onErr fun)
+lookupFun' = lookupX functions
 
 -- | 'extendVar': Extends the current scope with the given variable with name
 -- and it's additional information. If variable exists, onError is used.
@@ -161,3 +204,7 @@ extendFun' onErr (FunId name sig) = do
     maybe (functions .= insert name sig funs)
           (const $ onErr name)
           (lookup name funs)
+
+lookupX :: Ord k => LensLike' (Const (Maybe b)) TCEnv (Map k b)
+        -> (k -> TCComp b) -> k -> TCComp b
+lookupX store onErr k = uses store (lookup k) >>= maybeErr (onErr k)
