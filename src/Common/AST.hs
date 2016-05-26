@@ -50,8 +50,14 @@ newtype Ident = Ident { _ident :: String }
 data Program a = Program { _pAnot :: a, _pTopDefs :: [TopDef a] }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data TopDef a = FnDef { _fAnot :: a, _fRetTyp :: Type a, _fIdent :: Ident,
-                        _fArgs  :: [Arg a], _fBlock :: Block a }
+data TopDef a = StructDef { _tdAnot :: a, _stIdent :: Ident,
+                            _stFields :: [SField a] }
+              | TypeDef   { _tdAnot :: a, _tdType :: Type a, _tdIdent :: Ident }
+              | FnDef     { _tdAnot :: a, _fRetTyp :: Type a, _fIdent :: Ident,
+                            _fArgs  :: [Arg a], _fBlock :: Block a }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data SField a = SField { _sfAnot :: a, _sfType :: Type a, _sfIdent :: Ident }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data Arg a = Arg { _aAnot :: a, _aTyp :: Type a, _aIdent :: Ident }
@@ -64,11 +70,7 @@ data Stmt a
     = Empty    { _sAnot :: a }
     | BStmt    { _sAnot :: a, _sBlock :: Block a }
     | Decl     { _sAnot :: a, _sDTyp  :: Type a, _sDItems :: [Item a] }
-    | Ass      { _sAnot :: a, _sIdent :: Ident,  _sExpr   :: Expr a }
-    | AssArr   { _sAnot :: a, _sIdent :: Ident,  _sDimEs  :: [DimE a],
-                 _sExpr :: Expr a }
-    | Incr     { _sAnot :: a, _sIdent :: Ident }
-    | Decr     { _sAnot :: a, _sIdent :: Ident }
+    | Assign   { _sAnot :: a, _sLVal  :: LValue a, _sExpr :: Expr a }
     | Ret      { _sAnot :: a, _sExpr  :: Expr a }
     | VRet     { _sAnot :: a }
     | Cond     { _sAnot :: a, _sExpr :: Expr a, _sSi :: Stmt a }
@@ -89,6 +91,8 @@ data Type a
     | Bool     { _tAnot :: a }
     | Void     { _tAnot :: a }
     | Array    { _tAnot :: a, _tTyp :: Type a, _tDimTs :: [DimT a] }
+    | TStruct  { _tAnot :: a, _tIdent :: Ident }
+    | TRef     { _tAnot :: a, _tIdent :: Ident }
     | ConstStr { _tAnot :: a }
     | Fun      { _tAnot :: a, _tfRetTyp :: Type a, _tfArgsTyps :: [Type a] }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
@@ -96,10 +100,15 @@ data Type a
 data DimT a = DimenT { _dtAnot :: a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
+data LValue a = LValueV { _lvAnot  :: a, _lvIdent :: Ident,
+                          _lvDimEs :: [DimE a] }
+              | LValueS { _lvAnot  :: a,
+                          _lvLLVal :: LValue a, _lvRLVal :: LValue a }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
 data Expr a
     = ENew      { _eAnot :: a, _eTyp   :: Type a, _eDimEs :: [DimE a] }
-    | EVar      { _eAnot :: a, _eIdent :: Ident,  _eDimEs :: [DimE a] }
-    | Length    { _eAnot :: a, _eExpr  :: Expr a }
+    | EVar      { _eAnot :: a, _eLVal  :: LValue a }
     | ELitInt   { _eAnot :: a, _eLIVal :: Integer }
     | ELitDoub  { _eAnot :: a, _eLDVal :: Double  }
     | EString   { _eAnot :: a, _eLSVal :: String  }
@@ -107,6 +116,10 @@ data Expr a
     | ELitFalse { _eAnot :: a }
     | ECastNull { _eAnot :: a, _eTyp   :: Type a }
     | EApp      { _eAnot :: a, _eIdent :: Ident, _eAppExprs :: [Expr a] }
+    | Incr      { _eAnot :: a, _eLVal  :: LValue a }
+    | Decr      { _eAnot :: a, _eLVal  :: LValue a }
+    | PreIncr   { _eAnot :: a, _eLVal  :: LValue a }
+    | PreDecr   { _eAnot :: a, _eLVal  :: LValue a }
     | Neg       { _eAnot :: a, _eExpr  :: Expr a  }
     | Not       { _eAnot :: a, _eExpr  :: Expr a  }
     | EMul      { _eAnot :: a, _eLExpr :: Expr a, _eMOp :: MulOp a,
@@ -139,6 +152,7 @@ data RelOp a = LTH { _rAnot :: a } | LE  { _rAnot :: a } | GTH { _rAnot :: a } |
 makeLenses ''Ident
 makeLenses ''Program
 makeLenses ''TopDef
+makeLenses ''SField
 makeLenses ''Arg
 makeLenses ''Block
 makeLenses ''Stmt
@@ -146,6 +160,7 @@ makeLenses ''Item
 makeLenses ''Type
 makeLenses ''DimT
 makeLenses ''Expr
+makeLenses ''LValue
 makeLenses ''DimE
 makeLenses ''AddOp
 makeLenses ''MulOp
@@ -154,12 +169,14 @@ makeLenses ''RelOp
 makePrisms ''Ident
 makePrisms ''Program
 makePrisms ''TopDef
+makePrisms ''SField
 makePrisms ''Arg
 makePrisms ''Block
 makePrisms ''Stmt
 makePrisms ''Item
 makePrisms ''Type
 makePrisms ''DimT
+makePrisms ''LValue
 makePrisms ''Expr
 makePrisms ''DimE
 makePrisms ''AddOp
@@ -174,7 +191,13 @@ instance Functor Program where
     fmap f (Program a tds)    = Program (f a) $ f <$$> tds
 
 instance Functor TopDef where
-    fmap f (FnDef a r i ps b) = FnDef   (f a) (f <$> r) i (f <$$> ps) (f <$> b)
+    fmap f = \case
+        StructDef a i sf -> StructDef (f a) i (f <$$> sf)
+        TypeDef   a t i  -> TypeDef   (f a) (f <$> t) i
+        FnDef a r i ps b -> FnDef     (f a) (f <$> r) i (f <$$> ps) (f <$> b)
+
+instance Functor SField where
+    fmap f (SField a t i) = SField (f a) (f <$> t) i
 
 instance Functor Arg where
     fmap f (Arg a t i)        = Arg     (f a) (f <$> t) i
@@ -187,10 +210,7 @@ instance Functor Stmt where
         Empty    a         -> Empty    (f a)
         BStmt    a b       -> BStmt    (f a) (f <$> b)
         Decl     a t is    -> Decl     (f a) (f <$> t) (f <$$> is)
-        Ass      a i e     -> Ass      (f a) i (f <$> e)
-        AssArr   a i ds e  -> AssArr   (f a) i (f <$$> ds) (f <$> e)
-        Incr     a i       -> Incr     (f a) i
-        Decr     a i       -> Decr     (f a) i
+        Assign   a lv e    -> Assign   (f a) (f <$> lv) (f <$> e)
         Ret      a e       -> Ret      (f a) (f <$> e)
         VRet     a         -> VRet     (f a)
         Cond     a c i     -> Cond     (f a) (f <$> c) (f <$> i)
@@ -210,15 +230,21 @@ instance Functor Type where
                    Bool     a      -> Bool     (f a)
                    Void     a      -> Void     (f a)
                    Array    a t ds -> Array    (f a) (f <$> t) (f <$$> ds)
+                   TStruct  a i    -> TStruct  (f a) i
+                   TRef     a i    -> TRef     (f a) i
                    ConstStr a      -> ConstStr (f a)
 
 instance Functor DimT where fmap = over dtAnot
 
+instance Functor LValue where
+    fmap f = \case
+        LValueV a i d -> LValueV (f a) i (f <$$> d)
+        LValueS a l r -> LValueS (f a) (f <$> l) (f <$> r)
+
 instance Functor Expr where
     fmap f = \case
         ENew      a t des  -> ENew      (f a) (f <$> t) (f <$$> des)
-        EVar      a i des  -> EVar      (f a) i         (f <$$> des)
-        Length    a e      -> Length    (f a) (f <$> e)
+        EVar      a lv     -> EVar      (f a) (f <$> lv)
         ELitInt   a v      -> ELitInt   (f a) v
         ELitDoub  a v      -> ELitDoub  (f a) v
         ELitTrue  a        -> ELitTrue  (f a)
@@ -226,6 +252,10 @@ instance Functor Expr where
         ECastNull a t      -> ECastNull (f a) (f <$> t)
         EString   a v      -> EString   (f a) v
         EApp      a i es   -> EApp      (f a) i (f <$$> es)
+        Incr      a lv     -> Incr      (f a) (f <$> lv)
+        Decr      a lv     -> Decr      (f a) (f <$> lv)
+        PreIncr   a lv     -> PreIncr   (f a) (f <$> lv)
+        PreDecr   a lv     -> PreDecr   (f a) (f <$> lv)
         Neg       a e      -> Neg       (f a) (f <$> e)
         Not       a e      -> Not       (f a) (f <$> e)
         EMul      a l op r -> EMul      (f a) (f <$> l) (f <$> op) (f <$> r)
@@ -246,7 +276,8 @@ instance Functor RelOp where fmap = over rAnot
 --------------------------------------------------------------------------------
 
 instance Overable Program where overF = pAnot
-instance Overable TopDef  where overF = fAnot
+instance Overable TopDef  where overF = tdAnot
+instance Overable SField  where overF = sfAnot
 instance Overable Arg     where overF = aAnot
 instance Overable Block   where overF = bAnot
 instance Overable Stmt    where overF = sAnot
@@ -254,6 +285,7 @@ instance Overable Item    where overF = iAnot
 instance Overable Type    where overF = tAnot
 instance Overable DimT    where overF = dtAnot
 instance Overable Expr    where overF = eAnot
+instance Overable LValue  where overF = lvAnot
 instance Overable DimE    where overF = deAnot
 instance Overable AddOp   where overF = addAnot
 instance Overable MulOp   where overF = mAnot
@@ -264,15 +296,20 @@ instance Overable RelOp   where overF = rAnot
 --------------------------------------------------------------------------------
 
 convert :: J.Program a -> Program a
-convert (J.Program anot fns)          = Program anot $ cf <$> fns
-    where cf  (J.FnDef a r i p b)     = FnDef     a (ct r) (ci i)
+convert (J.Program anot fns)          = Program anot $ ctd <$> fns
+    where ctd (J.StructDef a i sf)    = StructDef a (ci i) (csf <$> sf)
+          ctd (J.TypeDef   a t i)     = TypeDef   a (ct t) (ci i)
+          ctd (J.FnDef a r i p b)     = FnDef     a (ct r) (ci i)
                                                     (ca <$> p) (cb b)
+          csf (J.SField    a t i)     = SField    a (ct t) (ci i)
           ca  (J.Arg       a t i)     = Arg       a (ct t) (ci i)
           ct  (J.Int       a)         = Int       a
           ct  (J.Doub      a)         = Doub      a
           ct  (J.Bool      a)         = Bool      a
           ct  (J.Void      a)         = Void      a
           ct  (J.Array     a t ds)    = Array     a (ct t) (cdt <$> ds)
+          ct  (J.TStruct   a i)       = TStruct   a (ci i)
+          ct  (J.TRef      a i)       = TRef      a (ci i)
           ct  (J.ConstStr  a)         = ConstStr  a
           ct  (J.Fun       a r as)    = Fun       a (ct r) (ct <$> as)
           ci  (J.Ident     s)         = Ident     s
@@ -293,10 +330,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           cs  (J.Empty     a)         = Empty     a
           cs  (J.BStmt     a b)       = BStmt     a (cb b)
           cs  (J.Decl      a t is)    = Decl      a (ct t) (cit <$> is)
-          cs  (J.Ass       a i e)     = Ass       a (ci i) (ce e)
-          cs  (J.AssArr    a i ds e)  = AssArr    a (ci i) (cde <$> ds) (ce e)
-          cs  (J.Incr      a i)       = Incr      a (ci i)
-          cs  (J.Decr      a i)       = Decr      a (ci i)
+          cs  (J.Assign    a lv e)    = Assign    a (clv lv) (ce e)
           cs  (J.Ret       a e)       = Ret       a (ce e)
           cs  (J.VRet      a)         = VRet      a
           cs  (J.Cond      a c i)     = Cond      a (ce c) (cs i)
@@ -305,17 +339,22 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           cs  (J.For       a t i e s) = For       a (ct t) (ci i) (ce e) (cs s)
           cs  (J.SExp      a e)       = SExp      a (ce e)
           ce  (J.ENew      a t des)   = ENew      a (ct t) (cde <$> des)
-          ce  (J.EVar      a i des)   = EVar      a (ci i) (cde <$> des)
-          ce  (J.Length    a e)       = Length    a (ce e)
+          ce  (J.EVar      a lv)      = EVar      a (clv lv)
           ce  (J.ELitInt   a v)       = ELitInt   a v
           ce  (J.ELitDoub  a v)       = ELitDoub  a v
           ce  (J.EString   a v)       = EString   a v
           ce  (J.ELitTrue  a)         = ELitTrue  a
           ce  (J.ELitFalse a)         = ELitFalse a
-          ce  (J.ECastNull a t)       = ECastNull a (ct t)
+          ce  (J.ECastNullX a x)      = ECastNull a $ TRef  a (ci x)
+          ce  (J.ECastNullA a t d)    = ECastNull a $ Array a (ct t) (cdt <$> d)
+          ce  (J.ECastNullS a s)      = ECastNull a $ TStruct a (ci s)
           ce  (J.EApp      a i es)    = EApp      a (ci i) (ce <$> es)
           ce  (J.Neg       a e)       = Neg       a (ce e)
           ce  (J.Not       a e)       = Not       a (ce e)
+          ce  (J.Incr      a lv)      = Incr      a (clv lv)
+          ce  (J.Decr      a lv)      = Decr      a (clv lv)
+          ce  (J.PreIncr   a lv)      = PreIncr   a (clv lv)
+          ce  (J.PreDecr   a lv)      = PreDecr   a (clv lv)
           ce  (J.EMul      a l o r)   = EMul      a (ce l) (cmo o) (ce r)
           ce  (J.EAdd      a l o r)   = EAdd      a (ce l) (cao o) (ce r)
           ce  (J.ERel      a l o r)   = ERel      a (ce l) (cro o) (ce r)
@@ -323,3 +362,7 @@ convert (J.Program anot fns)          = Program anot $ cf <$> fns
           ce  (J.EOr       a l   r)   = EOr       a (ce l)         (ce r)
           cdt (J.DimenT    a)         = DimenT    a
           cde (J.DimenE    a e)       = DimenE    a (ce e)
+          clv (J.LValueV   a i d)     = LValueV   a (ci i) (cde <$> d)
+          clv (J.LValueS   a i d lv)  = LValueS   a
+                                                  (LValueV a (ci i) (cde <$> d))
+                                                  (clv lv)

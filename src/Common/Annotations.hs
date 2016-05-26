@@ -38,8 +38,8 @@ module Common.Annotations (
     Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
 
     -- ** AST Aliases
-    ProgramA, TopDefA, ArgA, BlockA, StmtA, ItemA,
-    TypeA, DimTA, ExprA, DimEA, AddOpA, MulOpA, RelOpA,
+    ProgramA, TopDefA, SFieldA, ArgA, BlockA, StmtA, ItemA,
+    TypeA, DimTA, LValueA, ExprA, DimEA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
 
@@ -194,14 +194,15 @@ doub     = appConcrete Doub
 bool     = appConcrete Bool
 tvoid    = appConcrete Void
 
--- TODO: Fix the annotations and move maybe
 defaultVal :: TypeA -> ExprA
 defaultVal typ = fst $ flip addTyp typ $ case typ of
-    Int  _   -> ELitInt   emptyAnot 0
-    Doub _   -> ELitDoub  emptyAnot 0
-    Bool _   -> ELitFalse emptyAnot
-    Array {} -> ECastNull emptyAnot typ
-    x        -> error $ "defaultVal is not defined for type " ++ show x
+    Int  _     -> ELitInt   emptyAnot 0
+    Doub _     -> ELitDoub  emptyAnot 0
+    Bool _     -> ELitFalse emptyAnot
+    Array   {} -> ECastNull emptyAnot typ
+    TStruct {} -> ECastNull emptyAnot typ
+    TRef    {} -> ECastNull emptyAnot typ
+    x          -> error $ "defaultVal is not defined for type " ++ show x
 
 --------------------------------------------------------------------------------
 -- Arrays & related:
@@ -221,7 +222,7 @@ instance Shrinkable TypeA where
                                    else b
 
 isPointable :: Type a -> Bool
-isPointable = is _Array
+isPointable x = any ($ x) [is _Array, is _TStruct]
 
 notArray :: Type a -> Bool
 notArray = isn't _Array
@@ -235,6 +236,9 @@ type ProgramA = Program ASTAnots
 
 -- | 'TopDefA': 'TopDef' annotated with 'ASTAnots'.
 type TopDefA  = TopDef  ASTAnots
+
+-- | 'SFieldA': 'SField' annotated with 'ASTAnots'.
+type SFieldA  = SField  ASTAnots
 
 -- | 'ArgA': 'Arg' annotated with 'ASTAnots'.
 type ArgA     = Arg     ASTAnots
@@ -253,6 +257,9 @@ type TypeA    = Type    ASTAnots
 
 -- | 'DimTA': 'DimT' annotated with 'ASTAnots'.
 type DimTA    = DimT    ASTAnots
+
+-- | 'LValueA': 'LValue' annotated with 'ASTAnots'.
+type LValueA  = LValue  ASTAnots
 
 -- | 'ExprA': 'Expr' annotated with 'ASTAnots'.
 type ExprA    = Expr    ASTAnots
