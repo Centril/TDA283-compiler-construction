@@ -50,8 +50,6 @@ import Prelude hiding (lookup)
 
 import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
 
-import Control.Monad
-
 import Control.Lens hiding (Context, contexts, uncons)
 
 import Utils.Monad
