@@ -83,7 +83,10 @@ compileLL = fkeep (readF >=> rebase . compile) >=> \(orig, ll) -> do
     return ll
 
 compile :: String -> LComp LLVMCode
-compile = flip (changeST . compilePO) initialTCEnv >=> compileLLVM
+compile = flip (transST carryTC . compilePO) initialTCEnv >=> compileLLVM
+
+carryTC :: ((a, LEnv), TCEnv) -> (a, LEnv)
+carryTC ((a, lEnv), tcEnv) = (a, lEnv { _structDefs = _structs tcEnv } )
 
 llvmAssemble :: FilePath -> Int -> LLVMCode -> IOLComp FilePath
 llvmAssemble tmp count ll = let fp = bcFile tmp $ show count

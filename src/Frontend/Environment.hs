@@ -105,6 +105,7 @@ type ReservedTypes = Map Ident TypeA
 -- Structs:
 --------------------------------------------------------------------------------
 
+-- | 'StructDefMap': Map from struct type names to its fields.
 type StructDefMap = Map Ident [SFieldA]
 
 --------------------------------------------------------------------------------

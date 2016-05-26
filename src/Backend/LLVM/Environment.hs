@@ -39,6 +39,7 @@ module Backend.LLVM.Environment (
 
     -- * Operations
     initialLEnv,
+    getStructDef,
     bindAConv, bindAlias, getConv, getAlias, allAliases,
     resetTemp, newTemp,
     newLabel, newLabels, getLabels, lastLabel,
@@ -49,13 +50,14 @@ module Backend.LLVM.Environment (
 import Prelude hiding (lookup)
 
 import Data.Maybe
-import Data.Map (Map, empty, insert, lookup, toList)
+import Data.Map (Map, empty, insert, lookup, toList, (!))
 
 import Control.Lens hiding (Context, contexts, pre)
 
 import Utils.Foldable
 import Utils.Monad
 
+import Common.AST
 import Common.Annotations
 import Common.Computation
 import Common.StateOps
@@ -65,6 +67,9 @@ import Backend.LLVM.AST
 --------------------------------------------------------------------------------
 -- Operating Environment:
 --------------------------------------------------------------------------------
+
+-- | 'StructDefMap': Map from struct type names to its fields.
+type StructDefMap = Map Ident [SFieldA]
 
 -- | 'LAConvMap': TypeA in Javalette AST -> alias references in LLVM.
 type LAConvMap = Map TypeA LAliasRef
@@ -82,6 +87,7 @@ data LEnv = LEnv {
     _aliasCount :: Int,             -- ^ Count of aliases.
     _aliasConvs :: LAConvMap,       -- ^ Alias convertion map.
     _aliasTypes :: LATypeMap,       -- ^ Alias type map.
+    _structDefs :: StructDefMap,    -- ^ Struct defs, copied from TCEnv.
     _insts      :: LInsts }         -- ^ Accumulated instructions.
     deriving (Eq, Show, Read)
 
@@ -89,7 +95,7 @@ makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
 initialLEnv :: LEnv
-initialLEnv = LEnv [] 0 0 0 0 empty empty []
+initialLEnv = LEnv [] 0 0 0 0 empty empty empty []
 
 --------------------------------------------------------------------------------
 -- Environment operations:
@@ -100,6 +106,9 @@ type IOLComp a = IOComp LEnv a
 
 -- | 'LComp': A computation in LLVM code generation using environment 'LEnv'.
 type LComp a = Comp LEnv a
+
+getStructDef :: Ident -> LComp [SFieldA]
+getStructDef name = uses structDefs (! name)
 
 bindAConv :: TypeA -> LType -> LComp LAliasRef
 bindAConv orig conv = bindAlias conv <<= (aliasConvs %=) . insert orig

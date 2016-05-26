@@ -44,6 +44,7 @@ import Data.List
 import Data.Tuple
 import Data.Maybe
 
+import Control.Arrow
 import Control.Monad
 
 import Control.Lens hiding (Empty, op, uncons, to, pre)
@@ -65,7 +66,7 @@ compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 
 compileLLVMAst :: ProgramA -> LComp LLVMAst
-compileLLVMAst = mapM compileFun . _pTopDefs >=>
+compileLLVMAst = compileFuns >=>
     liftM4 LLVMAst getConsts allAliases (return predefDecls) . return
 
 predefDecls :: LFunDecls
@@ -78,15 +79,19 @@ predefDecls =
     , LFunDecl intType   "readInt"     []
     , LFunDecl doubType  "readDouble"  []]
 
-compileFun :: TopDefA -> LComp LFunDef
--- TODO Pattern match(es) are non-exhaustive
-compileFun (FnDef _ rtyp name args block) = do
-    let name'  = compileFName name
-    rtyp'     <- compileFRTyp rtyp
-    args'     <- mapM compileFArg args
-    insts     <- compileFBlock args block
-    let insts' = insts ++ unreachableMay block
-    return $ LFunDef rtyp' name' args' insts'
+compileFuns :: ProgramA -> LComp LFunDefs
+compileFuns = mapM compileFun . _pTopDefs >$> concat
+
+compileFun :: TopDefA -> LComp LFunDefs
+compileFun = \case
+    FnDef _ rtyp name args block -> do
+        let name'  = compileFName name
+        rtyp'     <- compileFRTyp rtyp
+        args'     <- mapM compileFArg args
+        insts     <- compileFBlock args block
+        let insts' = insts ++ unreachableMay block
+        return $ return $ LFunDef rtyp' name' args' insts'
+    x                            -> return []
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $
@@ -356,14 +361,19 @@ compileLVal :: LValueA -> LComp LTValRef
 compileLVal = \case
     LValueS _ lvl lvr    -> do
         let lvlT = extractType lvl
-        if is _Array lvlT then do
-            llvl <- compileLVal lvl
-            ltyp <- compileType lvlT
-            l    <- load ltyp llvl
-            lengthRef l
-        else
-            -- TODO: structs
-            return u
+        case lvlT of
+            Array   {}      -> do
+                ltyp <- compileType lvlT
+                compileLVal lvl >>= load ltyp >>= lengthRef
+            TStruct _ sname -> do
+                ltyp <- compileType lvlT
+                llvl <- compileLVal lvl >>= load ltyp
+                -- Works because the LValue tree is left associative:
+                let LValueV _ rname dimes = lvr
+                (rtyp, ix) <- second intTVR <$> lookupFieldIx sname rname
+                lrtyp <- compileType rtyp
+                assignTemp lrtyp $ deref [ix] llvl
+            _                -> error "compileLVal: should not pass type check!"
     LValueV a name dimes -> do
         let typ = getType a
         let types@(topT:bts) = reverse $ take (1 + length dimes) (growInf typ)
@@ -371,6 +381,12 @@ compileLVal = \case
         let top    = LTValRef (LPtr ltopT) (LRef $ _ident $ markIfArg a name)
         let tdimes = zip3 dimes bts types
         foldM arrAcc top tdimes
+
+lookupFieldIx :: Ident -> Ident -> LComp (TypeA, Integer)
+lookupFieldIx sname rname = do
+    fields <- getStructDef sname
+    return $ _sfType &&& _sfIndex $
+             fromJust $ find ((rname ==) . _sfIdent) fields
 
 markIfArg :: ASTAnots -> Ident -> Ident
 markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)
@@ -523,15 +539,15 @@ store = pushInst .| LStore
 
 compileType :: TypeA -> LComp LType
 compileType = \case
-    Int      _     -> return intType
-    Doub     _     -> return doubType
-    Bool     _     -> return boolType
-    Void     _     -> return LVoid
-    arr@(Array {}) -> aliasFor arr
-    s@(TStruct {}) -> return u -- TODO
-    r@(TRef    {}) -> return u -- TODO (classes)
-    ConstStr _     -> return strType
-    Fun      {}    -> error "compileType Fun not implemented."
+    Int      _   -> return intType
+    Doub     _   -> return doubType
+    Bool     _   -> return boolType
+    Void     _   -> return LVoid
+    arr@Array {} -> aliasFor arr
+    s@TStruct {} -> return u -- aliasFor s
+    r@TRef    {} -> return u -- TODO (classes)
+    ConstStr _   -> return strType
+    Fun      {}  -> error "compileType Fun not implemented."
 
 boolType, intType, doubType, charType, strType, byteType, bytePType :: LType
 boolType  = LInt sizeofBool
@@ -560,7 +576,16 @@ aliasFor :: TypeA -> LComp LType
 aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
 
 createAlias :: TypeA -> LComp LType
-createAlias typ = if notArray typ then compileType typ else
-    (>>=) (aliasFor $ shrink typ) $
-    bindAlias . LStruct . (intType:) . return . LArray 0 >$> LAlias >=>
-    bindAConv typ . LPtr >$> LAlias
+createAlias typ = case typ of
+    Array {}   ->
+        (>>=) (aliasFor $ shrink typ) $
+        bindAlias . LStruct . (intType:) . return . LArray 0 >$> LAlias >=>
+        bindAConv typ . LPtr >$> LAlias
+    TStruct {} -> do
+        lstr   <- _sfType <$$> getStructDef (_tIdent typ) >>=
+                  mapM compileType >$> LStruct
+        -- Avoid infinite recursion:
+        getConv typ >>=
+            maybeErr (LAlias <$> bindAlias lstr >>= bindAConv typ . LPtr)
+            >$> LAlias
+    _          -> compileType typ
