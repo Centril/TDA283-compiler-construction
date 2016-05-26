@@ -11,10 +11,15 @@ DUnit.     DSummand ::= UIdent ;
 DProduct.  DSummand ::= UIdent "(" [DField] ")" ;
 separator nonempty DSummand "|" ;
 
-DField.   DField   ::= Type ;
+DField.    DField   ::= Type ;
 separator nonempty DField   "," ;
 
-EMatch.     Expr  ::= "case" Expr1 "of" [MatchCase] ;
+EDUnit.    Expr  ::= UIdent ;
+EDProduct. Expr  ::= UIdent "(" [DExpr] ")" ;
+DExpr.     DExpr ::= Expr ;
+separator nonempty DExpr "," ;
+
+EMatch.    Expr  ::= "case" Expr1 "of" [MatchCase] ;
 
 MatchCase. MatchCase ::= MatchPattern "->" Expr ;
 terminator nonempty MatchCase ";" ;
@@ -122,7 +127,6 @@ LValueS.   LValue ::= Ident [DimE] "->" LValue ;
 
 -- Expressions ---------------------------------------------
 
--- shift reduce! x2
 Length.    Expr6 ::= Expr6 "." "length";
 
 -- shift reduce!
