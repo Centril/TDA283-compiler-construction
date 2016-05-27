@@ -303,10 +303,7 @@ compileNew bt  []     = compileType bt >>= \lbt -> salloc lbt return lbt
 compileNew typ (d:ds) = do
     (bt, lbt) <- fkeep compileType $ shrink typ
     l         <- compileExpr $ _deExpr d
-
-    let lbt' = LPtr lbt
-
-    (compileType typ >>= salloc lbt' (imul l >=> iadd lenSize)) <<= setLength l
+    (compileType typ >>= salloc (LPtr lbt) (imul l >=> iadd lenSize)) <<= setLength l
         <<= \newed -> unless (null ds) $ basicFor "newSubArr" lbt newed l $
             (compileNew bt ds >>=) . flip store
 
