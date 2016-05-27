@@ -150,3 +150,13 @@ structDupFields :: Ident -> [SFieldA] -> [SFieldA] -> TCComp a
 structDupFields name _ dups =
     terr' ["Struct", _ident name, "has duplicate fields:",
            joinComma (_ident . _sfIdent <$> dups) ++ "."]
+
+classDupProps :: Ident -> [SFieldA] -> [SFieldA] -> TCComp a
+classDupProps name _ dups =
+    terr' ["Class", _ident name, "has duplicate properties:",
+           joinComma (_ident . _sfIdent <$> dups) ++ "."]
+
+classDupMethods :: Ident -> [FnDefA] -> [FnDefA] -> TCComp a
+classDupMethods name _ dups =
+    terr' ["Class", _ident name, "has duplicate method names:",
+           joinComma (_ident . _fIdent <$> dups) ++ "."]

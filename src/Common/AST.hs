@@ -59,12 +59,12 @@ data TopDef a
 
 data ClassDef a
     = ClassDef { _cdAnot :: a, _cdIdent :: Ident,
-                 _cdHierarchy :: ClassHierarchy a, _cdPart :: [ClassPart a] }
+                 _cdHierarchy :: ClassHierarchy a, _cdParts :: [ClassPart a] }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data ClassPart a
-    = MethodDef { _cpAnot :: a, _cpFnDef :: FnDef a }
-    | ClassProp { _cpAnot :: a, _cpType  :: Type a, _cpIdent :: Ident }
+    = MethodDef { _cpAnot :: a, _cpFnDef :: FnDef  a }
+    | ClassProp { _cpAnot :: a, _cpField :: SField a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data ClassHierarchy a
@@ -201,8 +201,8 @@ instance Functor ClassDef where
 
 instance Functor ClassPart where
     fmap f = \case
-        MethodDef a fd  -> MethodDef (f a) (f <$> fd)
-        ClassProp a t i -> ClassProp (f a) (f <$> t) i
+        MethodDef a fd -> MethodDef (f a) (f <$> fd)
+        ClassProp a sf -> ClassProp (f a) (f <$> sf)
 
 instance Functor ClassHierarchy where fmap = over chAnot
 
@@ -329,7 +329,7 @@ convert (J.Program anot fns)          = Program anot $ cto <$> fns
           cto (J.TFnDef     a fd)     = TFnDef     a (cfd fd)
           ccd (J.ClassDef  a i h ps)  = ClassDef  a (ci i) (cch h) (ccp <$> ps)
           ccp (J.MethodDef a fd)      = MethodDef a (cfd fd)
-          ccp (J.ClassProp a t i)     = ClassProp a (ct t) (ci i)
+          ccp (J.ClassProp a sf)      = ClassProp a (csf 0 sf)
           cch (J.HBase     a)         = HBase     a
           cch (J.HExtend   a i)       = HExtend   a (ci i)
           ctd (J.TypeDef   a t i)     = TypeDef   a (ct t) (ci i)

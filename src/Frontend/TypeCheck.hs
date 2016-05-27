@@ -145,12 +145,47 @@ nukeTypedefs = pTopDefs %%~ return . filter (isn't _TTypeDef)
 --------------------------------------------------------------------------------
 
 collectComplex :: ProgramA -> TCComp ()
-collectComplex = progCollect _TStructDef $ \(StructDef _ name fields) -> do
-    let typ  = appConcrete $ flip TStruct name
-    fields' <- forM fields $ sfType %%~ (inferType >$> fst)
-    let (nubbed, dups) = nubDupsBy ((==) |. _sfIdent) fields'
-    unless (null dups) (structDupFields name nubbed dups)
-    extendStruct typeIsReserved typ name fields'
+collectComplex p = do
+    collectStructs p
+    -- TODO: fix!
+    void $ collectClasses p
+
+collectStructs :: ProgramA -> TCComp ()
+collectStructs = progCollect _TStructDef $ \(StructDef _ name fields) ->
+    checkFields structDupFields name fields
+    >>= extendStruct typeIsReserved (appConcrete $ flip TStruct name) name
+
+collectClasses :: ProgramA -> TCComp ProgramA
+collectClasses = pTopDefs %%~ mapM . toClassDef %%~
+    \c@(ClassDef _ name hier parts) -> do
+    props   <- ClassProp emptyAnot <$$> checkFields classDupProps name
+                                        (sndsOfPrism _ClassProp parts)
+    methods <- MethodDef emptyAnot <$$> checkMethod classDupMethods name
+                                        (sndsOfPrism _MethodDef parts)
+    let clazz = c { _cdParts = props ++ methods }
+    extendClass typeIsReserved (appConcrete $ flip TRef name) name clazz
+    return clazz
+
+checkClass :: TCComp ()
+checkClass = do
+    return u
+
+checkMethod :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
+            -> t -> [FnDefA] -> TCComp [FnDefA]
+checkMethod onErr name methods =
+    checkNoDups onErr _fIdent name methods >> return methods
+
+checkFields :: (t -> [SFieldA] -> [SFieldA] -> TCComp ())
+            ->  t -> [SFieldA] -> TCComp [SFieldA]
+checkFields onErr name fields =
+    forM fields (sfType %%~ (inferType >$> fst))
+    <<= checkNoDups onErr _sfIdent name
+
+checkNoDups :: (Eq a, Applicative f)
+             => (t -> [x] -> [x] -> f ()) -> (x -> a) -> t -> [x] -> f ()
+checkNoDups onErr xname tname xs =
+    let (nubbed, dups) = nubDupsBy ((==) |. xname) xs
+    in unless (null dups) (onErr tname nubbed dups)
 
 --------------------------------------------------------------------------------
 -- Type checking:

@@ -15,7 +15,7 @@ separator nonempty TopDef "" ;
 ClassDef.  ClassDef ::= "class" Ident ClassHierarchy "{" [ClassPart] "}" ;
 
 MethodDef. ClassPart ::= FnDef ;
-ClassProp. ClassPart ::= Type Ident ";" ;
+ClassProp. ClassPart ::= SField ";" ;
 separator  ClassPart "" ;
 
 HExtend.   ClassHierarchy ::= "extend" Ident ;
