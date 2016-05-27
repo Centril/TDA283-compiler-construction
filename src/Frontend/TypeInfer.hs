@@ -133,7 +133,7 @@ inferLVal lval = case lval of
             TStruct _ sname -> do
                 -- Works because the LValue tree is left associative:
                 let LValueV _ rname dimes = lvr
-                SField _ typ _ idx <- lookupField sname rname
+                typ <- _sfType <$> lookupField sname rname
                 (lvr', rtyp) <- case dimes of
                     [] -> addTyp' lvr typ
                     _  -> inferLValArr lvr typ

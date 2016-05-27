@@ -46,6 +46,7 @@ import Control.Lens hiding (contexts, Empty)
 
 import qualified Data.Generics.Uniplate.Data as U
 
+import Utils.Pointless
 import Utils.Monad
 import Utils.Sizeables
 
@@ -148,6 +149,8 @@ collectComplex prog = forM_ (_pTopDefs prog) $ \x -> case x of
     StructDef _ name fields -> do
         let typ  = appConcrete $ flip TStruct name
         fields' <- forM fields $ sfType %%~ (inferType >$> fst)
+        let (nubbed, dups) = nubDupsBy ((==) |. _sfIdent) fields'
+        unless (null dups) (structDupFields name nubbed dups)
         extendStruct typeIsReserved typ name fields'
     _                       -> return ()
 
