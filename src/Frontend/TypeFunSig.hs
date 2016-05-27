@@ -67,12 +67,11 @@ allFunctions = pTopDefs %%~ (<<= collectFuns . (predefFuns ++) .
                                  (>>= toFnSigIds))
                             . mapM checkFunSignature
 
-checkFunSignature :: TopDefA -> TCComp TopDefA
-checkFunSignature fun = case fun of
-    FnDef {} -> do args' <- mapM checkArgTypes $ _fArgs fun
-                   (ret',  _) <- inferType $ _fRetTyp fun
-                   return $ fun { _fRetTyp = ret', _fArgs = args' }
-    x        -> return x
+checkFunSignature :: FnDefA -> TCComp FnDefA
+checkFunSignature fun = do
+    args' <- mapM checkArgTypes $ _fArgs fun
+    (ret',  _) <- inferType $ _fRetTyp fun
+    return $ fun { _fRetTyp = ret', _fArgs = args' }
 
 checkArgTypes :: ArgA -> TCComp ArgA
 checkArgTypes = aTyp %%~ (fmap fst . inferType)
@@ -88,7 +87,5 @@ predefFuns = map toFunId
      ("readInt",     ([        ], int )),
      ("readDouble",  ([        ], doub))]
 
-toFnSigIds :: TopDefA -> [FunId]
-toFnSigIds = \case
-    FnDef _ ret name args _ -> [FunId name $ FunSig (_aTyp <$> args) ret]
-    _                       -> []
+toFnSigIds :: FnDefA -> [FunId]
+toFnSigIds (FnDef _ ret name args _) = [FunId name $ FunSig (_aTyp <$> args) ret]
