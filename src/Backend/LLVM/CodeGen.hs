@@ -54,6 +54,7 @@ import Utils.Sizeables
 
 import Common.AST
 import Common.Annotations
+import Common.ASTOps
 
 import Backend.LLVM.Environment
 import Backend.LLVM.Print
@@ -78,18 +79,13 @@ predefDecls =
     , LFunDecl doubType  "readDouble"  []]
 
 compileFuns :: ProgramA -> LComp LFunDefs
-compileFuns = mapM compileFun . _pTopDefs >$> concat
-
-compileFun :: TopDefA -> LComp LFunDefs
-compileFun = \case
-    FnDef _ rtyp name args block -> do
-        let name'  = compileFName name
-        rtyp'     <- compileFRTyp rtyp
-        args'     <- mapM compileFArg args
-        insts     <- compileFBlock args block
-        let insts' = insts ++ unreachableMay block
-        return $ return $ LFunDef rtyp' name' args' insts'
-    _                            -> return []
+compileFuns = intoProg _TFnDef $ \(FnDef _ rtyp name args block) -> do
+    let name'  = compileFName name
+    rtyp'     <- compileFRTyp rtyp
+    args'     <- mapM compileFArg args
+    insts     <- compileFBlock args block
+    let insts' = insts ++ unreachableMay block
+    return $ LFunDef rtyp' name' args' insts'
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $

@@ -53,19 +53,14 @@ import Frontend.Error
 import Common.AST
 
 returnCheck :: ProgramA -> TCComp ProgramA
-returnCheck = pTopDefs %%~ mapM checkFunRet
+returnCheck = pTopDefs %%~ mapM . toFnDef %%~ checkFunRet
 
-checkFunRet :: TopDefA -> TCComp TopDefA
-checkFunRet fun = case fun of
-    FnDef {} -> checkFunRet' fun
-    x        -> return x
-
-checkFunRet' :: TopDefA -> TCComp TopDefA
-checkFunRet' fun
+checkFunRet :: FnDefA -> TCComp FnDefA
+checkFunRet fun
     | _fRetTyp fun == tvoid = checkFunVoid fun
     | otherwise             = fBlock %%~ checkBlockTop (_fIdent fun) $ fun
 
-checkFunVoid :: TopDefA -> TCComp TopDefA
+checkFunVoid :: FnDefA -> TCComp FnDefA
 checkFunVoid = fBlock . bStmts %%~ \stmts -> return $ stmts ++
     maybe [always $ VRet emptyAnot] (const []) (lastMay stmts >>= (^? _VRet))
 

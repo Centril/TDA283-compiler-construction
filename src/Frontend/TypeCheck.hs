@@ -37,7 +37,7 @@ module Frontend.TypeCheck (
     typeCheck, compileFrontend, targetTypeCheck
 ) where
 
-import Data.Data(Data)
+import Data.Data (Data)
 
 import Control.Monad
 import Control.Monad.Reader
@@ -47,6 +47,7 @@ import Control.Lens hiding (contexts, Empty)
 import qualified Data.Generics.Uniplate.Data as U
 
 import Utils.Pointless
+import Utils.Foldable
 import Utils.Monad
 import Utils.Sizeables
 
@@ -58,6 +59,7 @@ import Frontend.ReturnCheck
 import Frontend.ParseLex
 
 import Common.AST
+import Common.ASTOps
 import Common.FileOps
 
 u = undefined
@@ -114,11 +116,9 @@ typeCheck prog0 = do
 --------------------------------------------------------------------------------
 
 collectTypedefs :: ProgramA -> TCComp ()
-collectTypedefs prog = forM_ (_pTopDefs prog) $ \td -> case td of
-    TypeDef _ typ alias -> do
-        (typ', _) <- inferType typ
-        extendTypeDef typeIsReserved alias typ'
-    _                   -> return ()
+collectTypedefs = progCollect _TTypeDef $ \(TypeDef _ typ alias) -> do
+    (typ', _) <- inferType typ
+    extendTypeDef typeIsReserved alias typ'
 
 expandTypedefs :: ProgramA -> TCComp ProgramA
 expandTypedefs = expandInStructs >>. expandTDs
@@ -138,34 +138,28 @@ expandTD typ alias = lookupTypeName noSuchTypeName alias >>= \case
     x                    -> return x
 
 nukeTypedefs :: ProgramA -> TCComp ProgramA
-nukeTypedefs = pTopDefs %%~ return . (>>= \case TypeDef {} -> []; x -> [x])
+nukeTypedefs = pTopDefs %%~ return . filter (isn't _TTypeDef)
 
 --------------------------------------------------------------------------------
 -- Structs, Classes:
 --------------------------------------------------------------------------------
 
 collectComplex :: ProgramA -> TCComp ()
-collectComplex prog = forM_ (_pTopDefs prog) $ \x -> case x of
-    StructDef _ name fields -> do
-        let typ  = appConcrete $ flip TStruct name
-        fields' <- forM fields $ sfType %%~ (inferType >$> fst)
-        let (nubbed, dups) = nubDupsBy ((==) |. _sfIdent) fields'
-        unless (null dups) (structDupFields name nubbed dups)
-        extendStruct typeIsReserved typ name fields'
-    _                       -> return ()
+collectComplex = progCollect _TStructDef $ \(StructDef _ name fields) -> do
+    let typ  = appConcrete $ flip TStruct name
+    fields' <- forM fields $ sfType %%~ (inferType >$> fst)
+    let (nubbed, dups) = nubDupsBy ((==) |. _sfIdent) fields'
+    unless (null dups) (structDupFields name nubbed dups)
+    extendStruct typeIsReserved typ name fields'
 
 --------------------------------------------------------------------------------
 -- Type checking:
 --------------------------------------------------------------------------------
 
 checkProg :: ProgramA -> TCComp ProgramA
-checkProg = pTopDefs %%~ mapM checkFunction
-
-checkFunction :: TopDefA -> TCComp TopDefA
-checkFunction fun = case fun of
-    FnDef {} -> sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
-                   (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
-    _        -> return fun
+checkProg = pTopDefs %%~ mapM . toFnDef %%~ \fun ->
+    sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
+    (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
 
 checkBlock :: TypeA -> BlockA -> TCComp BlockA
 checkBlock rtyp block = (bStmts %%~ mapM (checkStm rtyp) $ block) <*

@@ -41,6 +41,7 @@ import Control.Lens
 import Utils.Monad
 
 import Common.AST
+import Common.ASTOps
 
 import Frontend.Environment
 import Frontend.Error
@@ -63,9 +64,9 @@ mainCorrect = lookupFunE mainId >>=
 --------------------------------------------------------------------------------
 
 allFunctions :: ProgramA -> TCComp ProgramA
-allFunctions = pTopDefs %%~ (<<= collectFuns . (predefFuns ++) .
-                                 (>>= toFnSigIds))
-                            . mapM checkFunSignature
+allFunctions = pTopDefs %%~
+    (<<= collectFuns . (predefFuns ++) . (sndsOfPrism _TFnDef >$> toFnSigIds)) .
+    mapM (toFnDef %%~ checkFunSignature)
 
 checkFunSignature :: FnDefA -> TCComp FnDefA
 checkFunSignature fun = do
@@ -80,12 +81,12 @@ collectFuns :: [FunId] -> TCComp ()
 collectFuns = mapM_ $ extendFun' funAlreadyDef
 
 predefFuns :: [FunId]
-predefFuns = map toFunId
+predefFuns = toFunId <$>
     [("printInt",    ([int     ], tvoid)),
      ("printDouble", ([doub    ], tvoid)),
      ("printString", ([conststr], tvoid)),
      ("readInt",     ([        ], int )),
      ("readDouble",  ([        ], doub))]
 
-toFnSigIds :: FnDefA -> [FunId]
-toFnSigIds (FnDef _ ret name args _) = [FunId name $ FunSig (_aTyp <$> args) ret]
+toFnSigIds :: FnDefA -> FunId
+toFnSigIds (FnDef _ ret name args _) = FunId name $ FunSig (_aTyp <$> args) ret

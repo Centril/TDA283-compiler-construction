@@ -65,7 +65,8 @@ makeLenses ''AREnv
 
 -- | 'alphaRename': alpha renames a 'ProgramA'.
 alphaRename :: ProgramA -> ProgramA
-alphaRename = flip evalState (AREnv [] 0) . (pTopDefs %%~ mapM arFun)
+alphaRename = flip evalState (AREnv [] 0) .
+              (pTopDefs %%~ mapM . toFnDef %%~ arFun)
     where arFun f = sPushM substs >> arF f <* (nameCount .= 0)
           arF     = fArgs %%~ mapM arArg >=> fBlock %%~ arBlock
           arArg   = aIdent %%~ newSub
@@ -106,8 +107,6 @@ arStmt stmt = case stmt of
 arItem :: ItemA -> ARComp ItemA
 arItem i = (case i of Init {} -> iExpr %%~ arExpr $ i; _ -> return i) >>=
            (iIdent %%~ newSub)
-
-u = undefined
 
 arExpr :: ExprA -> ARComp ExprA
 arExpr expr = case expr of
