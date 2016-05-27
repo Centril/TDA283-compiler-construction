@@ -29,7 +29,7 @@ General utility functions on Foldable:s, Lists, Monoids.
 -}
 module Utils.Foldable (
     -- * Operations
-    mfind, mfindU, maybePred, modifyf, addSuffixes
+    mfind, mfindU, maybePred, modifyf, addSuffixes, nubDupsBy
 ) where
 
 import Data.Monoid
