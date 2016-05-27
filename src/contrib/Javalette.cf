@@ -1,11 +1,18 @@
 -- programs ------------------------------------------------
 
 entrypoints Program ;
-Program.   Program ::= [TopDef] ;
+Program.    Program ::= [TopDef] ;
+
+TClassDef.  TopDef ::= ClassDef ;
+TStructDef. TopDef ::= StructDef ;
+TTypeDef.   TopDef ::= TypeDef ;
+TFnDef.     TopDef ::= FnDef ;
+
+separator nonempty TopDef "" ;
 
 -- classes -------------------------------------------------
 
-ClassDef.  TopDef ::= "class" Ident ClassHierarchy "{" [ClassPart] "}" ;
+ClassDef.  ClassDef ::= "class" Ident ClassHierarchy "{" [ClassPart] "}" ;
 
 MethodDef. ClassPart ::= FnDef ;
 ClassProp. ClassPart ::= Type Ident ";" ;
@@ -16,24 +23,21 @@ HBase.     ClassHierarchy ::= ;
 
 -- structs -------------------------------------------------
 
-StructDef. TopDef ::= "struct" Ident "{" [SField] "}" ";" ;
+StructDef. StructDef ::= "struct" Ident "{" [SField] "}" ";" ;
 
 SField.    SField ::= Type Ident ;
 terminator SField ";" ;
 
 -- typedefs ------------------------------------------------
 
-TypeDef.   TopDef ::= "typedef" Type Ident ";" ;
+TypeDef.   TypeDef ::= "typedef" Type Ident ";" ;
 
 -- functions -----------------------------------------------
 
-TFnDef.    TopDef ::= FnDef ;
 FnDef.     FnDef ::= Type Ident "(" [Arg] ")" Block ;
 
 Arg.       Arg ::= Type Ident ;
 separator  Arg "," ;
-
-separator nonempty TopDef "" ;
 
 -- statements ----------------------------------------------
 
