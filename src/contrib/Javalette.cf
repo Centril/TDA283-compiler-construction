@@ -91,6 +91,7 @@ separator  nonempty DimT "" ;
 
 LValueV.   LValue ::= Ident [DimE] ;
 LValueS.   LValue ::= Ident [DimE] "->" LValue ;
+-- shift reduce!
 LValueS.   LValue ::= Ident [DimE] "."  LValue ;
 
 -- Expressions ---------------------------------------------
