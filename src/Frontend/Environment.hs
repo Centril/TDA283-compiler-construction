@@ -40,10 +40,11 @@ module Frontend.Environment (
 
     -- * Operations
     initialTCEnv, functions, contexts, toFunId,
-    lookupVar', lookupFun', currUnused,
-    extendVar', extendFun',
+    lookupVar', currUnused, extendVar',
+    lookupFun', extendFun',
     extendTypeDef, lookupTypeName,
-    extendStruct, lookupStruct, structs
+    extendStruct, lookupStruct, structs,
+    extendClass, lookupClass, classes
 ) where
 
 import Prelude hiding (lookup)
@@ -95,18 +96,17 @@ toFunId :: (String, ([TypeA], TypeA)) -> FunId
 toFunId (name, sig) = FunId (Ident name) $ uncurry FunSig sig
 
 --------------------------------------------------------------------------------
--- Type names:
+-- Type names: Structs, Classes, Typedefs:
 --------------------------------------------------------------------------------
 
 -- | 'ReservedTypes': Map of type names -> actual types.
 type ReservedTypes = Map Ident TypeA
 
---------------------------------------------------------------------------------
--- Structs:
---------------------------------------------------------------------------------
-
 -- | 'StructDefMap': Map from struct type names to its fields.
 type StructDefMap = Map Ident [SFieldA]
+
+-- | 'ClassDefMap': Map from class names to definitions.
+type ClassDefMap = Map Ident ClassDefA
 
 --------------------------------------------------------------------------------
 -- Operating Environment:
@@ -116,6 +116,7 @@ type StructDefMap = Map Ident [SFieldA]
 data TCEnv = TCEnv {
       _reserved  :: ReservedTypes
     , _structs   :: StructDefMap
+    , _classes   :: ClassDefMap
     , _functions :: FnSigMap  -- ^ Map of ident -> function signatures.
     , _contexts  :: Contexts } -- ^ Stack of contexts.
     deriving (Eq, Show, Read)
@@ -124,7 +125,7 @@ makeLenses ''TCEnv
 
 -- | 'initialTCEnv': The initial empty typechecker environment.
 initialTCEnv :: TCEnv
-initialTCEnv = TCEnv empty empty empty [empty]
+initialTCEnv = TCEnv empty empty empty empty [empty]
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:
@@ -137,35 +138,48 @@ type IOTCComp a = IOComp TCEnv a
 type TCComp a = Comp TCEnv a
 
 --------------------------------------------------------------------------------
--- Environment operations:
+-- Type operations:
 --------------------------------------------------------------------------------
 
-checkNotReserved :: (Ident -> TypeA -> TCComp ()) -> Ident -> TCComp ()
-checkNotReserved onErr name = do
-    rts <- use reserved
-    maybe (return ()) (onErr name) (lookup name rts)
+lookupClass :: (Ident -> TCComp ClassDefA) -> Ident -> TCComp ClassDefA
+lookupClass = lookupX classes
+
+extendClass :: (Ident -> TypeA -> TCComp ())
+            -> TypeA -> Ident -> ClassDefA -> TCComp ()
+extendClass = extendTypeName classes
 
 extendStruct :: (Ident -> TypeA -> TCComp ())
              -> TypeA -> Ident -> [SFieldA] -> TCComp ()
-extendStruct onErr typ name fields = do
-    checkNotReserved onErr name
-    reserved %= insert name typ
-    structs  %= insert name fields
+extendStruct = extendTypeName structs
 
 lookupStruct :: (Ident -> TCComp [SFieldA]) -> Ident -> TCComp [SFieldA]
 lookupStruct = lookupX structs
-
--- | 'extendTypeDef': Extends current list of typedefs with the one given,
--- or fails with onErr if the type name already exists.
-extendTypeDef :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
-extendTypeDef onErr alias typ = do
-    checkNotReserved onErr alias
-    reserved %= insert alias typ
 
 -- | 'lookupTypeName': If name is bound, returns the corresponding type.
 -- Fails with an error otherwise.
 lookupTypeName :: (Ident -> TCComp TypeA) -> Ident -> TCComp TypeA
 lookupTypeName = lookupX reserved
+
+-- | 'extendTypeName': Extends current list of type names with the one given,
+-- or fails with onErr if the type name already exists.
+-- Also puts a binding into the given part of the state on success.
+extendTypeName :: ASetter TCEnv TCEnv (Map Ident a) (Map Ident a)
+               -> (Ident -> TypeA -> TCComp ())
+               -> TypeA -> Ident -> a -> TCComp ()
+extendTypeName trav onErr typ name binding =
+    extendTypeDef onErr name typ >> trav %= insert name binding
+
+-- | 'extendTypeDef': Extends current list of typedefs with the one given,
+-- or fails with onErr if the type name already exists.
+extendTypeDef :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
+extendTypeDef onErr alias typ = do
+    rts <- use reserved
+    maybe (return ()) (onErr alias) (lookup alias rts)
+    reserved %= insert alias typ
+
+--------------------------------------------------------------------------------
+-- Variable operations:
+--------------------------------------------------------------------------------
 
 -- | 'currUnused': yields all unused variables in most local scope.
 currUnused :: TCComp [Var]
@@ -183,11 +197,6 @@ ctxLookup name ctx = case updateLookupWithKey incUses name ctx of
     (Nothing , _   ) -> Nothing
     where incUses _ var = Just $ var { vuses = 1 + vuses var }
 
--- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
--- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
-lookupFun' :: (Ident -> TCComp FunSig) -> Ident -> TCComp FunSig
-lookupFun' = lookupX functions
-
 -- | 'extendVar': Extends the current scope with the given variable with name
 -- and it's additional information. If variable exists, onError is used.
 extendVar' :: (Ident -> TCComp ()) -> Var -> TCComp ()
@@ -197,6 +206,15 @@ extendVar' onErr var = do
     maybe (contexts .= insert name var c:ctxs)
           (const $ onErr name)
           (lookup name c)
+
+--------------------------------------------------------------------------------
+-- Function operations:
+--------------------------------------------------------------------------------
+
+-- | 'lookupFun': If function with given identifier exists, the 'FunSig' of it
+-- is 'return':ed, otherwise, onErr is given the (fun = 'Ident').
+lookupFun' :: (Ident -> TCComp FunSig) -> Ident -> TCComp FunSig
+lookupFun' = lookupX functions
 
 -- | 'extendVar': Extends the accumulated function signatures with the given
 -- signature as 'FnId'. If function exists, onError is used.
