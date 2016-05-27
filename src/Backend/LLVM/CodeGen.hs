@@ -27,7 +27,7 @@ Portability : ALL
 
 LLVM code generator in the LLVM backend of the Javalette compiler.
 -}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, TupleSections #-}
 
 module Backend.LLVM.CodeGen (
     -- * Modules
@@ -135,8 +135,7 @@ compileStmt = \case
     SExp     _ e       -> void $ compileExpr e
 
 compileStore :: Ident -> LTValRef -> LComp ()
-compileStore name tvr = store tvr $ LTValRef (LPtr $ _lTType tvr)
-                                             (LRef $ _ident name)
+compileStore name tvr = store tvr $ ptrRef (_lTType tvr) (_ident name)
 
 compileDecl :: TypeA -> ItemA -> LComp ()
 compileDecl typ item = do
@@ -183,7 +182,6 @@ compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
     ENew      a _ ds  -> compileENew a ds
     EVar      a lval  -> compileEVar a lval
-    --ELength   _ e     -> compileLength e
     ELitInt   _ v     -> return $ intTVR  v
     ELitDoub  _ v     -> return $ doubTVR v
     EString   _ v     -> compileCString   v
@@ -210,20 +208,19 @@ switchType :: t -> t -> LType -> t
 switchType onI onF = \case
     LInt   _  -> onI
     LFloat _  -> onF
-    _         -> error "switchType got wrong type."
+    x         -> error $ "switchType got wrong type, " ++ show x ++ "."
 
 compileNeg :: ExprA -> LComp LTValRef
 compileNeg e = do
     LTValRef t e' <- compileExpr e
     assignTemp t $ switchType (LSub izero) (LFSub dzero) t e'
 
-compileBArith :: (LType -> LType)
-              -> (LType -> LTValRef -> LValRef -> LExpr) -> ExprA -> ExprA
-              -> LComp LTValRef
+compileBArith :: (LType -> LType) -> (LType -> LTValRef -> LValRef -> LExpr)
+               -> ExprA -> ExprA -> LComp LTValRef
 compileBArith th gf l r = do
     l'            <- compileExpr l
     LTValRef t r' <- compileExpr r
-    assignTemp (th t) $ gf t l' r'
+    assignTemp (th t) (gf t l' r')
 
 compileAdd :: AddOpA -> ExprA -> ExprA -> LComp LTValRef
 compileAdd = compileBArith id . switchAdd
@@ -259,8 +256,15 @@ compileFMulOp = \case
     Mod   _ -> LFRem -- will never happen, but added for completeness.
 
 compileLRel :: RelOpA -> ExprA -> ExprA -> LComp LTValRef
-compileLRel = compileBArith (const boolType) .
-    flip (switchType (LICmp . compileRelOpI) (LFCmp . compileRelOpF))
+compileLRel op l r = do
+    ll <- compileExpr l
+    let (c, f) = case _lTType ll of
+                 LPtr   _ -> (LICmp . compileRelOpI, ptrToInt)
+                 LInt   _ -> (LICmp . compileRelOpI, return)
+                 LFloat _ -> (LFCmp . compileRelOpF, return)
+                 x        -> error $ "compileLRel got wrong type, " ++ show x
+    ll' <- f ll
+    compileExpr r >>= f >>= assignBool . c op ll' . _lTVRef
 
 compileRelOpI :: RelOpA -> LICmpOp
 compileRelOpI = \case
@@ -581,7 +585,7 @@ createAlias typ = case typ of
                   bindAConv typ . LStruct . (intType:) . return . LArray 0
     TStruct {} -> do
         -- Might have self recursion or even worse: mutual recursion in types.
-        -- Thus, create alias first and make it a LPtr to that in compileType.
+        -- Thus, create alias first and make it a LPtr to that in aliasFor.
         stAlias <- newAlias <<= insertAConv typ
         _sfType <$$> getStructDef (_tIdent typ) >>= mapM compileType >$> LStruct
             >>= insertAlias stAlias >> return stAlias
