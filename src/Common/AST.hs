@@ -177,51 +177,10 @@ data RelOp a = LTH { _rAnot :: a } | LE  { _rAnot :: a } | GTH { _rAnot :: a } |
 -- Prisms and Lenses:
 --------------------------------------------------------------------------------
 
-makeLenses ''Ident
-makeLenses ''Program
-makeLenses ''TopDef
-makeLenses ''ClassDef
-makeLenses ''ClassPart
-makeLenses ''ClassHierarchy
-makeLenses ''StructDef
-makeLenses ''SField
-makeLenses ''TypeDef
-makeLenses ''FnDef
-makeLenses ''Arg
-makeLenses ''Block
-makeLenses ''Stmt
-makeLenses ''Item
-makeLenses ''Type
-makeLenses ''DimT
-makeLenses ''Expr
-makeLenses ''LValue
-makeLenses ''DimE
-makeLenses ''AddOp
-makeLenses ''MulOp
-makeLenses ''RelOp
-
-makePrisms ''Ident
-makePrisms ''Program
-makePrisms ''TopDef
-makePrisms ''ClassDef
-makePrisms ''ClassPart
-makePrisms ''ClassHierarchy
-makePrisms ''StructDef
-makePrisms ''SField
-makePrisms ''TypeDef
-makePrisms ''FnDef
-makePrisms ''Arg
-makePrisms ''Block
-makePrisms ''Stmt
-makePrisms ''Item
-makePrisms ''Type
-makePrisms ''DimT
-makePrisms ''LValue
-makePrisms ''Expr
-makePrisms ''DimE
-makePrisms ''AddOp
-makePrisms ''MulOp
-makePrisms ''RelOp
+concat <$> mapM (\n -> (++) <$> makeLenses n <*> makePrisms n)
+    [''Ident, ''Program, ''TopDef, ''ClassDef, ''ClassPart, ''ClassHierarchy
+    ,''StructDef, ''SField, ''TypeDef, ''FnDef, ''Arg, ''Block, ''Stmt, ''Item
+    ,''Type, ''DimT, ''Expr, ''LValue, ''DimE, ''AddOp, ''MulOp, ''RelOp]
 
 --------------------------------------------------------------------------------
 -- Functor instances:

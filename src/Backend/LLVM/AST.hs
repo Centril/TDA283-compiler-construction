@@ -158,32 +158,7 @@ type LArgs         = [LArg]
 -- Lenses and Prisms:
 --------------------------------------------------------------------------------
 
-makeLenses ''LLVMAst
-makeLenses ''LConstGlobal
-makeLenses ''LFunDecl
-makeLenses ''LFunDef
-makeLenses ''LType
-makeLenses ''LArg
-makeLenses ''LICmpOp
-makeLenses ''LFCmpOp
-makeLenses ''LValRef
-makeLenses ''LTValRef
-makeLenses ''LFunRef
-makeLenses ''LInst
-makeLenses ''LExpr
-makeLenses ''LPhiRef
-
-makePrisms ''LLVMAst
-makePrisms ''LConstGlobal
-makePrisms ''LFunDecl
-makePrisms ''LFunDef
-makePrisms ''LType
-makePrisms ''LArg
-makePrisms ''LICmpOp
-makePrisms ''LFCmpOp
-makePrisms ''LValRef
-makePrisms ''LTValRef
-makePrisms ''LFunRef
-makePrisms ''LInst
-makePrisms ''LExpr
-makePrisms ''LPhiRef
+concat <$> mapM (\n -> (++) <$> makeLenses n <*> makePrisms n)
+    [''LLVMAst, ''LConstGlobal, ''LFunDecl, ''LFunDef, ''LType, ''LArg
+    ,''LICmpOp, ''LFCmpOp, ''LValRef, ''LTValRef, ''LFunRef,''LInst, ''LExpr
+    ,''LPhiRef]
