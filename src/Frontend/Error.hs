@@ -29,9 +29,14 @@ Error messsages in Frontend of Javalette compiler.
 -}
 module Frontend.Error where
 
+import Data.List
+
 import Frontend.Environment
 
 import Common.AST
+
+joinComma :: [String] -> String
+joinComma = intercalate ", "
 
 terr :: String -> TCComp a
 terr = err TypeChecker
@@ -140,3 +145,8 @@ typeIsReserved :: Ident -> TypeA -> TCComp a
 typeIsReserved name typ =
     terr' ["Type name", _ident name,
            "has already been defined as", show typ ++ "."]
+
+structDupFields :: Ident -> [SFieldA] -> [SFieldA] -> TCComp a
+structDupFields name _ dups =
+    terr' ["Struct", _ident name, "has duplicate fields:",
+           joinComma (_ident . _sfIdent <$> dups) ++ "."]
