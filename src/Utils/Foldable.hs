@@ -66,3 +66,11 @@ modifyf f (x : xs) = f x : xs
 addSuffixes :: (Functor f, Monoid a) => f a -> a -> a -> f a
 addSuffixes ss j pre = (pre' `mappend`) <$> ss
     where pre' = pre `mappend` j
+
+-- 'duplicatesBy': for a given list yields a pair where the fst contains the
+-- the list without any duplicates, and snd contains the duplicate elements.
+-- This is determined by a user specified binary predicate function.
+nubDupsBy :: (a -> a -> Bool) -> [a] -> ([a], [a])
+nubDupsBy p = foldl f ([], [])
+    where f (seen, dups) x | any (p x) seen = (seen, dups ++ [x])
+                           | otherwise      = (seen ++ [x], dups)
