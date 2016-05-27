@@ -40,11 +40,22 @@ module Backend.LLVM.Environment (
     -- * Operations
     initialLEnv,
     getStructDef,
-    bindAConv, bindAlias, getConv, getAlias, allAliases,
+
+    -- ** Aliases
+    bindAConv, insertAConv, getConv,
+    bindAlias, insertAlias, newAlias, getAlias, allAliases,
+
+    -- * Temporary SSA
     resetTemp, newTemp,
-    newLabel, newLabels, getLabels, lastLabel,
+
+    -- * Constants
     newConstRef, pushConst, getConsts,
-    pushInst, clearInsts, getInsts
+
+    -- * Instructions
+    pushInst, clearInsts, getInsts,
+
+    -- * Labels
+    newLabel, newLabels, getLabels, lastLabel
 ) where
 
 import Prelude hiding (lookup)
@@ -98,7 +109,7 @@ initialLEnv :: LEnv
 initialLEnv = LEnv [] 0 0 0 0 empty empty empty []
 
 --------------------------------------------------------------------------------
--- Environment operations:
+-- Environment types:
 --------------------------------------------------------------------------------
 
 -- | 'IOLComp': An LLVM computation gifted with the powers of IO, use wisely.
@@ -107,18 +118,34 @@ type IOLComp a = IOComp LEnv a
 -- | 'LComp': A computation in LLVM code generation using environment 'LEnv'.
 type LComp a = Comp LEnv a
 
+--------------------------------------------------------------------------------
+-- Struct operations:
+--------------------------------------------------------------------------------
+
 getStructDef :: Ident -> LComp [SFieldA]
 getStructDef name = uses structDefs (! name)
 
-bindAConv :: TypeA -> LType -> LComp LAliasRef
-bindAConv orig conv = bindAlias conv <<= (aliasConvs %=) . insert orig
+--------------------------------------------------------------------------------
+-- Alias operations:
+--------------------------------------------------------------------------------
 
-bindAlias :: LType -> LComp LAliasRef
-bindAlias typ = freshOf "talias" aliasCount <<=
-                (aliasTypes %=) . flip insert typ
+bindAConv :: TypeA -> LType -> LComp LAliasRef
+bindAConv orig conv = bindAlias conv <<= insertAConv orig
+
+insertAConv :: TypeA -> LAliasRef -> LComp ()
+insertAConv orig = (aliasConvs %=) . insert orig
 
 getConv :: TypeA -> LComp (Maybe LAliasRef)
 getConv = uses aliasConvs . lookup
+
+bindAlias :: LType -> LComp LAliasRef
+bindAlias typ = newAlias <<= flip insertAlias typ
+
+insertAlias :: LAliasRef -> LType -> LComp ()
+insertAlias alias typ = aliasTypes %= insert alias typ
+
+newAlias :: LComp LAliasRef
+newAlias = freshOf "talias" aliasCount
 
 getAlias :: LAliasRef -> LComp (Maybe LType)
 getAlias = uses aliasTypes . lookup
@@ -126,17 +153,19 @@ getAlias = uses aliasTypes . lookup
 allAliases :: LComp LAliases
 allAliases = uses aliasTypes toList
 
+--------------------------------------------------------------------------------
+-- Temporary SSA operations:
+--------------------------------------------------------------------------------
+
 resetTemp :: LComp ()
 resetTemp = tempCount .= 0
 
 newTemp :: LComp LIdent
 newTemp = freshOf "t" tempCount
 
-newLabel :: String -> LComp LLabelRef
-newLabel = flip freshOf labelCount
-
-newLabels :: Functor f => String -> f String -> LComp (f LLabelRef)
-newLabels pre ss = addSuffixes ss "." <$> newLabel pre
+--------------------------------------------------------------------------------
+-- Const operations:
+--------------------------------------------------------------------------------
 
 newConstRef :: String -> LComp LIdent
 newConstRef = flip freshOf constCount
@@ -147,6 +176,10 @@ pushConst = sAppendL constants
 getConsts :: LComp LConstGlobals
 getConsts = use constants
 
+--------------------------------------------------------------------------------
+-- Instructions operations:
+--------------------------------------------------------------------------------
+
 pushInst :: LInst -> LComp ()
 pushInst = sAppendL insts
 
@@ -155,6 +188,16 @@ clearInsts = insts .= []
 
 getInsts :: LComp LInsts
 getInsts = use insts
+
+--------------------------------------------------------------------------------
+-- Label operations:
+--------------------------------------------------------------------------------
+
+newLabel :: String -> LComp LLabelRef
+newLabel = flip freshOf labelCount
+
+newLabels :: Functor f => String -> f String -> LComp (f LLabelRef)
+newLabels pre ss = addSuffixes ss "." <$> newLabel pre
 
 getLabels :: LComp [LLabelRef]
 getLabels = mapMaybe (^? _LLabel) <$> getInsts

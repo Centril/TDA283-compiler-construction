@@ -44,11 +44,9 @@ import Data.List
 import Data.Tuple
 import Data.Maybe
 
-import Control.Arrow
 import Control.Monad
 
-import Control.Lens hiding (Empty, op, uncons, to, pre)
-import Control.Lens.Extras
+import Control.Lens hiding (Empty, op, uncons, to, pre, ix)
 
 import Utils.Pointless
 import Utils.Monad
@@ -91,7 +89,7 @@ compileFun = \case
         insts     <- compileFBlock args block
         let insts' = insts ++ unreachableMay block
         return $ return $ LFunDef rtyp' name' args' insts'
-    x                            -> return []
+    _                            -> return []
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $
@@ -359,37 +357,35 @@ strPointer t = deref [izero] . LTValRef t . LConst
 
 compileLVal :: LValueA -> LComp LTValRef
 compileLVal = \case
-    LValueS _ lvl lvr    -> do
+    LValueS a lvl lvr    -> do
         let lvlT = extractType lvl
+        ltyp <- compileType lvlT
+        llvl <- compileLVal lvl >>= load ltyp
         case lvlT of
-            Array   {}      -> do
-                ltyp <- compileType lvlT
-                compileLVal lvl >>= load ltyp >>= lengthRef
-            TStruct _ sname -> do
-                ltyp <- compileType lvlT
-                llvl <- compileLVal lvl >>= load ltyp
-                -- Works because the LValue tree is left associative:
-                let LValueV _ rname dimes = lvr
-                (rtyp, ix) <- second intTVR <$> lookupFieldIx sname rname
-                lrtyp <- compileType rtyp
-                assignTemp lrtyp $ deref [ix] llvl
-            _                -> error "compileLVal: should not pass type check!"
-    LValueV a name dimes -> do
-        let typ = getType a
-        let types@(topT:bts) = reverse $ take (1 + length dimes) (growInf typ)
-        ltopT     <- compileType topT
-        let top    = LTValRef (LPtr ltopT) (LRef $ _ident $ markIfArg a name)
-        let tdimes = zip3 dimes bts types
-        foldM arrAcc top tdimes
+            Array   {}      -> lengthRef llvl
+            TStruct _ sname -> accStruct llvl a lvr sname
+            _               -> error "compileLVal: should not pass type check!"
+    LValueV a name dimes ->
+        arrAccs a dimes $ return . flip ptrRef (_ident $ markIfArg a name)
 
-lookupFieldIx :: Ident -> Ident -> LComp (TypeA, Integer)
-lookupFieldIx sname rname = do
-    fields <- getStructDef sname
-    return $ _sfType &&& _sfIndex $
-             fromJust $ find ((rname ==) . _sfIdent) fields
+accStruct :: LTValRef -> ASTAnots -> LValueA -> Ident -> LComp LTValRef
+accStruct llvl a lvr sname =
+    let LValueV _ rname dimes = lvr -- Works since LValue tree is left assoc.
+    in arrAccs a dimes $ \ltopT -> intTVR <$> lookupFieldIx rname sname >>=
+                                   assignPtr ltopT . flip deref llvl . return
+
+lookupFieldIx :: Ident -> Ident -> LComp Integer
+lookupFieldIx rname = getStructDef >$>
+                      _sfIndex . fromJust . find ((rname ==) . _sfIdent)
 
 markIfArg :: ASTAnots -> Ident -> Ident
 markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)
+
+arrAccs :: ASTAnots -> [DimEA] -> (LType -> LComp LTValRef) -> LComp LTValRef
+arrAccs a dimes topf = do
+    let ts@(topt:bts) = reverse $ take (1 + length dimes) (growInf $ getType a)
+    top <- compileType topt >>= topf
+    foldM arrAcc top $ zip3 dimes bts ts
 
 arrAcc :: LTValRef -> (DimEA, TypeA, TypeA) -> LComp LTValRef
 arrAcc top (dime, bT, topT) = do
@@ -402,8 +398,7 @@ arrAcc top (dime, bT, topT) = do
 --------------------------------------------------------------------------------
 
 compileSizeof :: LType -> LComp LTValRef
-compileSizeof t = assignPtr t (LGElemPtr (LTValRef (LPtr t) LNull) ione [])
-                  >>= ptrToInt
+compileSizeof t = assignPtr t (LGElemPtr (ptrTo t LNull) ione []) >>= ptrToInt
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
 compileCalloc n sizeof = assignCall bytePType $ LFunRef "calloc" [n, sizeof]
@@ -431,13 +426,18 @@ basicFor prefix lbt arr len handler = do
     iload <- loadi i
     assignBool (LICmp LSlt iload $ _lTVRef len) >>= condBr _then _cont
     -- load: arr[i] + body + store: i++
-    xInLabel _then _check $
-        assignTemp (LPtr lbt) (deref [ione, iload] arr) >>= handler >>
-        iadd iload ione >>= flip store i
+    xInLabel _then _check $ assignPtr lbt (deref [ione, iload] arr) >>= handler
+                            >> iadd iload ione >>= flip store i
     compileLabel _cont
 
 deref :: LTValRefs -> LTValRef -> LExpr
 deref = flip $ flip LGElemPtr izero
+
+ptrTo :: LType -> LValRef -> LTValRef
+ptrTo = LTValRef . LPtr
+
+ptrRef :: LType -> LIdent -> LTValRef
+ptrRef typ = ptrTo typ . LRef
 
 --------------------------------------------------------------------------------
 -- Branching, Labels:
@@ -543,8 +543,8 @@ compileType = \case
     Doub     _   -> return doubType
     Bool     _   -> return boolType
     Void     _   -> return LVoid
-    arr@Array {} -> aliasFor arr
-    s@TStruct {} -> return u -- aliasFor s
+    a@Array   {} -> aliasFor a
+    s@TStruct {} -> aliasFor s
     r@TRef    {} -> return u -- TODO (classes)
     ConstStr _   -> return strType
     Fun      {}  -> error "compileType Fun not implemented."
@@ -573,19 +573,16 @@ compileAnotType = compileType . getType
 --------------------------------------------------------------------------------
 
 aliasFor :: TypeA -> LComp LType
-aliasFor typ = getConv typ >>= maybe (createAlias typ) (return . LAlias)
+aliasFor typ = LPtr . LAlias <$> (getConv typ >>= maybeErr (createAlias typ))
 
-createAlias :: TypeA -> LComp LType
+createAlias :: TypeA -> LComp LAliasRef
 createAlias typ = case typ of
-    Array {}   ->
-        (>>=) (aliasFor $ shrink typ) $
-        bindAlias . LStruct . (intType:) . return . LArray 0 >$> LAlias >=>
-        bindAConv typ . LPtr >$> LAlias
+    Array   {} -> compileType (shrink typ) >>=
+                  bindAConv typ . LStruct . (intType:) . return . LArray 0
     TStruct {} -> do
-        lstr   <- _sfType <$$> getStructDef (_tIdent typ) >>=
-                  mapM compileType >$> LStruct
-        -- Avoid infinite recursion:
-        getConv typ >>=
-            maybeErr (LAlias <$> bindAlias lstr >>= bindAConv typ . LPtr)
-            >$> LAlias
-    _          -> compileType typ
+        -- Might have self recursion or even worse: mutual recursion in types.
+        -- Thus, create alias first and make it a LPtr to that in compileType.
+        stAlias <- newAlias <<= insertAConv typ
+        _sfType <$$> getStructDef (_tIdent typ) >>= mapM compileType >$> LStruct
+            >>= insertAlias stAlias >> return stAlias
+    _          -> error "createAlias: should be handled by compileType."
