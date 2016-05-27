@@ -303,7 +303,10 @@ compileNew bt  []     = compileType bt >>= \lbt -> salloc lbt return lbt
 compileNew typ (d:ds) = do
     (bt, lbt) <- fkeep compileType $ shrink typ
     l         <- compileExpr $ _deExpr d
-    (compileType typ >>= salloc lbt (imul l >=> iadd lenSize)) <<= setLength l
+
+    let lbt' = LPtr lbt
+
+    (compileType typ >>= salloc lbt' (imul l >=> iadd lenSize)) <<= setLength l
         <<= \newed -> unless (null ds) $ basicFor "newSubArr" lbt newed l $
             (compileNew bt ds >>=) . flip store
 
@@ -402,7 +405,8 @@ arrAcc top (dime, bT, topT) = do
 --------------------------------------------------------------------------------
 
 compileSizeof :: LType -> LComp LTValRef
-compileSizeof t = assignPtr t (LGElemPtr (ptrTo t LNull) ione []) >>= ptrToInt
+compileSizeof t = assignTemp t (LGElemPtr (LTValRef t LNull) ione []) >>=
+                  ptrToInt
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
 compileCalloc n sizeof = assignCall bytePType $ LFunRef "calloc" [n, sizeof]
