@@ -50,15 +50,41 @@ newtype Ident = Ident { _ident :: String }
 data Program a = Program { _pAnot :: a, _pTopDefs :: [TopDef a] }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data TopDef a = StructDef { _tdAnot :: a, _stIdent :: Ident,
-                            _stFields :: [SField a] }
-              | TypeDef   { _tdAnot :: a, _tdType :: Type a, _tdIdent :: Ident }
-              | FnDef     { _tdAnot :: a, _fRetTyp :: Type a, _fIdent :: Ident,
-                            _fArgs  :: [Arg a], _fBlock :: Block a }
+data TopDef a
+    = TClassDef  { _toAnot :: a, _toClassDef  :: ClassDef  a }
+    | TStructDef { _toAnot :: a, _toStructDef :: StructDef a }
+    | TTypeDef   { _toAnot :: a, _toTypeDef   :: TypeDef   a }
+    | TFnDef     { _toAnot :: a, _toFnDef     :: FnDef     a }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data ClassDef a
+    = ClassDef { _cdAnot :: a, _cdIdent :: Ident,
+                 _cdHierarchy :: ClassHierarchy a, _cdPart :: [ClassPart a] }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data ClassPart a
+    = MethodDef { _cpAnot :: a, _cpFnDef :: FnDef a }
+    | ClassProp { _cpAnot :: a, _cpType  :: Type a, _cpIdent :: Ident }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data ClassHierarchy a
+    = HExtend { _chAnot :: a, _chIdent :: Ident }
+    | HBase   { _chAnot :: a }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data StructDef a
+    = StructDef { _stAnot :: a, _stIdent :: Ident, _stFields :: [SField a] }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data TypeDef a = TypeDef { _tdAnot :: a, _tdType :: Type a, _tdIdent :: Ident }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data SField a = SField { _sfAnot :: a, _sfType :: Type a, _sfIdent :: Ident,
                          _sfIndex :: Integer }
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
+
+data FnDef a = FnDef { _fAnot :: a, _fRetTyp :: Type a, _fIdent :: Ident,
+                       _fArgs :: [Arg a], _fBlock :: Block a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data Arg a = Arg { _aAnot :: a, _aTyp :: Type a, _aIdent :: Ident }
@@ -101,10 +127,9 @@ data Type a
 data DimT a = DimenT { _dtAnot :: a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
-data LValue a = LValueV { _lvAnot  :: a, _lvIdent :: Ident,
-                          _lvDimEs :: [DimE a] }
-              | LValueS { _lvAnot  :: a,
-                          _lvLLVal :: LValue a, _lvRLVal :: LValue a }
+data LValue a
+    = LValueV { _lvAnot  :: a, _lvIdent :: Ident,    _lvDimEs :: [DimE a] }
+    | LValueS { _lvAnot  :: a, _lvLLVal :: LValue a, _lvRLVal :: LValue a }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 data Expr a
@@ -117,6 +142,8 @@ data Expr a
     | ELitFalse { _eAnot :: a }
     | ECastNull { _eAnot :: a, _eTyp   :: Type a }
     | EApp      { _eAnot :: a, _eIdent :: Ident, _eAppExprs :: [Expr a] }
+    | EMApp     { _eAnot :: a, _eExpr  :: Expr a,
+                 _eIdent :: Ident, _eAppExprs :: [Expr a] }
     | Incr      { _eAnot :: a, _eLVal  :: LValue a }
     | Decr      { _eAnot :: a, _eLVal  :: LValue a }
     | PreIncr   { _eAnot :: a, _eLVal  :: LValue a }
@@ -153,7 +180,13 @@ data RelOp a = LTH { _rAnot :: a } | LE  { _rAnot :: a } | GTH { _rAnot :: a } |
 makeLenses ''Ident
 makeLenses ''Program
 makeLenses ''TopDef
+makeLenses ''ClassDef
+makeLenses ''ClassPart
+makeLenses ''ClassHierarchy
+makeLenses ''StructDef
 makeLenses ''SField
+makeLenses ''TypeDef
+makeLenses ''FnDef
 makeLenses ''Arg
 makeLenses ''Block
 makeLenses ''Stmt
@@ -170,7 +203,13 @@ makeLenses ''RelOp
 makePrisms ''Ident
 makePrisms ''Program
 makePrisms ''TopDef
+makePrisms ''ClassDef
+makePrisms ''ClassPart
+makePrisms ''ClassHierarchy
+makePrisms ''StructDef
 makePrisms ''SField
+makePrisms ''TypeDef
+makePrisms ''FnDef
 makePrisms ''Arg
 makePrisms ''Block
 makePrisms ''Stmt
@@ -193,12 +232,32 @@ instance Functor Program where
 
 instance Functor TopDef where
     fmap f = \case
-        StructDef a i sf -> StructDef (f a) i (f <$$> sf)
-        TypeDef   a t i  -> TypeDef   (f a) (f <$> t) i
-        FnDef a r i ps b -> FnDef     (f a) (f <$> r) i (f <$$> ps) (f <$> b)
+        TClassDef  a x -> TClassDef  (f a) (f <$> x)
+        TStructDef a x -> TStructDef (f a) (f <$> x)
+        TTypeDef   a x -> TTypeDef   (f a) (f <$> x)
+        TFnDef     a x -> TFnDef     (f a) (f <$> x)
+
+instance Functor ClassDef where
+    fmap f (ClassDef a i ch cps) = ClassDef (f a) i (f <$> ch) (f <$$> cps)
+
+instance Functor ClassPart where
+    fmap f = \case
+        MethodDef a fd  -> MethodDef (f a) (f <$> fd)
+        ClassProp a t i -> ClassProp (f a) (f <$> t) i
+
+instance Functor ClassHierarchy where fmap = over chAnot
+
+instance Functor StructDef where
+    fmap f (StructDef a i fs) = StructDef (f a) i (f <$$> fs)
 
 instance Functor SField where
     fmap f (SField a t n i) = SField (f a) (f <$> t) n i
+
+instance Functor TypeDef where
+    fmap f (TypeDef a t i) = TypeDef (f a) (f <$> t) i
+
+instance Functor FnDef where
+    fmap f (FnDef a r i ps b) = FnDef (f a) (f <$> r) i (f <$$> ps) (f <$> b)
 
 instance Functor Arg where
     fmap f (Arg a t i)        = Arg     (f a) (f <$> t) i
@@ -253,6 +312,7 @@ instance Functor Expr where
         ECastNull a t      -> ECastNull (f a) (f <$> t)
         EString   a v      -> EString   (f a) v
         EApp      a i es   -> EApp      (f a) i (f <$$> es)
+        EMApp     a e i es -> EMApp     (f a) (f <$> e) i (f <$$> es)
         Incr      a lv     -> Incr      (f a) (f <$> lv)
         Decr      a lv     -> Decr      (f a) (f <$> lv)
         PreIncr   a lv     -> PreIncr   (f a) (f <$> lv)
@@ -276,34 +336,50 @@ instance Functor RelOp where fmap = over rAnot
 -- Overable instances:
 --------------------------------------------------------------------------------
 
-instance Overable Program where overF = pAnot
-instance Overable TopDef  where overF = tdAnot
-instance Overable SField  where overF = sfAnot
-instance Overable Arg     where overF = aAnot
-instance Overable Block   where overF = bAnot
-instance Overable Stmt    where overF = sAnot
-instance Overable Item    where overF = iAnot
-instance Overable Type    where overF = tAnot
-instance Overable DimT    where overF = dtAnot
-instance Overable Expr    where overF = eAnot
-instance Overable LValue  where overF = lvAnot
-instance Overable DimE    where overF = deAnot
-instance Overable AddOp   where overF = addAnot
-instance Overable MulOp   where overF = mAnot
-instance Overable RelOp   where overF = rAnot
+instance Overable Program        where overF = pAnot
+instance Overable TopDef         where overF = toAnot
+instance Overable ClassDef       where overF = cdAnot
+instance Overable ClassPart      where overF = cpAnot
+instance Overable ClassHierarchy where overF = chAnot
+instance Overable StructDef      where overF = stAnot
+instance Overable SField         where overF = sfAnot
+instance Overable TypeDef        where overF = tdAnot
+instance Overable FnDef          where overF = fAnot
+instance Overable Arg            where overF = aAnot
+instance Overable Block          where overF = bAnot
+instance Overable Stmt           where overF = sAnot
+instance Overable Item           where overF = iAnot
+instance Overable Type           where overF = tAnot
+instance Overable DimT           where overF = dtAnot
+instance Overable Expr           where overF = eAnot
+instance Overable LValue         where overF = lvAnot
+instance Overable DimE           where overF = deAnot
+instance Overable AddOp          where overF = addAnot
+instance Overable MulOp          where overF = mAnot
+instance Overable RelOp          where overF = rAnot
 
 --------------------------------------------------------------------------------
 -- Converting:
 --------------------------------------------------------------------------------
 
 convert :: J.Program a -> Program a
-convert (J.Program anot fns)          = Program anot $ ctd <$> fns
-    where ctd (J.TypeDef   a t i)     = TypeDef   a (ct t) (ci i)
-          ctd (J.FnDef a r i p b)     = FnDef     a (ct r) (ci i)
-                                                    (ca <$> p) (cb b)
-          ctd (J.StructDef a i sf)    = StructDef a (ci i)
+convert (J.Program anot fns)          = Program anot $ cto <$> fns
+    where cto (J.TClassDef  a cd)     = TClassDef  a (ccd cd)
+          cto (J.TTypeDef   a td)     = TTypeDef   a (ctd td)
+          cto (J.TStructDef a sd)     = TStructDef a (csd sd)
+          cto (J.TFnDef     a fd)     = TFnDef     a (cfd fd)
+          ccd (J.ClassDef  a i h ps)  = ClassDef  a (ci i) (cch h) (ccp <$> ps)
+          ccp (J.MethodDef a fd)      = MethodDef a (cfd fd)
+          ccp (J.ClassProp a t i)     = ClassProp a (ct t) (ci i)
+          cch (J.HBase     a)         = HBase     a
+          cch (J.HExtend   a i)       = HExtend   a (ci i)
+          ctd (J.TypeDef   a t i)     = TypeDef   a (ct t) (ci i)
+          csd (J.StructDef a i sf)    = StructDef a (ci i)
                                                     (zipWith csf [0..] sf)
           csf i (J.SField  a t n)     = SField    a (ct t) (ci n) i
+          
+          cfd (J.FnDef a r i p b)     = FnDef     a (ct r) (ci i)
+                                                    (ca <$> p) (cb b)
           ca  (J.Arg       a t i)     = Arg       a (ct t) (ci i)
           ct  (J.Int       a)         = Int       a
           ct  (J.Doub      a)         = Doub      a
@@ -351,6 +427,7 @@ convert (J.Program anot fns)          = Program anot $ ctd <$> fns
           ce  (J.ECastNullA a t d)    = ECastNull a $ Array a (ct t) (cdt <$> d)
           ce  (J.ECastNullS a s)      = ECastNull a $ TStruct a (ci s)
           ce  (J.EApp      a i es)    = EApp      a (ci i) (ce <$> es)
+          ce  (J.EMApp     a e i es)  = EMApp     a (ce e) (ci i) (ce <$> es)
           ce  (J.Neg       a e)       = Neg       a (ce e)
           ce  (J.Not       a e)       = Not       a (ce e)
           ce  (J.Incr      a lv)      = Incr      a (cLV lv)

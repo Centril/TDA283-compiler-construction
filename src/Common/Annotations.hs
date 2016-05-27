@@ -38,7 +38,10 @@ module Common.Annotations (
     Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
 
     -- ** AST Aliases
-    ProgramA, TopDefA, SFieldA, ArgA, BlockA, StmtA, ItemA,
+    ProgramA, TopDefA,
+    ClassDefA, ClassPartA, ClassHierarchyA,
+    StructDefA, SFieldA, TypeDefA,
+    FnDefA, ArgA, BlockA, StmtA, ItemA,
     TypeA, DimTA, LValueA, ExprA, DimEA, AddOpA, MulOpA, RelOpA,
 
     -- * Operations
@@ -232,49 +235,67 @@ notArray = isn't _Array
 --------------------------------------------------------------------------------
 
 -- | 'ProgramA': 'Program' annotated with 'ASTAnots'.
-type ProgramA = Program ASTAnots
+type ProgramA        = Program        ASTAnots
 
 -- | 'TopDefA': 'TopDef' annotated with 'ASTAnots'.
-type TopDefA  = TopDef  ASTAnots
+type TopDefA         = TopDef         ASTAnots
+
+-- | 'ClassDefA': 'ClassDef' annotated with 'ASTAnots'.
+type ClassDefA       = ClassDef       ASTAnots
+
+-- | 'ClassPartA': 'ClassPart' annotated with 'ASTAnots'.
+type ClassPartA      = ClassPart      ASTAnots
+
+-- | 'ClassHierarchyA': 'ClassHierarchy' annotated with 'ASTAnots'.
+type ClassHierarchyA = ClassHierarchy ASTAnots
+
+-- | 'StructDefA': 'StructDef' annotated with 'ASTAnots'.
+type StructDefA      = StructDef      ASTAnots
 
 -- | 'SFieldA': 'SField' annotated with 'ASTAnots'.
-type SFieldA  = SField  ASTAnots
+type SFieldA         = SField         ASTAnots
+
+-- | 'TypeDefA': 'TypeDef' annotated with 'ASTAnots'.
+type TypeDefA        = TypeDef        ASTAnots
+
+-- | 'FnDefA': 'FnDef' annotated with 'ASTAnots'.
+type FnDefA          = FnDef          ASTAnots
 
 -- | 'ArgA': 'Arg' annotated with 'ASTAnots'.
-type ArgA     = Arg     ASTAnots
+type ArgA            = Arg            ASTAnots
 
 -- | 'BlockA': 'Block' annotated with 'ASTAnots'.
-type BlockA   = Block   ASTAnots
+type BlockA          = Block          ASTAnots
 
 -- | 'StmtA': 'Stmt' annotated with 'ASTAnots'.
-type StmtA    = Stmt    ASTAnots
+type StmtA           = Stmt           ASTAnots
 
 -- | 'ItemA': 'Item' annotated with 'ASTAnots'.
-type ItemA    = Item    ASTAnots
+type ItemA           = Item           ASTAnots
 
 -- | 'TypeA': 'Type' annotated with 'ASTAnots'.
-type TypeA    = Type    ASTAnots
+type TypeA           = Type           ASTAnots
 
 -- | 'DimTA': 'DimT' annotated with 'ASTAnots'.
-type DimTA    = DimT    ASTAnots
+type DimTA           = DimT           ASTAnots
 
 -- | 'LValueA': 'LValue' annotated with 'ASTAnots'.
-type LValueA  = LValue  ASTAnots
+type LValueA         = LValue         ASTAnots
 
 -- | 'ExprA': 'Expr' annotated with 'ASTAnots'.
-type ExprA    = Expr    ASTAnots
+type ExprA           = Expr           ASTAnots
 
 -- | 'AddOpA': 'AddOp' annotated with 'ASTAnots'.
-type AddOpA   = AddOp   ASTAnots
+type AddOpA          = AddOp          ASTAnots
 
 -- | 'MulOpA': 'MulOp' annotated with 'ASTAnots'.
-type MulOpA   = MulOp   ASTAnots
+type MulOpA          = MulOp          ASTAnots
 
 -- | 'RelOpA': 'RelOp' annotated with 'ASTAnots'.
-type RelOpA   = RelOp   ASTAnots
+type RelOpA          = RelOp          ASTAnots
 
 -- | 'DimEA': 'DimE' annotated with 'ASTAnots'.
-type DimEA    = DimE    ASTAnots
+type DimEA           = DimE           ASTAnots
 
 --------------------------------------------------------------------------------
 -- AST Annotations, helpers:
