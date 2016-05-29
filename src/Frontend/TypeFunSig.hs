@@ -31,7 +31,7 @@ Collecting function signatures & checking main.
 
 module Frontend.TypeFunSig (
     -- * Operations
-    mainCorrect, allFunctions
+    mainCorrect, allFunctions, toFnSigId
 ) where
 
 import Control.Monad
@@ -65,7 +65,7 @@ mainCorrect = lookupFunE mainId >>=
 
 allFunctions :: ProgramA -> TCComp ProgramA
 allFunctions = pTopDefs %%~
-    (<<= collectFuns . (predefFuns ++) . (sndsOfPrism _TFnDef >$> toFnSigIds)) .
+    (<<= collectFuns . (predefFuns ++) . (sndsOfPrism _TFnDef >$> toFnSigId)) .
     mapM (toFnDef %%~ checkFunSignature)
 
 checkFunSignature :: FnDefA -> TCComp FnDefA
@@ -88,5 +88,5 @@ predefFuns = toFunId <$>
      ("readInt",     ([        ], int )),
      ("readDouble",  ([        ], doub))]
 
-toFnSigIds :: FnDefA -> FunId
-toFnSigIds (FnDef _ ret name args _) = FunId name $ FunSig (_aTyp <$> args) ret
+toFnSigId :: FnDefA -> FunId
+toFnSigId (FnDef _ ret name args _) = FunId name $ FunSig (_aTyp <$> args) ret
