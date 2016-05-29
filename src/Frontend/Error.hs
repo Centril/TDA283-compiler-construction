@@ -35,14 +35,25 @@ import Frontend.Environment
 
 import Common.AST
 
+import Utils.Monad
+
 joinComma :: [String] -> String
 joinComma = intercalate ", "
 
 terr :: String -> TCComp a
-terr = err TypeChecker
+twarn, tinfo :: String -> TCComp ()
+terr  = err  TypeChecker
+twarn = warn TypeChecker
+tinfo = info TypeChecker
 
 terr' :: [String] -> TCComp a
-terr' = err' TypeChecker
+twarn', tinfo' :: [String] -> TCComp ()
+terr'  = err'  TypeChecker
+twarn' = warn' TypeChecker
+tinfo' = info' TypeChecker
+
+tinfoP :: Show a => String -> a -> TCComp ()
+tinfoP = infoP TypeChecker
 
 xAlreadyDef :: String -> Ident -> TCComp a
 xAlreadyDef what x = terr' ["The", what, _ident x, "is already defined."]
@@ -63,7 +74,7 @@ argAlreadyDef = xAlreadyDef "parameter"
 varAlreadyDef = xAlreadyDef "variable"
 
 unusedVar :: Var -> TCComp ()
-unusedVar var = warn' TypeChecker
+unusedVar var = twarn'
     ["The", showVS $ vsource var, _ident $ vident var, "was unused."]
 
 wrongRetTyp :: Show b => Type b -> Type b -> TCComp a
@@ -160,3 +171,19 @@ classDupMethods :: Ident -> [FnDefA] -> [FnDefA] -> TCComp a
 classDupMethods name _ dups =
     terr' ["Class", _ident name, "has duplicate method names:",
            joinComma (_ident . _fIdent <$> dups) ++ "."]
+
+noSuchSuperClass :: Ident -> Ident -> TCComp a
+noSuchSuperClass cname super =
+    terr' ["The class", _ident cname, "can not extend super class",
+           _ident super, "since it does not exist."]
+
+cycleDetectedInClasses :: [[ClassInfo]] -> TCComp a
+cycleDetectedInClasses cycles =
+    terr' ["Cycles detected in classes:",
+           joinComma $ bracketize . joinComma <$> clIdent <$$> cycles]
+
+selfCycleDetected :: ClassInfo -> TCComp a
+selfCycleDetected cl = terr' ["Self cycle detected in class", clIdent cl]
+
+clIdent :: ClassInfo -> String
+clIdent = _ident . _ciIdent
