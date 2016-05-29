@@ -29,18 +29,22 @@ General utility functions on Foldable:s, Lists, Monoids.
 -}
 module Utils.Foldable (
     -- * Operations
-    mfind, mfindU, maybePred, modifyf, addSuffixes, nubDupsBy, fromKVL
+    mfind, mfindU, maybePred, modifyf, addSuffixes, nubDupsBy, fromKVL,
+    foldM', foldM2, maybe3, insert3, iinsert3
 ) where
 
 import Data.Foldable (toList)
-import Data.Map (Map, fromList)
+import qualified Data.Map as M
+import qualified Data.IntMap as IM
 import Data.Monoid
 import Data.Maybe
 import Data.List
 
 import Control.Arrow
+import Control.Monad
 
 import Utils.Pointless
+import Utils.Function
 
 -- 'maybePred': transforms a function into a predicate with the semantics that:
 -- if the function returns 'Just', then there's a match, otheriwse there's not.
@@ -81,5 +85,26 @@ nubDupsBy p = foldl f ([], [])
 
 -- | 'fromKVL': creates, from two foldables (assumed to be of the same size),
 -- a lazy map from the first to the second.
-fromKVL :: (Foldable f, Ord k) => f k -> f v -> Map k v
-fromKVL fk fv = fromList $ zip (toList fk) (toList fv)
+fromKVL :: (Foldable f, Ord k) => f k -> f v -> M.Map k v
+fromKVL fk fv = M.fromList $ zip (toList fk) (toList fv)
+
+-- | foldM': 'foldM' with first argument last.
+foldM' :: (Monad m, Foldable t) => b -> t a -> (b -> a -> m b) -> m b
+foldM' z t f = foldM f z t
+
+-- | 'foldM2': fold over 2 structures simultaneously.
+foldM2 :: (Monad m, Foldable t1, Foldable t2)
+       => z -> t1 x1 -> t2 x2 -> (z -> x1 -> x2 -> m z) -> m z
+foldM2 z0 t1 t2 f = foldM' z0 t1 $ \z1 x1 -> foldM' z1 t2 (f `flip` x1)
+
+-- | 'maybe3': 'maybe' with the 'Maybe' as first argument.
+maybe3 :: Maybe a -> r -> (a -> r) -> r
+maybe3  = flip3 maybe
+
+-- | 'insert3': 'insert' for 'Map' with map as first argument.
+insert3 :: Ord k => M.Map k a -> k -> a -> M.Map k a
+insert3 = flip3 M.insert
+
+-- | 'insert3': 'insert' for 'IntMap' with map as first argument.
+iinsert3 :: IM.IntMap a -> IM.Key -> a -> IM.IntMap a
+iinsert3 = flip3 IM.insert
