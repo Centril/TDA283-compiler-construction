@@ -37,18 +37,24 @@ module Frontend.Environment (
     TCComp, IOTCComp,
     TCEnv(..), Context, Contexts, Var(..),
     FunSig(..), FunId(..), FnSigMap,
+    ClassInfo (..), ClassDAG, ClassGraph, ClassToCGNode, CGNode, CGEdge,
 
     -- * Operations
     initialTCEnv, functions, contexts, toFunId,
     lookupVar', currUnused, extendVar',
     lookupFun', extendFun',
-    extendTypeDef, lookupTypeName,
+    extendTypeName, lookupTypeName,
     extendStruct, lookupStruct, structs,
-    extendClass, lookupClass, classes
+    ciIdent, ciHierarchy, ciMethods, ciFields,
+    lookupClass, lookupMethod, classGraph
 ) where
 
 import Prelude hiding (lookup)
 
+import Data.List (find)
+import Data.Maybe
+import qualified Data.Graph.Inductive as G
+import qualified Utils.GraphFlip as GF
 import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
 
 import Control.Lens hiding (Context, contexts, uncons)
@@ -105,8 +111,28 @@ type ReservedTypes = Map Ident TypeA
 -- | 'StructDefMap': Map from struct type names to its fields.
 type StructDefMap = Map Ident [SFieldA]
 
--- | 'ClassDefMap': Map from class names to definitions.
-type ClassDefMap = Map Ident ClassDefA
+-- | 'ClassInfo': considerably simplified way of describing 'ClassDef'.
+data ClassInfo = ClassInfo {
+      _ciIdent     :: Ident       -- ^ Name of class.
+    , _ciFields    :: [SFieldA]   -- ^ Properties of class.
+    , _ciMethods   :: [FnDefA]    -- ^ Methods of class.
+    , _ciHierarchy :: Maybe Ident -- ^ Potential parent.
+    } deriving (Eq, Ord, Show, Read)
+
+-- | 'ClassDAG': 'ClassGraph' augmented with 'ClassToCGNode'.
+type ClassDAG      = (ClassToCGNode, ClassGraph)
+
+-- | 'ClassDefMap': Graph of classes, edges denote inheritance.
+type ClassGraph    = GF.Flip G.Gr () ClassInfo
+
+-- | 'CGNode': Node in 'ClassGraph'.
+type CGNode        = G.LNode ClassInfo
+
+-- | 'CGEdge': Edge in 'ClassGraph'.
+type CGEdge        = G.UEdge
+
+-- | 'ClassToCGNode': Map for going from type name to 'CGNode' in 'ClassGraph'.
+type ClassToCGNode = Map Ident G.Node
 
 --------------------------------------------------------------------------------
 -- Operating Environment:
@@ -114,18 +140,19 @@ type ClassDefMap = Map Ident ClassDefA
 
 -- | 'TCEnv': The operating environment of an 'TCComp' computation.
 data TCEnv = TCEnv {
-      _reserved  :: ReservedTypes
-    , _structs   :: StructDefMap
-    , _classes   :: ClassDefMap
-    , _functions :: FnSigMap  -- ^ Map of ident -> function signatures.
-    , _contexts  :: Contexts } -- ^ Stack of contexts.
+      _reserved   :: ReservedTypes  -- ^ Map of reserved type names -> TypeA.
+    , _structs    :: StructDefMap   -- ^ Map of type names -> StructDefA
+    , _classGraph :: ClassDAG       -- ^ Class graph.
+    , _functions  :: FnSigMap       -- ^ Map of ident -> function signatures.
+    , _contexts   :: Contexts }     -- ^ Stack of contexts.
     deriving (Eq, Show, Read)
 
-makeLenses ''TCEnv
+concat <$> mapM (\n -> (++) <$> makeLenses n <*> makePrisms n)
+    [''ClassInfo, ''TCEnv]
 
 -- | 'initialTCEnv': The initial empty typechecker environment.
 initialTCEnv :: TCEnv
-initialTCEnv = TCEnv empty empty empty empty [empty]
+initialTCEnv = TCEnv empty empty (empty, GF.empty) empty [empty]
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:
@@ -141,16 +168,21 @@ type TCComp a = Comp TCEnv a
 -- Type operations:
 --------------------------------------------------------------------------------
 
-lookupClass :: (Ident -> TCComp ClassDefA) -> Ident -> TCComp ClassDefA
-lookupClass = lookupX classes
+lookupMethod :: (Ident -> TCComp FnDefA) -> Ident -> ClassInfo -> TCComp FnDefA
+lookupMethod onErr name cl =
+    maybeErr (onErr name) (find ((name ==) . _fIdent) $ _ciMethods cl)
 
-extendClass :: (Ident -> TypeA -> TCComp ())
-            -> TypeA -> Ident -> ClassDefA -> TCComp ()
-extendClass = extendTypeName classes
+lookupClass :: (Ident -> TCComp G.Node) -> Ident -> TCComp ClassInfo
+lookupClass onErr name = do
+    (cgni, graph) <- use classGraph
+    fromJust . GF.lab graph <$> maybeErr (onErr name) (lookup name cgni)
+
+getClass :: G.Node -> TCComp ClassInfo
+getClass node = uses classGraph (fromJust . flip GF.lab node . snd)
 
 extendStruct :: (Ident -> TypeA -> TCComp ())
              -> TypeA -> Ident -> [SFieldA] -> TCComp ()
-extendStruct = extendTypeName structs
+extendStruct = extendTypeX structs
 
 lookupStruct :: (Ident -> TCComp [SFieldA]) -> Ident -> TCComp [SFieldA]
 lookupStruct = lookupX structs
@@ -160,22 +192,21 @@ lookupStruct = lookupX structs
 lookupTypeName :: (Ident -> TCComp TypeA) -> Ident -> TCComp TypeA
 lookupTypeName = lookupX reserved
 
--- | 'extendTypeName': Extends current list of type names with the one given,
+-- | 'extendTypeX': Extends current map of type names with the one given,
 -- or fails with onErr if the type name already exists.
 -- Also puts a binding into the given part of the state on success.
-extendTypeName :: ASetter TCEnv TCEnv (Map Ident a) (Map Ident a)
+extendTypeX :: ASetter TCEnv TCEnv (Map Ident a) (Map Ident a)
                -> (Ident -> TypeA -> TCComp ())
                -> TypeA -> Ident -> a -> TCComp ()
-extendTypeName trav onErr typ name binding =
-    extendTypeDef onErr name typ >> trav %= insert name binding
+extendTypeX trav onErr typ name binding =
+    extendTypeName onErr name typ >> trav %= insert name binding
 
--- | 'extendTypeDef': Extends current list of typedefs with the one given,
+-- | 'extendTypeName': Extends current map of type names with the one given,
 -- or fails with onErr if the type name already exists.
-extendTypeDef :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
-extendTypeDef onErr alias typ = do
-    rts <- use reserved
-    maybe (return ()) (onErr alias) (lookup alias rts)
-    reserved %= insert alias typ
+extendTypeName :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
+extendTypeName onErr name typ =
+    reserved %>= maybe (return ()) (onErr name) . lookup name <<=>
+                 return . insert name typ
 
 --------------------------------------------------------------------------------
 -- Variable operations:
