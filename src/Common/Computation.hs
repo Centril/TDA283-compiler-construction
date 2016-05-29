@@ -43,7 +43,8 @@ module Common.Computation (
 
     -- ** Logging and Error operations
     warn, warn', warnln, info, info', infoln, infoP, err, err', errln,
-    showLogItem, showLogs, printLogs, showError, printError, phaseEnd
+    showLogItem, showLogs, printLogs, showError, printError, phaseEnd,
+    bracketize
 ) where
 
 import Control.Monad.Identity
