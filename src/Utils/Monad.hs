@@ -35,7 +35,7 @@ module Utils.Monad (
     (<!>), (<:>), (<++>),
 
     -- * Monad operations
-    (>?=>), (>=?>), (<<=), (.>>), (>>.),
+    (>?=>), (>=?>), (<<=), (<<=>), (.>>), (>>.),
     maybeErr, unless', foldl1M, foldr1M, untilEqM, untilMatchM
 ) where
 
@@ -80,6 +80,11 @@ infixr 1 >=?>
 (<<=) :: Monad m => m a -> (a -> m b) -> m a
 (<<=) m f = m >>= \x -> f x >> return x
 infixl 5 <<=
+
+-- | '<<=>': "Kleisli" version of '<<='.
+(<<=>) :: Monad m => (a -> m b) -> (a -> m c) -> a -> m c
+(<<=>) f g a = f a >> g a
+infixl 5 <<=>
 
 -- | '<!>': sequential application of a non-applicative value
 -- lifted into the same 'Applicative' of as the function applied.
