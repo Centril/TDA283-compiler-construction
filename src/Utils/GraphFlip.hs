@@ -17,26 +17,31 @@
  -}
 
 {-|
-Module      : Frontend.Typecheck
-Description : Type checker for Javalette compiler.
+Module      : Frontend.GraphFlip
+Description : Graph utilities for FGL.
 Copyright   : (c) Björn Tropf, 2016
                   Mazdak Farrokhzad, 2016
 License     : GPL-2+
 Stability   : experimental
 Portability : ALL
 
-Type checker for Javalette compiler.
+Graph utilities for FGL.
 -}
 {-# LANGUAGE FlexibleInstances #-}
 
 module Utils.GraphFlip where
 
+import Data.Maybe
+import Data.Foldable
+import Data.Monoid
 import Data.Traversable
 
 import qualified Data.Graph.Inductive as G
 import qualified Utils.Graph as UG
 
 import Utils.Pointless
+import Utils.Foldable
+import Utils.Function
 
 newtype Flip f b a = Flip { unFlip :: f a b }
     deriving (Eq, Ord, Show, Read)
@@ -68,14 +73,64 @@ cyclesIn = UG.cyclesIn . unFlip
 topsort' :: G.DynGraph gr => Flip gr b a -> [a]
 topsort' = G.topsort' . unFlip
 
-lab :: G.DynGraph gr => Flip gr b a -> G.Node -> Maybe a
-lab gr = G.lab (unFlip gr)
+lab :: G.Graph gr => Flip gr b a -> G.Node -> Maybe a
+lab = G.lab . unFlip
 
 addLabels :: G.Graph g => Flip g b a -> [G.Node] -> [G.LNode a]
 addLabels = UG.addLabels . unFlip
 
 bfs :: G.Graph gr => G.Node -> Flip gr b a -> [G.Node]
-bfs n = G.bfs n . unFlip
+bfs = G.bfs .$ unFlip
 
 bfsL :: G.Graph gr => G.Node -> Flip gr b a -> [G.LNode a]
 bfsL n gr = addLabels gr $ bfs n gr
+
+lab' :: G.Graph gr => Flip gr b a -> G.Node -> a
+lab' = fromJust .| lab
+
+lnmap :: G.Graph gr => Flip gr b a -> (G.LNode a -> G.LNode a) -> Flip gr b a
+lnmap gr f = reconstr gr $ f <$> labNodes gr
+
+gaction :: (Monad m, G.Graph gr)
+        => Flip gr b a -> ([G.LNode a] -> m [G.LNode c]) -> m (Flip gr b c)
+gaction gr f = reconstr gr <$> f (labNodes gr)
+
+reconstr :: G.Graph gr => Flip gr b a -> [G.LNode c] -> Flip gr b c
+reconstr gr ns = mkGraph ns $ labEdges gr
+
+rootBfsM :: (Monad m, G.Graph gr, Applicative f, Monoid (f G.Node))
+         => Flip gr b a -> z -> f G.Node -> (z -> f G.Node -> G.Node -> m z) -> m z
+rootBfsM gr z i f = foldM' z (classGraphRoots gr $ labNodes gr) g
+    where g z1 r = ancestralBfsM gr i r f z1
+
+outdeg :: G.Graph gr => Flip gr b a -> G.Node -> Int
+outdeg = G.outdeg . unFlip
+
+pre :: G.Graph gr => Flip gr b a -> G.Node -> [G.Node]
+pre = G.pre . unFlip
+
+classGraphRoots :: G.Graph gr => Flip gr b a -> [G.LNode a] -> [G.Node]
+classGraphRoots gr = filter ((0 ==) . outdeg gr) . (fst <$>)
+
+-- | 'ancestralBfsM': monadic mapping of a graph using a BFS algorithm starting
+-- from a specific node. The ancestors of the current node, and the current node
+-- itself are passed to a monadic action producing a value that is ignored.
+-- The algorithm assumes there are no cycles.
+ancestralBfsM_ :: (Monad m, G.Graph gr, Applicative f, Monoid (f G.Node))
+              => Flip gr b a -> f G.Node -> G.Node
+              -> (f G.Node -> G.Node -> m ()) -> m ()
+ancestralBfsM_ gr ancs curr _do =
+    let ancs' = ancs <> pure curr in forM_ (pre gr curr) $ \child ->
+        _do ancs' child >> ancestralBfsM_ gr ancs' child _do
+
+-- | 'ancestralBfsM': monadic folding of a graph using a BFS algorithm starting
+-- from a specific node. The current value, the ancestors of the current node,
+-- and the current node itself are passed to a monadic action which produces
+-- the next current value which is finally yielded as the result.
+-- The algorithm assumes there are no cycles.
+ancestralBfsM :: (Monad m, G.Graph gr, Applicative f, Monoid (f G.Node))
+              => Flip gr b a -> f G.Node -> G.Node
+              -> (z -> f G.Node -> G.Node -> m z) -> z -> m z
+ancestralBfsM gr ancs curr _do z0 =
+    _do z0 ancs curr >>= flip3 foldlM (pre gr curr)
+        (lsh3 (ancestralBfsM gr $ ancs <> pure curr) _do)

@@ -29,12 +29,16 @@ General utility for functions and arrows.
 -}
 module Utils.Function (
     -- * Operations
-    flip3, (§), (<§>), untilMatch, untilEq, applyN
+    flip3, lsh3, (§), (<§>), untilMatch, untilEq, applyN
 ) where
 
 -- | 'flip3': move the third argument of a function to the front.
 flip3 :: (a -> b -> c -> r) -> c -> a -> b -> r
 flip3 f c a b = f a b c
+
+-- | 'lsh3': logical left shifts argument order of a function.
+lsh3 :: (a -> b -> c -> r) -> b -> c -> a -> r
+lsh3 f x y z = f z x y
 
 -- | '(§)': apply a function to both elements of pair.
 (§) :: (a -> b) -> (a, a) -> (b, b)

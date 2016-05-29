@@ -43,7 +43,6 @@ import Data.List
 import Control.Arrow
 import Control.Monad
 
-import Utils.Pointless
 import Utils.Function
 
 -- 'maybePred': transforms a function into a predicate with the semantics that:
