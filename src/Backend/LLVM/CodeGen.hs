@@ -59,8 +59,6 @@ import Backend.LLVM.CodeComplex
 import Backend.LLVM.CodeExpr
 import Backend.LLVM.Print
 
-u = undefined
-
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 

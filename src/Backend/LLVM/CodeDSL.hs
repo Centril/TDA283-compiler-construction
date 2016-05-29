@@ -37,8 +37,6 @@ import Utils.Monad
 import Backend.LLVM.Environment
 import Backend.LLVM.Types
 
-u = undefined
-
 --------------------------------------------------------------------------------
 -- Branching, Labels:
 --------------------------------------------------------------------------------

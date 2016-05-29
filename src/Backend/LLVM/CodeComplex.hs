@@ -39,8 +39,6 @@ import Backend.LLVM.Environment
 import Backend.LLVM.Types
 import Backend.LLVM.CodeDSL
 
-u = undefined
-
 --------------------------------------------------------------------------------
 -- Structs, Arrays:
 --------------------------------------------------------------------------------

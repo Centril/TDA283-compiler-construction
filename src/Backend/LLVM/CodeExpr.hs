@@ -50,8 +50,6 @@ import Backend.LLVM.Types
 import Backend.LLVM.CodeDSL
 import Backend.LLVM.CodeComplex
 
-u = undefined
-
 compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
 compileCondExpr c _then _else = compileExpr c >>= condBr _then _else
 
