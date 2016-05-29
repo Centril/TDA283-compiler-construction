@@ -27,11 +27,12 @@ Portability : ALL
 
 Common MonadState operations using lenses in Javalette Compiler.
 -}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, RankNTypes #-}
 
 module Common.StateOps (
     -- * Operations
-    postInc, freshOf, sPopM, sPushM, sInScope, sAppendL, ctxFirst
+    postInc, freshOf, sPopM, sPushM, sInScope, sAppendL, ctxFirst,
+    envTraverseX, (%>~), envDo, (%>=)
 ) where
 
 import Prelude hiding (lookup)
@@ -68,3 +69,17 @@ sAppendL x l = x %= (`mappend` pure l)
 
 ctxFirst :: (Ord k, Foldable f) => k -> f (Map k v) -> Maybe v
 ctxFirst = mfind . lookup
+
+(%>~) :: (MonadState s m, Traversable t) => Lens' s (t a) -> (a -> m a) -> m ()
+(%>~) = envTraverseX
+
+envTraverseX :: (MonadState s m, Traversable t)
+        => Lens' s (t a) -> (a -> m a) -> m ()
+envTraverseX x f = x %>= traverse f
+
+envDo :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
+envDo = (%>=)
+
+(%>=) :: MonadState s m => Lens' s a -> (a -> m a) -> m ()
+(%>=) l f = use l >>= f >>= (l .=)
+infixl 1 %>=
