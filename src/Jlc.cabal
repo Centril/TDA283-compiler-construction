@@ -22,6 +22,7 @@ executable jlc
                        , containers == 0.5.*
                        , mmorph == 1.0.*
                        , transformers == 0.4.*
+                       , fgl == 5.5.*
                        , lens == 4.13.*
                        , uniplate == 1.6.*
                        , process == 1.2.*
