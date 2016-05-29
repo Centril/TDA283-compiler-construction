@@ -18,7 +18,7 @@ MethodDef. ClassPart ::= FnDef ;
 ClassProp. ClassPart ::= SField ";" ;
 separator  ClassPart "" ;
 
-HExtend.   ClassHierarchy ::= "extend" Ident ;
+HExtend.   ClassHierarchy ::= "extends" Ident ;
 HBase.     ClassHierarchy ::= ;
 
 -- structs -------------------------------------------------
