@@ -27,7 +27,7 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-{-# LANGUAGE LambdaCase, MultiWayIf, TupleSections, StandaloneDeriving #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, TupleSections #-}
 
 
 module Frontend.TypeCheck (
@@ -242,6 +242,22 @@ indexSFields x = zipWith (sfIndex .~) [x..]
 --------------------------------------------------------------------------------
 -- Classes (Virtual):
 --------------------------------------------------------------------------------
+
+assignableTo :: TypeA -> TypeA -> TCComp Bool
+assignableTo typ1 typ2 = case typ1 of
+    Array    _ t ds -> do bt <- assignableTo t (_tTyp typ2)
+                          return $ bt && ds == _tDimTs typ2
+    TRef     _ i    -> assignableClass i (_tIdent typ2)
+    ConstStr {}     -> error "ConstStr are not assignable."
+    Fun      {}     -> error "Fun are not assignable."
+    _               -> return $ typ1 == typ2
+
+assignableClass :: Ident -> Ident -> TCComp Bool
+assignableClass ibase isuper = do
+    (ma, gr) <- use classGraph
+    case lookup (ma M.! isuper) (GF.bfsL (ma M.! ibase) gr) of
+        Just _  -> return True
+        Nothing -> return False
 
 checkVirtual :: TCComp ()
 checkVirtual = classGraph %>= \(convs, gr) ->
