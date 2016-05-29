@@ -139,8 +139,26 @@ make all
 
 The standard dangling else:
 ```c
-if ( cond ) { s; }
-if ( cond ) { s1; } else { s2; }
+Cond.      Stmt ::= "if" "(" Expr ")" Stmt ;
+CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt ;
+```
+
+The array separator is an empty string:
+```c
+Array.     Type ::= Type [DimT] ;
+separator  nonempty DimT "" ;
+```
+
+Dimensions of LValues can be empty:
+```c
+LValueS.   LValue ::= Ident [DimE] "."  LValue ;
+separator  DimE "" ;
+```
+
+Coercions causes issues with the brackets "(" and ")":
+```c
+ECastNullX. Expr7 ::= "(" Ident ")" "null" ;
+coercions   Expr 7 ;
 ```
 
 ### reduce-reduce
