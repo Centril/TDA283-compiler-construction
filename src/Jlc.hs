@@ -55,7 +55,7 @@ evalCheck = uncurry $ either evalFailure evalSuccess
 evalFailure :: ErrMsg -> InfoLog -> IO ()
 evalFailure eMsg logs = do
     errLn $ phaseErr $ errPhase eMsg
-    printError eMsg >> printLogs logs
+    printLogs logs >> printError eMsg
     exitFailure
 
 evalSuccess :: a -> InfoLog -> IO ()
