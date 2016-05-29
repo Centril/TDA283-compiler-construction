@@ -66,11 +66,11 @@ module Common.Annotations (
     (+@),
     addTyp, addTyp', addKind,
     addWE, addWE', always, addLit, addLit',
-    addSource,
+    addSource, addVirt,
 
     -- ** Extraction
-    extractType, extractWE, extractCELit, extractKind, extractVS,
-    getType, getWE, getCELit, getKind, getVS,
+    extractType, extractWE, extractCELit, extractKind, extractVS, extractVirt,
+    getType, getWE, getCELit, getKind, getVS, getVirt,
     mayType, mayWE, mayCELit, mayKind, mayVS
 ) where
 
