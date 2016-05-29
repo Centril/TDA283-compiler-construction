@@ -29,14 +29,18 @@ General utility functions on Foldable:s, Lists, Monoids.
 -}
 module Utils.Foldable (
     -- * Operations
-    mfind, mfindU, maybePred, modifyf, addSuffixes, nubDupsBy
+    mfind, mfindU, maybePred, modifyf, addSuffixes, nubDupsBy, fromKVL
 ) where
 
+import Data.Foldable (toList)
+import Data.Map (Map, fromList)
 import Data.Monoid
 import Data.Maybe
 import Data.List
 
 import Control.Arrow
+
+import Utils.Pointless
 
 -- 'maybePred': transforms a function into a predicate with the semantics that:
 -- if the function returns 'Just', then there's a match, otheriwse there's not.
@@ -67,10 +71,15 @@ addSuffixes :: (Functor f, Monoid a) => f a -> a -> a -> f a
 addSuffixes ss j pre = (pre' `mappend`) <$> ss
     where pre' = pre `mappend` j
 
--- 'duplicatesBy': for a given list yields a pair where the fst contains the
+-- | 'duplicatesBy': for a given list yields a pair where the fst contains the
 -- the list without any duplicates, and snd contains the duplicate elements.
 -- This is determined by a user specified binary predicate function.
 nubDupsBy :: (a -> a -> Bool) -> [a] -> ([a], [a])
 nubDupsBy p = foldl f ([], [])
     where f (seen, dups) x | any (p x) seen = (seen, dups ++ [x])
                            | otherwise      = (seen ++ [x], dups)
+
+-- | 'fromKVL': creates, from two foldables (assumed to be of the same size),
+-- a lazy map from the first to the second.
+fromKVL :: (Foldable f, Ord k) => f k -> f v -> Map k v
+fromKVL fk fv = fromList $ zip (toList fk) (toList fv)
