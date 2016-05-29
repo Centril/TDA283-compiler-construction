@@ -145,7 +145,9 @@ expandTDs = U.transformBiM $ \case
 
 expandTD :: TypeA -> Ident -> TCComp TypeA
 expandTD typ alias = lookupTypeName noSuchTypeName alias >>= \case
-    typ'@(TRef _ alias') -> if typ == typ' then return typ
+    typ'@(TRef _ alias') -> do
+                            assignable <- assignableTo typ typ'
+                            if assignable then return typ
                             else expandTD typ' alias'
     x                    -> return x
 
@@ -345,8 +347,11 @@ checkDeclItem _    item@(NoInit _ _) = return item
 checkDeclItem vtyp item              = iExpr %%~ checkExp vtyp $ item
 
 checkExp :: TypeA -> ExprA -> TCComp ExprA
-checkExp texpected expr = fst <$> unless' (inferExp expr) ((texpected ==) . snd)
-                                  (wrongExpTyp expr texpected . snd)
+checkExp texpected expr = do
+    (expr', tactual) <- (inferExp expr)
+    assignable       <- (assignableTo tactual texpected)
+    unless assignable (wrongExpTyp expr texpected tactual)
+    return expr'
 
 extendArg :: ArgA -> TCComp ()
 extendArg a = extendVar' argAlreadyDef $ Var (_aIdent a) (_aTyp a) VSArg 0
