@@ -35,7 +35,7 @@ module Common.Annotations (
 
     -- ** Annotations
     ASTAnot(..), AnotKey (..), ASTAnots,
-    Kind(..), WillExecute(..), Literal(..), ML, VarSource(..),
+    Kind(..), WillExecute(..), Literal(..), ML, VarSource(..), IsVirtual,
 
     -- ** AST Aliases
     ProgramA, TopDefA,
@@ -54,7 +54,7 @@ module Common.Annotations (
     _LitBool, _LitInt, _LitDouble, _LitString,
     litBool, litDouble, litInt, litStr,
     _AWillExec, _ACExprLit,
-    anotCExprLit, anotKind, anotType, anotWillExec, anotVS,
+    anotCExprLit, anotKind, anotType, anotWillExec, anotVS, anotIsVirt,
 
     -- ** Primitive types
     int, conststr, doub, bool, tvoid,
@@ -158,7 +158,11 @@ showVS VSLocal = "variable"
 -- Annotations:
 --------------------------------------------------------------------------------
 
-data AnotKey = AKType | AKWillExec | AKCExprLit | AKKind | AKVarSource
+-- | 'IsVirtual': denotes if a method is virtual (dynamic dispatch) or not.
+type IsVirtual = Bool
+
+data AnotKey
+    = AKType | AKWillExec | AKCExprLit | AKKind | AKVarSource | AKIsVirtual
     deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
 
 -- | 'ASTAnot': The annotations allowed in a Javalette AST.
@@ -167,6 +171,7 @@ data ASTAnot = AType      { _anotType     :: Type (Map AnotKey ASTAnot) }
              | ACExprLit  { _anotCExprLit :: ML          }
              | AKind      { _anotKind     :: Kind        }
              | AVarSource { _anotVS       :: VarSource   }
+             | AIsVirtual { _anotIsVirt   :: IsVirtual   }
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 makePrisms ''ASTAnot
@@ -312,6 +317,9 @@ addH :: Shallowable f
      => (t -> (AnotKey, ASTAnot)) -> f ASTAnots -> t -> (f ASTAnots, t)
 addH f x a = (f a +@ x, a)
 
+addVirt :: Shallowable f => f ASTAnots -> IsVirtual -> f ASTAnots
+addVirt x v = (AKIsVirtual, AIsVirtual v) +@ x
+
 -- | 'addKind': adds a kind annotation to a node.
 addKind :: Shallowable f => f ASTAnots -> Kind -> (f ASTAnots, Kind)
 addKind = addH $ (AKKind,) . AKind
@@ -368,6 +376,9 @@ extractKind = getKind . extract
 extractVS :: Extractable f => f ASTAnots -> VarSource
 extractVS = getVS . extract
 
+extractVirt :: Extractable f => f ASTAnots -> IsVirtual
+extractVirt = getVirt . extract
+
 getType :: ASTAnots -> TypeA
 getType = fromJust . mayType
 
@@ -382,6 +393,9 @@ getKind = fromJust . mayKind
 
 getVS :: ASTAnots -> VarSource
 getVS = fromJust . mayVS
+
+getVirt :: ASTAnots -> IsVirtual
+getVirt = fromMaybe False . mayAnot AKIsVirtual _AIsVirtual
 
 mayType :: ASTAnots -> Maybe TypeA
 mayType = mayAnot AKType _AType
