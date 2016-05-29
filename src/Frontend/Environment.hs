@@ -207,7 +207,7 @@ extendTypeX trav onErr typ name binding =
 -- or fails with onErr if the type name already exists.
 extendTypeName :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
 extendTypeName onErr name typ =
-    reserved %>= maybe (return ()) (onErr name) . lookup name <<=>
+    reserved %>= maybe (return ()) (onErr name) . lookup name <=>
                  return . insert name typ
 
 --------------------------------------------------------------------------------

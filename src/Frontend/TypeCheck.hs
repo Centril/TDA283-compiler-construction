@@ -157,7 +157,7 @@ nukeTypedefs = pTopDefs %%~ return . filter (isn't _TTypeDef)
 --------------------------------------------------------------------------------
 
 collectComplex :: ProgramA -> TCComp ()
-collectComplex = collectStructs <<=>
+collectComplex = collectStructs <=>
                  collectClasses .>> (checkVirtual >> reindexClassProps)
 
 collectStructs :: ProgramA -> TCComp ()
