@@ -38,12 +38,10 @@ module Frontend.TypeCheck (
     typeCheck, compileFrontend, targetTypeCheck
 ) where
 
-import Data.Traversable
-
 import Data.Data (Data)
 
-import Data.Maybe
-import Data.Monoid ((<>))
+import Data.Traversable
+import Data.List
 import qualified Data.Graph.Inductive as G
 import qualified Utils.GraphFlip      as GF
 import qualified Data.IntMap          as IM
@@ -138,8 +136,7 @@ expandInStructs :: TCComp ()
 expandInStructs = structs %>= expandTDs
 
 expandInClasses :: TCComp ()
-expandInClasses = classGraph %>= expand
-    where expand (x, GF.Flip gr) = (x,) . GF.Flip <$> gaction gr expandTDs
+expandInClasses = classGraph %>= \(x, gr) -> (x,) <$> GF.gaction gr expandTDs
 
 expandTDs :: Data from => from -> TCComp from
 expandTDs = U.transformBiM $ \case
@@ -161,7 +158,7 @@ nukeTypedefs = pTopDefs %%~ return . filter (isn't _TTypeDef)
 
 collectComplex :: ProgramA -> TCComp ()
 collectComplex = collectStructs <<=>
-                 collectClasses .>> checkVirtual
+                 collectClasses .>> (checkVirtual >> reindexClassProps)
 
 collectStructs :: ProgramA -> TCComp ()
 collectStructs = progCollect _TStructDef $ \(StructDef _ name fields) ->
@@ -217,6 +214,7 @@ computeCIMap = intoProg _TClassDef $ \(ClassDef _ name hier parts_) -> do
     return (name, ClassInfo
            { _ciIdent     = name
            , _ciFields    = props
+           , _ciFieldsDer = []
            , _ciMethods   = M.fromList $ (_fIdent &&& id) <$> methods
            , _ciHierarchy = hier ^? chIdent })
 
@@ -226,33 +224,44 @@ checkMethods onErr name methods =
     checkNoDups onErr _fIdent name methods >> return methods
 
 --------------------------------------------------------------------------------
+-- Classes (Fields):
+--------------------------------------------------------------------------------
+
+reindexClassProps :: TCComp ()
+reindexClassProps = classGraph %>= \(convs, gr) ->
+    fmap ((convs,) . GF.reconstr gr) $ GF.rootBfsM gr [] [] $ \ns ancs child ->
+     -- assume single inheritance:
+    let der = indexSFields 0 $ ancs >>= (_ciFields . GF.lab' gr)
+        clu = (ciFields %~ indexSFields (genericLength der)) .
+              (ciFieldsDer %~ const der)
+    in return $ ns ++ [(child, clu $ GF.lab' gr child)]
+
+indexSFields :: Integer -> [SField a0] -> [SField a0]
+indexSFields x = zipWith (sfIndex .~) [x..]
+
+--------------------------------------------------------------------------------
 -- Classes (Virtual):
 --------------------------------------------------------------------------------
 
 checkVirtual :: TCComp ()
-checkVirtual = classGraph %>= \(convs, GF.Flip gr) ->
-                    (convs,) . GF.Flip . annotateCGVirt gr <$> computeVirtMap gr
+checkVirtual = classGraph %>= \(convs, gr) ->
+                    (convs,) . annotateCGVirt gr <$> computeVirtMap gr
 
-annotateCGVirt :: G.Graph gr => gr ClassInfo b -> VirtMap -> gr ClassInfo b
-annotateCGVirt gr vmap = gr `lnmap` nm
-    where nm (n, cl)   = let cvm = ((vmap IM.! n) M.!)
-                             xmap m = addVirt m $ cvm $ _fIdent m
-                         in (n, ciMethods %~ fmap xmap $ cl)
+annotateCGVirt :: ClassGraph -> VirtMap -> ClassGraph
+annotateCGVirt gr vmap = GF.lnmap gr nm
+    where nm (n, cl) = let giv = (M.!) .| (IM.!)
+                           xmap m = addVirt m $ giv vmap n $ _fIdent m
+                       in (n, ciMethods %~ fmap xmap $ cl)
 
 type VirtMap   = IM.IntMap (M.Map Ident IsVirtual)
 
-computeVirtMap :: G.Graph gr => gr ClassInfo () -> TCComp VirtMap
-computeVirtMap gr = do
-    let roots = filter ((0 ==) . G.outdeg gr) . (fst <$>)
+computeVirtMap :: ClassGraph -> TCComp VirtMap
+computeVirtMap gr =
     let vinit = IM.fromList . fmap (second (fmap (const False) . _ciMethods))
-    uncurry foldM' (vinit &&& roots $ G.labNodes gr) (discoverVirtual gr)
-
-discoverVirtual :: G.Graph gr => gr ClassInfo ()
-                -> VirtMap -> G.Node -> TCComp VirtMap
-discoverVirtual gr vinit curr = flip (ancestralBfsM gr [] curr) vinit $
-    \vmap0 ancs child -> foldM' vmap0 ancs $ \vmap1 anc ->
+    in GF.rootBfsM gr (vinit $ GF.labNodes gr) [] $ \vmap0 ancs child ->
+    foldM' vmap0 ancs $ \vmap1 anc ->
         let ((ln, lms), (rn, rms)) =
-                ((_ciIdent &&& _ciMethods) . fromJust . G.lab gr) § (child, anc)
+                ((_ciIdent &&& _ciMethods) . GF.lab' gr) § (child, anc)
         in foldM2 vmap1 lms rms $ \vmapC fun pfun ->
             if | ((/=) |. _fIdent)   fun pfun -> return vmapC
                | ((==) |. toFnSigId) fun pfun -> markVirtual child fun vmapC >>=
@@ -261,27 +270,6 @@ discoverVirtual gr vinit curr = flip (ancestralBfsM gr [] curr) vinit $
 
 markVirtual :: G.Node -> FnDefA -> VirtMap -> TCComp VirtMap
 markVirtual n f = pure . IM.insertWith M.union n (M.singleton (_fIdent f) True)
-
--- | 'ancestralBfsM': monadic folding of a graph using a BFS algorithm starting
--- from a specific node. The current value, the ancestors of the current node,
--- and the current node itself are passed to a monadic action which produces
--- the next current value which is finally yielded as the result.
--- The algorithm assumes there are no cycles.
-ancestralBfsM :: (Monad m, G.Graph gr, Applicative f, Monoid (f G.Node))
-              => gr a b -> f G.Node -> G.Node
-              -> (z -> f G.Node -> G.Node -> m z) -> z -> m z
-ancestralBfsM gr ancs curr _do =
-    let ancs' = ancs <> pure curr in flip3 foldM (G.pre gr curr) $ \z child ->
-        _do z ancs' child >>= ancestralBfsM gr ancs' child _do
-
-lnmap :: G.Graph gr => gr a b -> (G.LNode a -> G.LNode a) -> gr a b
-lnmap gr f = G.mkGraph (f <$> G.labNodes gr) (G.labEdges gr)
-
-gaction :: (Monad m, G.Graph gr)
-        => gr a b -> ([G.LNode a] -> m [G.LNode c]) -> m (gr c b)
-gaction gr f = do
-    ns <- f $ G.labNodes gr
-    return $ G.mkGraph ns (G.labEdges gr)
 
 --------------------------------------------------------------------------------
 -- Type checking:

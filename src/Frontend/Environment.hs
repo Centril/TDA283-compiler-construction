@@ -45,7 +45,7 @@ module Frontend.Environment (
     lookupFun', extendFun',
     extendTypeName, lookupTypeName,
     extendStruct, lookupStruct, structs,
-    ciIdent, ciHierarchy, ciMethods, ciFields,
+    ciIdent, ciHierarchy, ciMethods, ciFields, ciFieldsDer,
     lookupClass, lookupMethod, classGraph
 ) where
 
@@ -115,9 +115,10 @@ type StructDefMap = Map Ident [SFieldA]
 -- | 'ClassInfo': considerably simplified way of describing 'ClassDef'.
 data ClassInfo = ClassInfo {
       _ciIdent     :: Ident             -- ^ Name of class.
-    , _ciFields    :: [SFieldA]         -- ^ Properties of class.
-    , _ciMethods   :: Map Ident FnDefA  -- ^ map of Fun name -> Method
     , _ciHierarchy :: Maybe Ident       -- ^ Potential parent.
+    , _ciMethods   :: Map Ident FnDefA  -- ^ map of Fun name -> Method
+    , _ciFieldsDer :: [SFieldA]         -- ^ Derived properties of class.
+    , _ciFields    :: [SFieldA]         -- ^ Properties of class.
     } deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 -- | 'ClassDAG': 'ClassGraph' augmented with 'ClassToCGNode'.
