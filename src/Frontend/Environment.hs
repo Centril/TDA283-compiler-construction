@@ -113,10 +113,10 @@ type StructDefMap = Map Ident [SFieldA]
 
 -- | 'ClassInfo': considerably simplified way of describing 'ClassDef'.
 data ClassInfo = ClassInfo {
-      _ciIdent     :: Ident       -- ^ Name of class.
-    , _ciFields    :: [SFieldA]   -- ^ Properties of class.
-    , _ciMethods   :: [FnDefA]    -- ^ Methods of class.
-    , _ciHierarchy :: Maybe Ident -- ^ Potential parent.
+      _ciIdent     :: Ident             -- ^ Name of class.
+    , _ciFields    :: [SFieldA]         -- ^ Properties of class.
+    , _ciMethods   :: Map Ident FnDefA  -- ^ map of Fun name -> Method
+    , _ciHierarchy :: Maybe Ident       -- ^ Potential parent.
     } deriving (Eq, Ord, Show, Read)
 
 -- | 'ClassDAG': 'ClassGraph' augmented with 'ClassToCGNode'.
