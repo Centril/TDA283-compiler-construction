@@ -187,3 +187,10 @@ selfCycleDetected cl = terr' ["Self cycle detected in class", clIdent cl]
 
 clIdent :: ClassInfo -> String
 clIdent = _ident . _ciIdent
+
+mismatchedOverridenMethod :: Ident -> FnDefA -> Ident -> FnDefA -> TCComp a
+mismatchedOverridenMethod clazz fun super pfun =
+    terr' ["Mismatched method signature in class", _ident clazz,
+           "extending class", _ident super ++ ".",
+           joinComma [unwords ["Expected signature:", show pfun],
+                      unwords ["actual:", show fun]]]
