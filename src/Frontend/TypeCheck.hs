@@ -27,7 +27,7 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, TupleSections #-}
 
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
@@ -43,11 +43,12 @@ import Data.Traversable
 
 import Data.Data (Data)
 
+import Data.Maybe
+import Data.Monoid ((<>))
 import qualified Data.Graph.Inductive as G
 import qualified Utils.GraphFlip      as GF
-
-import qualified Data.IntMap as IM
-import qualified Data.Map    as M
+import qualified Data.IntMap          as IM
+import qualified Data.Map             as M
 
 import Control.Arrow
 import Control.Monad
@@ -105,8 +106,6 @@ typeCheck prog0 = do
     -- Part 2: Collect all structs + classes
     tinfo "Collecting structs and classes"
     collectComplex prog1
-    return prog1
-    {-
     -- Part 3: Expand typedefs
     tinfo   "Expanding typedefs"
     prog2 <- expandTypedefs >=> nukeTypedefs $ prog1
@@ -124,7 +123,6 @@ typeCheck prog0 = do
     -- Part 7: Return check the program.
     info ReturnChecker "Return checking the program"
     returnCheck prog4
-    -}
 
 --------------------------------------------------------------------------------
 -- Typedefs:
@@ -159,16 +157,8 @@ nukeTypedefs = pTopDefs %%~ return . filter (isn't _TTypeDef)
 --------------------------------------------------------------------------------
 
 collectComplex :: ProgramA -> TCComp ()
-collectComplex p = do
-    collectStructs p
-    collectClasses p
-    -- 
-    (_, g) <- use classGraph
-    tinfoP "showing class graph" g
-    tinfoP "showing topsort" $ GF.topsort' g
-    tinfoP "pre..." $ G.pre (GF.unFlip g) 0
-    tinfoP "suc..." $ G.suc (GF.unFlip g) 0
-    tinfoP "bfs..." $ G.bfs 0 (GF.unFlip g)
+collectComplex = collectStructs <<=>
+                 collectClasses .>> checkVirtual
 
 collectStructs :: ProgramA -> TCComp ()
 collectStructs = progCollect _TStructDef $ \(StructDef _ name fields) ->
@@ -221,54 +211,68 @@ computeCIMap = intoProg _TClassDef $ \(ClassDef _ name hier parts_) -> do
     props   <- checkFields  classDupProps   name (sndsOfPrism _ClassProp parts_)
     methods <- checkMethods classDupMethods name (sndsOfPrism _MethodDef parts_)
     extendTypeName typeIsReserved name (appConcrete $ flip TRef name)
-    return (name, ClassInfo { _ciIdent     = name
-                            , _ciFields    = props
-                            , _ciMethods   = methods
-                            , _ciHierarchy = hier ^? chIdent })
+    return (name, ClassInfo
+           { _ciIdent     = name
+           , _ciFields    = props
+           , _ciMethods   = M.fromList $ (_fIdent &&& id) <$> methods
+           , _ciHierarchy = hier ^? chIdent })
 
 checkMethods :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
             -> t -> [FnDefA] -> TCComp [FnDefA]
 checkMethods onErr name methods =
     checkNoDups onErr _fIdent name methods >> return methods
 
-type CGVirtWork = IM.IntMap (M.Map Ident FnDefA)
+--------------------------------------------------------------------------------
+-- Classes (Virtual):
+--------------------------------------------------------------------------------
 
 checkVirtual :: TCComp ()
-checkVirtual = do
-    (nOf, graph) <- uses classGraph $ first (M.!)
-    mmap <- foldM' IM.empty graph $ \mmap0 cl ->
-        let ((name, node), meths) = (id &&& nOf . _ciIdent) &&& _ciMethods $ cl
-        in foldM' mmap0 (tail $ GF.bfsL node graph) $ \mmap1 anc ->
-            let (pnode, pmeths) = second _ciMethods anc
-            in foldM2 mmap1 meths pmeths $ ifVirtualMark node pnode
-    return u
+checkVirtual = classGraph %>= \(convs, GF.Flip gr) ->
+                    (convs,) . GF.Flip . annotateCGVirt gr <$> computeVirtMap gr
 
-ifVirtualMark :: G.Node -> G.Node
-              -> CGVirtWork -> FnDefA -> FnDefA -> TCComp CGVirtWork
-ifVirtualMark node pnode mmap fun pfun
-    | fun `notSameName` pfun = ordinaryMethod node fun mmap
-    | fun `eqFnSig` pfun     = mismatchedOverridenMethod fun pfun
-    | otherwise = markVirtual node fun mmap >>= markVirtual pnode pfun
+annotateCGVirt :: G.Graph gr => gr ClassInfo b -> VirtMap -> gr ClassInfo b
+annotateCGVirt gr vmap = gr `lnmap` nm
+    where nm (n, cl)   = let cvm = ((vmap IM.! n) M.!)
+                             xmap m = addVirt m $ cvm $ _fIdent m
+                         in (n, ciMethods %~ fmap xmap $ cl)
 
-ordinaryMethod :: G.Node -> FnDefA -> CGVirtWork -> TCComp CGVirtWork
-ordinaryMethod node fun mmap = do
-    let fi  = _fIdent fun
-    let ins = maybe3 (IM.lookup node mmap) M.singleton $ \funs ->
-                maybe (insert3 funs) (const $ const $ const funs)
-                      (M.lookup fi funs)
-    return $ iinsert3 mmap node $ ins fi fun
+type VirtMap   = IM.IntMap (M.Map Ident IsVirtual)
 
-markVirtual :: G.Node -> FnDefA -> CGVirtWork -> TCComp CGVirtWork
-markVirtual node fun mmap = do
-    let ins = maybe M.singleton insert3 $ IM.lookup node mmap
-    let (fun', fi) = id &&& _fIdent $ fun -- todo
-    return $ iinsert3 mmap node $ ins fi fun'
+computeVirtMap :: G.Graph gr => gr ClassInfo () -> TCComp VirtMap
+computeVirtMap gr = do
+    let roots = filter ((0 ==) . G.outdeg gr) . (fst <$>)
+    let vinit = IM.fromList . fmap (second (fmap (const False) . _ciMethods))
+    uncurry foldM' (vinit &&& roots $ G.labNodes gr) (discoverVirtual gr)
 
-mismatchedOverridenMethod :: FnDefA -> FnDefA -> TCComp a
-mismatchedOverridenMethod fun pfun = u
-eqFnSig f1 f2 = fnSig f1 == fnSig f2
-fnSig f = True
-notSameName f1 f2 = _fIdent f1 /= _fIdent f2
+discoverVirtual :: G.Graph gr => gr ClassInfo ()
+                -> VirtMap -> G.Node -> TCComp VirtMap
+discoverVirtual gr vinit curr = flip (ancestralBfsM gr [] curr) vinit $
+    \vmap0 ancs child -> foldM' vmap0 ancs $ \vmap1 anc ->
+        let ((ln, lms), (rn, rms)) =
+                ((_ciIdent &&& _ciMethods) . fromJust . G.lab gr) § (child, anc)
+        in foldM2 vmap1 lms rms $ \vmapC fun pfun ->
+            if | ((/=) |. _fIdent)   fun pfun -> return vmapC
+               | ((==) |. toFnSigId) fun pfun -> markVirtual child fun vmapC >>=
+                                                 markVirtual anc   pfun
+               | otherwise -> mismatchedOverridenMethod ln fun rn pfun
+
+markVirtual :: G.Node -> FnDefA -> VirtMap -> TCComp VirtMap
+markVirtual n f = pure . IM.insertWith M.union n (M.singleton (_fIdent f) True)
+
+-- | 'ancestralBfsM': monadic folding of a graph using a BFS algorithm starting
+-- from a specific node. The current value, the ancestors of the current node,
+-- and the current node itself are passed to a monadic action which produces
+-- the next current value which is finally yielded as the result.
+-- The algorithm assumes there are no cycles.
+ancestralBfsM :: (Monad m, G.Graph gr, Applicative f, Monoid (f G.Node))
+              => gr a b -> f G.Node -> G.Node
+              -> (z -> f G.Node -> G.Node -> m z) -> z -> m z
+ancestralBfsM gr ancs curr _do =
+    let ancs' = ancs <> pure curr in flip3 foldM (G.pre gr curr) $ \z child ->
+        _do z ancs' child >>= ancestralBfsM gr ancs' child _do
+
+lnmap :: G.Graph gr => gr a b -> (G.LNode a -> G.LNode a) -> gr a b
+lnmap gr f = G.mkGraph (f <$> G.labNodes gr) (G.labEdges gr)
 
 --------------------------------------------------------------------------------
 -- Type checking:
@@ -304,10 +308,10 @@ checkStm typ stmt = case stmt of
           checkS f = f %%~ checkStm typ
 
 checkFor :: TypeA -> StmtA -> TCComp StmtA
-checkFor rtyp = sTyp %%~ (inferType >$> fst) >=> \for ->
-    let typ = _sTyp for
-    in (sExpr %%~ checkExp (grow typ)) for >>= sInScope contexts .
-        (extendLocal typ (_sIdent for) >>) . (sSi %%~ checkStm rtyp)
+checkFor rtyp = sTyp %%~ (inferType >$> fst) >=> \for_ ->
+    let typ = _sTyp for_
+    in (sExpr %%~ checkExp (grow typ)) for_ >>= sInScope contexts .
+        (extendLocal typ (_sIdent for_) >>) . (sSi %%~ checkStm rtyp)
 
 checkAssign :: StmtA -> TCComp StmtA
 checkAssign ass = do
