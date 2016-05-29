@@ -27,7 +27,7 @@ Portability : ALL
 
 Operating environment of type checker in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DeriveDataTypeable #-}
 
 module Frontend.Environment (
     -- * Modules
@@ -51,6 +51,7 @@ module Frontend.Environment (
 
 import Prelude hiding (lookup)
 
+import Data.Data
 import Data.List (find)
 import Data.Maybe
 import qualified Data.Graph.Inductive as G
@@ -117,7 +118,7 @@ data ClassInfo = ClassInfo {
     , _ciFields    :: [SFieldA]         -- ^ Properties of class.
     , _ciMethods   :: Map Ident FnDefA  -- ^ map of Fun name -> Method
     , _ciHierarchy :: Maybe Ident       -- ^ Potential parent.
-    } deriving (Eq, Ord, Show, Read)
+    } deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 -- | 'ClassDAG': 'ClassGraph' augmented with 'ClassToCGNode'.
 type ClassDAG      = (ClassToCGNode, ClassGraph)

@@ -27,9 +27,8 @@ Portability : ALL
 
 Type checker for Javalette compiler.
 -}
-{-# LANGUAGE LambdaCase, MultiWayIf, TupleSections #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, TupleSections, StandaloneDeriving #-}
 
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Frontend.TypeCheck (
     -- * Modules
@@ -133,10 +132,14 @@ collectTypedefs = progCollect _TTypeDef $ \(TypeDef _ typ alias) ->
     fst <$> inferType typ >>= extendTypeName typeIsReserved alias
 
 expandTypedefs :: ProgramA -> TCComp ProgramA
-expandTypedefs = expandInStructs >>. expandTDs
+expandTypedefs = (expandInStructs >> expandInClasses) >>. expandTDs
 
 expandInStructs :: TCComp ()
-expandInStructs = use structs >>= expandTDs >>= (structs .=)
+expandInStructs = structs %>= expandTDs
+
+expandInClasses :: TCComp ()
+expandInClasses = classGraph %>= expand
+    where expand (x, GF.Flip gr) = (x,) . GF.Flip <$> gaction gr expandTDs
 
 expandTDs :: Data from => from -> TCComp from
 expandTDs = U.transformBiM $ \case
@@ -273,6 +276,12 @@ ancestralBfsM gr ancs curr _do =
 
 lnmap :: G.Graph gr => gr a b -> (G.LNode a -> G.LNode a) -> gr a b
 lnmap gr f = G.mkGraph (f <$> G.labNodes gr) (G.labEdges gr)
+
+gaction :: (Monad m, G.Graph gr)
+        => gr a b -> ([G.LNode a] -> m [G.LNode c]) -> m (gr c b)
+gaction gr f = do
+    ns <- f $ G.labNodes gr
+    return $ G.mkGraph ns (G.labEdges gr)
 
 --------------------------------------------------------------------------------
 -- Type checking:
