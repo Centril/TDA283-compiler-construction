@@ -29,6 +29,8 @@ Type checker for Javalette compiler.
 -}
 {-# LANGUAGE LambdaCase #-}
 
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+
 module Frontend.TypeCheck (
     -- * Modules
     module X,
@@ -37,8 +39,17 @@ module Frontend.TypeCheck (
     typeCheck, compileFrontend, targetTypeCheck
 ) where
 
+import Data.Traversable
+
 import Data.Data (Data)
 
+import qualified Data.Graph.Inductive as G
+import qualified Utils.GraphFlip      as GF
+
+import qualified Data.IntMap as IM
+import qualified Data.Map    as M
+
+import Control.Arrow
 import Control.Monad
 import Control.Monad.Reader
 
@@ -46,6 +57,7 @@ import Control.Lens hiding (contexts, Empty)
 
 import qualified Data.Generics.Uniplate.Data as U
 
+import Utils.Function
 import Utils.Pointless
 import Utils.Foldable
 import Utils.Monad
@@ -88,37 +100,39 @@ typeCheck :: Program () -> TCComp ProgramA
 typeCheck prog0 = do
     let prog1 = fmap (const emptyAnot) prog0
     -- Part 1: Collect all typedefs
-    info TypeChecker   "Collecting typedefs"
+    tinfo "Collecting typedefs"
     collectTypedefs prog1
     -- Part 2: Collect all structs + classes
-    info TypeChecker   "Collecting structs and classes"
+    tinfo "Collecting structs and classes"
     collectComplex prog1
+    return prog1
+    {-
     -- Part 3: Expand typedefs
-    info TypeChecker   "Expanding typedefs"
+    tinfo   "Expanding typedefs"
     prog2 <- expandTypedefs >=> nukeTypedefs $ prog1
     -- Part 4: Collect all functions
-    info TypeChecker   "Collecting all functions"
+    tinfo   "Collecting all functions"
     prog3 <- allFunctions prog2
-    info TypeChecker   "AST after collect"
-    info TypeChecker $ show prog3
+    tinfo   "AST after collect"
+    tinfo $ show prog3
     -- Part 5: Check for the correctness of the main definition
-    info TypeChecker   "Checking existence of int main()"
+    tinfo   "Checking existence of int main()"
     mainCorrect
     -- Part 6: Type check the program
-    info TypeChecker   "Type checking the program"
+    tinfo   "Type checking the program"
     prog4 <- checkProg prog3
     -- Part 7: Return check the program.
     info ReturnChecker "Return checking the program"
     returnCheck prog4
+    -}
 
 --------------------------------------------------------------------------------
 -- Typedefs:
 --------------------------------------------------------------------------------
 
 collectTypedefs :: ProgramA -> TCComp ()
-collectTypedefs = progCollect _TTypeDef $ \(TypeDef _ typ alias) -> do
-    (typ', _) <- inferType typ
-    extendTypeDef typeIsReserved alias typ'
+collectTypedefs = progCollect _TTypeDef $ \(TypeDef _ typ alias) ->
+    fst <$> inferType typ >>= extendTypeName typeIsReserved alias
 
 expandTypedefs :: ProgramA -> TCComp ProgramA
 expandTypedefs = expandInStructs >>. expandTDs
@@ -141,39 +155,25 @@ nukeTypedefs :: ProgramA -> TCComp ProgramA
 nukeTypedefs = pTopDefs %%~ return . filter (isn't _TTypeDef)
 
 --------------------------------------------------------------------------------
--- Structs, Classes:
+-- Structs:
 --------------------------------------------------------------------------------
 
 collectComplex :: ProgramA -> TCComp ()
 collectComplex p = do
     collectStructs p
-    -- TODO: fix!
-    void $ collectClasses p
+    collectClasses p
+    -- 
+    (_, g) <- use classGraph
+    tinfoP "showing class graph" g
+    tinfoP "showing topsort" $ GF.topsort' g
+    tinfoP "pre..." $ G.pre (GF.unFlip g) 0
+    tinfoP "suc..." $ G.suc (GF.unFlip g) 0
+    tinfoP "bfs..." $ G.bfs 0 (GF.unFlip g)
 
 collectStructs :: ProgramA -> TCComp ()
 collectStructs = progCollect _TStructDef $ \(StructDef _ name fields) ->
     checkFields structDupFields name fields
     >>= extendStruct typeIsReserved (appConcrete $ flip TStruct name) name
-
-collectClasses :: ProgramA -> TCComp ProgramA
-collectClasses = pTopDefs %%~ mapM . toClassDef %%~
-    \c@(ClassDef _ name hier parts) -> do
-    props   <- ClassProp emptyAnot <$$> checkFields classDupProps name
-                                        (sndsOfPrism _ClassProp parts)
-    methods <- MethodDef emptyAnot <$$> checkMethod classDupMethods name
-                                        (sndsOfPrism _MethodDef parts)
-    let clazz = c { _cdParts = props ++ methods }
-    extendClass typeIsReserved (appConcrete $ flip TRef name) name clazz
-    return clazz
-
-checkClass :: TCComp ()
-checkClass = do
-    return u
-
-checkMethod :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
-            -> t -> [FnDefA] -> TCComp [FnDefA]
-checkMethod onErr name methods =
-    checkNoDups onErr _fIdent name methods >> return methods
 
 checkFields :: (t -> [SFieldA] -> [SFieldA] -> TCComp ())
             ->  t -> [SFieldA] -> TCComp [SFieldA]
@@ -186,6 +186,89 @@ checkNoDups :: (Eq a, Applicative f)
 checkNoDups onErr xname tname xs =
     let (nubbed, dups) = nubDupsBy ((==) |. xname) xs
     in unless (null dups) (onErr tname nubbed dups)
+
+--------------------------------------------------------------------------------
+-- Classes:
+--------------------------------------------------------------------------------
+
+collectClasses :: ProgramA -> TCComp ()
+collectClasses = computeClassDAG >=> (classGraph .=)
+
+computeClassDAG :: ProgramA -> TCComp ClassDAG
+computeClassDAG prog = do
+    (cmap, (cgni, lnodes)) <- (id &&& makeCGTNN) <$> computeCIMap prog
+    ledges <- foldM (cgBindInherit cmap cgni) [] (snd <$> cmap)
+    let graph  = GF.mkGraph lnodes ledges
+    let cycles = snd <$$> GF.cyclesIn graph
+    unless (null cycles) (cycleDetectedInClasses cycles)
+    return (cgni, graph)
+
+makeCGTNN :: [(Ident, ClassInfo)] -> (ClassToCGNode, [CGNode])
+makeCGTNN = flip fromKVL [0..] . fmap fst &&& zip [0..] . fmap snd
+
+cgBindInherit :: [(Ident, ClassInfo)] -> ClassToCGNode
+              -> [CGEdge] -> ClassInfo -> TCComp [CGEdge]
+cgBindInherit cmap cgni edges cl =
+    let (name, hier) = _ciIdent &&& _ciHierarchy $ cl
+    in  flip (maybe $ return edges) hier $ \s -> do
+        when (name == s) (selfCycleDetected cl)
+        super <- maybeErr (noSuchSuperClass name s) (lookup s cmap)
+        -- swap (from, to)?
+        return $ (cgni M.! name, cgni M.! _ciIdent super, ()) : edges
+
+computeCIMap :: ProgramA -> TCComp [(Ident, ClassInfo)]
+computeCIMap = intoProg _TClassDef $ \(ClassDef _ name hier parts_) -> do
+    props   <- checkFields  classDupProps   name (sndsOfPrism _ClassProp parts_)
+    methods <- checkMethods classDupMethods name (sndsOfPrism _MethodDef parts_)
+    extendTypeName typeIsReserved name (appConcrete $ flip TRef name)
+    return (name, ClassInfo { _ciIdent     = name
+                            , _ciFields    = props
+                            , _ciMethods   = methods
+                            , _ciHierarchy = hier ^? chIdent })
+
+checkMethods :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
+            -> t -> [FnDefA] -> TCComp [FnDefA]
+checkMethods onErr name methods =
+    checkNoDups onErr _fIdent name methods >> return methods
+
+type CGVirtWork = IM.IntMap (M.Map Ident FnDefA)
+
+checkVirtual :: TCComp ()
+checkVirtual = do
+    (nOf, graph) <- uses classGraph $ first (M.!)
+    mmap <- foldM' IM.empty graph $ \mmap0 cl ->
+        let ((name, node), meths) = (id &&& nOf . _ciIdent) &&& _ciMethods $ cl
+        in foldM' mmap0 (tail $ GF.bfsL node graph) $ \mmap1 anc ->
+            let (pnode, pmeths) = second _ciMethods anc
+            in foldM2 mmap1 meths pmeths $ ifVirtualMark node pnode
+    return u
+
+ifVirtualMark :: G.Node -> G.Node
+              -> CGVirtWork -> FnDefA -> FnDefA -> TCComp CGVirtWork
+ifVirtualMark node pnode mmap fun pfun
+    | fun `notSameName` pfun = ordinaryMethod node fun mmap
+    | fun `eqFnSig` pfun     = mismatchedOverridenMethod fun pfun
+    | otherwise = markVirtual node fun mmap >>= markVirtual pnode pfun
+
+ordinaryMethod :: G.Node -> FnDefA -> CGVirtWork -> TCComp CGVirtWork
+ordinaryMethod node fun mmap = do
+    let fi  = _fIdent fun
+    let ins = maybe3 (IM.lookup node mmap) M.singleton $ \funs ->
+                maybe (insert3 funs) (const $ const $ const funs)
+                      (M.lookup fi funs)
+    return $ iinsert3 mmap node $ ins fi fun
+
+markVirtual :: G.Node -> FnDefA -> CGVirtWork -> TCComp CGVirtWork
+markVirtual node fun mmap = do
+    let ins = maybe M.singleton insert3 $ IM.lookup node mmap
+    let (fun', fi) = id &&& _fIdent $ fun -- todo
+    return $ iinsert3 mmap node $ ins fi fun'
+
+mismatchedOverridenMethod :: FnDefA -> FnDefA -> TCComp a
+mismatchedOverridenMethod fun pfun = u
+eqFnSig f1 f2 = fnSig f1 == fnSig f2
+fnSig f = True
+notSameName f1 f2 = _fIdent f1 /= _fIdent f2
 
 --------------------------------------------------------------------------------
 -- Type checking:
