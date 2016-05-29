@@ -29,7 +29,7 @@ Combinators to ease writing common cases in pointfree style.
 -}
 module Utils.Pointless (
     -- * Operations
-    (.|), (|.|), (|.)
+    (.|), (|.|), (|.), (.$)
 ) where
 
 -- | '.|': Compose an unary function with a binary function.
@@ -47,3 +47,8 @@ infixr 8 |.|
 (|.) :: (b -> b -> c) -> (a -> b) -> a -> a -> c
 (|.) f g a b = f (g a) (g b)
 infixr 8 |.
+
+-- | '.$: Compose a unary function to the second argument of a binary function.
+(.$) :: (t -> b -> c) -> (a -> b) -> t -> a -> c
+(.$) f g x = f x . g
+infixr 8 .$
