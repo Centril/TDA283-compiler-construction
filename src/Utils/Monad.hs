@@ -35,7 +35,7 @@ module Utils.Monad (
     (<!>), (<:>), (<++>),
 
     -- * Monad operations
-    (>?=>), (>=?>), (<<=), (<<=>), (.>>), (>>.),
+    (>?=>), (>=?>), (<<=), (<<=>), (<=>), (.>>), (>>.),
     maybeErr, unless', foldl1M, foldr1M, untilEqM, untilMatchM
 ) where
 
@@ -82,9 +82,17 @@ infixr 1 >=?>
 infixl 5 <<=
 
 -- | '<<=>': "Kleisli" version of '<<='.
-(<<=>) :: Monad m => (a -> m b) -> (a -> m c) -> a -> m c
-(<<=>) f g a = f a >> g a
+--(<!<=>) :: Monad m => (a -> m b) -> (a -> m c) -> a -> m c
+(<<=>) :: Monad m => (a -> m b) -> (b -> m c) -> a -> m b
+(<<=>) f g a = f a >>= \x -> g x >> return x
 infixl 5 <<=>
+
+-- | '<=>': Blinding "Kleisli" operator taking two actions, given them the
+-- same value, performing the first, ignoring result of that, then running the
+-- second monadic action and yielding the result of that one.
+(<=>) :: Monad m => (a -> m b) -> (a -> m c) -> a -> m c
+(<=>) f g a = f a >> g a
+infixl 5 <=>
 
 -- | '<!>': sequential application of a non-applicative value
 -- lifted into the same 'Applicative' of as the function applied.
