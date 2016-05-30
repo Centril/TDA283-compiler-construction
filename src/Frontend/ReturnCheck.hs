@@ -31,7 +31,7 @@ that need do return.
 -}
 module Frontend.ReturnCheck (
     -- * Operations
-    returnCheck
+    returnCheck, checkFunRet
 ) where
 
 import Safe

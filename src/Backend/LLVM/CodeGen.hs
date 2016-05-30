@@ -109,18 +109,16 @@ compileClass cl = do
     currClass .= Nothing
     return funs
 
-makeCLTyp :: F.ClassInfo -> TypeA
-makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
-
 compileMethod :: TypeA -> F.ClassInfo -> FnDefA -> LComp LFunDef
 compileMethod cltyp cl meth@(FnDef _ rtyp _ args block) = do
     let name  = nameMethod cl meth
     rtyp'     <- compileFRTyp rtyp
     let this   = Arg emptyAnot cltyp $ Ident "this"
-    args1     <- mapM compileFArg $ this : args
-    insts     <- compileFBlock args block
+    let args1  = this : args
+    args2     <- mapM compileFArg args1
+    insts     <- compileFBlock args1 block
     let insts' = insts ++ unreachableMay block
-    return $ LFunDef rtyp' name args1 insts'
+    return $ LFunDef rtyp' name args2 insts'
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $
@@ -180,8 +178,11 @@ compileAlloca name = compileType >=> alloc (_ident name)
 
 compileAssign :: LValueA -> ExprA -> LComp ()
 compileAssign lval expr = do
-    rhs <- compileExpr expr
-    compileLVal lval >>= store rhs
+    rhs  <- compileExpr expr
+    lhs  <- compileLVal lval
+    let LPtr lhst = _lTType lhs
+    rhs' <- castIfNeed lhst rhs
+    store rhs' lhs
 
 compileRet :: ExprA -> LComp ()
 compileRet = compileExpr >$> LRet >=> pushInst

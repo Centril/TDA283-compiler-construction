@@ -84,8 +84,8 @@ compileENew :: ASTAnots -> [DimEA] -> LComp LTValRef
 compileENew = compileNew . getType
 
 compileNew :: TypeA -> [DimEA] -> LComp LTValRef
-compileNew t@(TStruct {}) [] = compileType t >>= \lbt -> salloc lbt return lbt
 compileNew t@(TRef    {}) [] = compileType t >>= \lbt -> salloc lbt return lbt
+compileNew t              [] = compileType t >>= \lbt -> salloc lbt return lbt
 compileNew typ          (d:ds) = do
     (bt, lbt) <- fkeep compileType $ shrink typ
     l         <- compileExpr $ _deExpr d
@@ -123,7 +123,7 @@ callFSwitch fr = \case
         rtyp  -> assignCall rtyp fr
 
 compileMApp :: ASTAnots -> LValueA -> Ident -> [ExprA] -> LComp LTValRef
-compileMApp anots lv mname es = do
+compileMApp _ lv mname es = do
     let typ  = extractType lv
     cls     <- getClass $ _tIdent typ
     let meth = getMethod mname cls
@@ -141,12 +141,27 @@ hasVirtual cls = or $ extractVirt <$> (cls >>= M.elems . F._ciMethods)
 nameMethod :: F.ClassInfo -> FnDefA -> LIdent
 nameMethod cl fn = _ident (F._ciIdent cl) ++ "__" ++ _ident (_fIdent fn)
 
+castIfNeed :: LType -> LTValRef -> LComp LTValRef
+castIfNeed tlhs rhs | tlhs == _lTType rhs = return rhs
+                    | otherwise           = bitcast tlhs rhs
+
+castApp :: FnDefA -> LTValRefs -> LComp LTValRefs
+castApp fn les = do
+    lArgTs <- mapM compileType $ _aTyp <$> _fArgs fn
+    zipWithM castIfNeed lArgTs les
+
+makeCLTyp :: F.ClassInfo -> TypeA
+makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
+
 compileCallStatic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
                   -> LTValRef -> LTValRefs
                   -> LComp LTValRef
 compileCallStatic _ (_, (fn, cl)) this les = do
     let name = nameMethod cl fn
-    let fr   = LFunRef False name (this : les)
+    les'    <- castApp fn les
+    thiste  <- compileType $ makeCLTyp cl
+    this'   <- castIfNeed thiste this
+    let fr   = LFunRef False name (this' : les')
     lrtyp   <- compileType $ _fRetTyp fn
     callFSwitch fr lrtyp
 
@@ -330,7 +345,13 @@ fieldIx :: Foldable t => Ident -> t (SField a) -> Integer
 fieldIx rname = _sfIndex . fromJust . find ((rname ==) . _sfIdent)
 
 markIfArg :: ASTAnots -> Ident -> Ident
-markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)
+markIfArg anots = ident %~ (vsMark (mayVS anots) ++)
+
+vsMark :: Maybe VarSource -> String
+vsMark = \case
+    Just VSArg  -> "p"
+    Just VSThis -> "p"
+    _           -> ""
 
 arrAccs :: ASTAnots -> [DimEA] -> (LType -> LComp LTValRef) -> LComp LTValRef
 arrAccs a dimes topf = do

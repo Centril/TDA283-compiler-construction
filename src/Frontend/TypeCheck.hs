@@ -217,7 +217,8 @@ checkMethods cl = do
     sInScope contexts $ do
         mapM_ (extendProp cl) $ _ciFields cl
         mapM_ (extendSelf cltyp) prereservedIdents
-        (ciMethods %%~ mapM checkFun $ cl) <* (inClass .= False)
+        (ciMethods %%~ mapM (checkFun >=> checkFunRet) $ cl)
+            <* (inClass .= False)
 
 --------------------------------------------------------------------------------
 -- Classes (Fields):
