@@ -53,8 +53,6 @@ import Frontend.Environment
 import Frontend.Error
 import Frontend.Common
 
-u = undefined
-
 --------------------------------------------------------------------------------
 -- Kind inference:
 --------------------------------------------------------------------------------

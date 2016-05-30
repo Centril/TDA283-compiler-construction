@@ -185,7 +185,7 @@ lookupMethod onErr name cls =
 
 lookupClass' :: (Ident -> TCComp G.Node) -> Ident -> TCComp ClassInfo
 lookupClass' onErr name = do
-    (conv, graph) <- use classGraph
+    (conv, _) <- use classGraph
     node <- maybeErr (onErr name) (M.lookup name conv)
     getClass node
 

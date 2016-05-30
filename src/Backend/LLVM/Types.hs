@@ -41,8 +41,6 @@ import Backend.LLVM.Environment
 
 import qualified Frontend.Environment as F
 
-u = undefined
-
 --------------------------------------------------------------------------------
 -- LType related:
 --------------------------------------------------------------------------------

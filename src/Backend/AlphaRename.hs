@@ -56,8 +56,6 @@ import Common.Annotations
 import Frontend.Environment
 import qualified Utils.GraphFlip as GF
 
-u = undefined
-
 --------------------------------------------------------------------------------
 -- Operating Environment:
 --------------------------------------------------------------------------------
