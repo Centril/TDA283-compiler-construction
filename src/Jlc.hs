@@ -23,8 +23,7 @@ import Utils.Terminal
 
 import Common.Computation
 
-import Frontend.TypeCheck
-
+import Backend.PreGen
 import Backend.LLVM.LLVM
 
 import CliOptions

@@ -54,8 +54,7 @@ import Common.FileOps
 
 import Frontend.TypeCheck
 
-import Backend.AlphaRename
-import Backend.PreOptimize
+import Backend.PreGen
 
 import Backend.LLVM.CodeGen
 
@@ -77,10 +76,8 @@ compileLLIO = do
             OFTAsm     -> llvmLLC "asm" bcLinked out
 
 compileLL :: FilePath -> IOLComp LLVMCode
-compileLL = fkeep (readF >=> rebase . compile) >=> \(orig, ll) -> do
-    inter <- view llIntermed
-    when inter $ writeF (orig -<.> "ll") ll
-    return ll
+compileLL = fkeep (readF >=> rebase . compile) >=> \(orig, ll) ->
+    view llIntermed >>= flip when (writeF (orig -<.> "ll") ll) >> return ll
 
 compile :: String -> LComp LLVMCode
 compile = flip (transST carryTC . compilePO) initialTCEnv >=> compileLLVM
@@ -94,33 +91,6 @@ llvmAssemble tmp count ll = let fp = bcFile tmp $ show count
 
 bcFile :: FilePath -> FilePath -> FilePath
 bcFile dir name = dir </> name <.> "bc"
-
---------------------------------------------------------------------------------
--- Pre Code Gen:
---------------------------------------------------------------------------------
-
--- TODO, MOVE OUT OF HERE.
-
-compileAR, compilePO :: String -> TCComp ProgramA
-compileAR code = (alphaRename <$> compileFrontend code)
-                 <<= infoP AlphaRenamer "AST after alpha rename"
-
-compilePO code = (preOptimize <$> compileAR code)
-                 <<= infoP PreOptimizer "AST after pre optimizing"
-
-targetAlphaRename, targetPreOpt :: JlcTarget
-targetAlphaRename = targetTcX compileAR
-targetPreOpt      = targetTcX compilePO
-
-targetTcX :: (String -> Comp TCEnv a) -> JlcTarget
-targetTcX = targetX initialTCEnv
-
-targetX :: s -> (String -> Comp s a) -> JlcTarget
-targetX ienv cf = flip (evalIOComp $ compileXIO cf) ienv
-
-compileXIO :: (String -> Comp s a) -> IOComp s ()
-compileXIO cf = jlFiles . classifyInputs <$> ask
-                >>= mapM_ (readF >=> rebase . cf)
 
 --------------------------------------------------------------------------------
 -- LLVM: External programs:
