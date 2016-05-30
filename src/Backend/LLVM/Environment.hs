@@ -41,7 +41,8 @@ module Backend.LLVM.Environment (
     initialLEnv,
 
     -- * Structs, Classes
-    getStructDef, getClass, getClass', getMethod, classGraph, currClass,
+    getStructDef, getClass, getClass',
+    getMethodsUniq, getMethod, classGraph, currClass,
 
     -- ** Aliases
     bindAConv, insertAConv, getConv,
@@ -149,9 +150,12 @@ getClass' name  = do
 
 getMethod :: Ident -> [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
 getMethod name cls =
+    fromJust $ find ((name ==) . _fIdent . fst . snd) $ getMethodsUniq cls
+
+getMethodsUniq :: [F.ClassInfo] -> [(Integer, (FnDefA, F.ClassInfo))]
+getMethodsUniq cls =
     let meths0 = cls >>= \cl -> fmap (,cl) $ M.elems $ F._ciMethods cl
-        meths1 = zip [0..] $ nubBy ((==) |. (_fIdent . fst)) meths0
-    in fromJust $ find ((name ==) . _fIdent . fst . snd) meths1
+    in zip [0..] $ nubBy ((==) |. (_fIdent . fst)) meths0
 
 --------------------------------------------------------------------------------
 -- Alias operations:

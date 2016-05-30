@@ -135,38 +135,34 @@ compileMApp _ lv mname es = do
     let dispatch = if virt then compileCallDynamic else compileCallStatic
     dispatch cls meth lthis les
 
-hasVirtual :: [F.ClassInfo] -> Bool
-hasVirtual cls = or $ extractVirt <$> (cls >>= M.elems . F._ciMethods)
-
-nameMethod :: F.ClassInfo -> FnDefA -> LIdent
-nameMethod cl fn = _ident (F._ciIdent cl) ++ "__" ++ _ident (_fIdent fn)
-
 castIfNeed :: LType -> LTValRef -> LComp LTValRef
 castIfNeed tlhs rhs | tlhs == _lTType rhs = return rhs
                     | otherwise           = bitcast tlhs rhs
+
+makeCLTyp :: F.ClassInfo -> TypeA
+makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
 
 castApp :: FnDefA -> LTValRefs -> LComp LTValRefs
 castApp fn les = do
     lArgTs <- mapM compileType $ _aTyp <$> _fArgs fn
     zipWithM castIfNeed lArgTs les
 
-makeCLTyp :: F.ClassInfo -> TypeA
-makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
+recastArgs :: F.ClassInfo -> FnDefA -> LTValRefs -> LTValRef -> LComp LTValRefs
+recastArgs cl fn les this = do
+    les'    <- castApp fn les
+    thiste  <- compileType $ makeCLTyp cl
+    this'   <- castIfNeed thiste this
+    return $ this' : les'
 
 compileCallStatic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
                   -> LTValRef -> LTValRefs
                   -> LComp LTValRef
 compileCallStatic _ (_, (fn, cl)) this les = do
-    let name = nameMethod cl fn
-    les'    <- castApp fn les
-    thiste  <- compileType $ makeCLTyp cl
-    this'   <- castIfNeed thiste this
-    let fr   = LFunRef False name (this' : les')
+    let name = nameMethod (fn, cl)
+    les'    <- recastArgs cl fn les this
+    let fr   = LFunRef False name les'
     lrtyp   <- compileType $ _fRetTyp fn
     callFSwitch fr lrtyp
-
-nameVTable :: String -> String
-nameVTable name = name ++ "__vtable"
 
 -- TODO: Check if this is correct
 vtableOf :: LType -> LType
@@ -188,12 +184,10 @@ compileCallDynamic _ (ix, (fn, cl)) this les = do
     methref  <- assignPtr ftyp  $ deref [intTVR ix] vtable
     methload <- load ftyp methref
     -- call method:
-    let fr   = LFunRef True (_lRIdent $ _lTVRef methload) (this : les)
+    les'     <- recastArgs cl fn les this
+    let fr   = LFunRef True (_lRIdent $ _lTVRef methload) les'
     lrtyp   <- compileType $ _fRetTyp fn
     callFSwitch fr lrtyp
-
-toFnPtr :: FnDefA -> TypeA
-toFnPtr fn = let FunSig args ret = F.toFnSig fn in Fun emptyAnot ret args
 
 compileInDeCr :: LValueA -> (ASTAnots -> AddOpA) -> Bool -> LComp LTValRef
 compileInDeCr lval op isPre = do

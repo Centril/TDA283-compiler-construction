@@ -31,6 +31,10 @@ LType and TypeA related in LLVM backend of the Javalette compiler.
 
 module Backend.LLVM.Types where
 
+import qualified Data.Map as M
+
+import Control.Arrow
+
 import Utils.Monad
 import Utils.Sizeables
 
@@ -100,10 +104,51 @@ createAlias typ = case typ of
         _sfType <$$> getStructDef (_tIdent typ) >>= mapM compileType >$> LStruct
             >>= insertAlias stAlias >> return stAlias
     TRef   {}  -> do
-        stAlias <- newAlias <<= insertAConv typ
-        cl <- getClass' (_tIdent typ)
-        let propt = _sfType <$> (F._ciFieldsDer cl) ++ (F._ciFields cl)
-        types <- mapM compileType propt
-        insertAlias stAlias (LStruct types)
+        stAlias    <- newAlias <<= insertAConv typ
+        cls@(cl:_) <- getClass (_tIdent typ)
+        let propt  = _sfType <$> F._ciFieldsDer cl ++ F._ciFields cl
+        types     <- mapM compileType propt
+        vt        <- makeVTable' stAlias cls
+        insertAlias stAlias (LStruct $ vt ++ types)
         return stAlias
     _          -> error "createAlias: should be handled by compileType."
+
+--------------------------------------------------------------------------------
+-- VTable:
+--------------------------------------------------------------------------------
+
+makeVTable' :: LAliasRef -> [F.ClassInfo] -> LComp [LType]
+makeVTable' alias cls = do
+    let virtMs = filter isVirt $ getMethodsUniq cls
+    if null virtMs then return [] else makeVTable alias virtMs
+
+makeVTable :: LAliasRef -> [(Integer, (FnDefA, F.ClassInfo))] -> LComp [LType]
+makeVTable alias virts = do
+    let (typs, ids)  = unzip $ (toFnPtr . fst &&& LRef . nameMethod)
+                             . snd <$> virts
+    fptrs     <- mapM compileType typs
+    let vtType = nameVTableT alias
+    insertAlias vtType (LStruct fptrs)
+    let vtdata = LTValRef (LAlias vtType) $ LVArray $ zipWith LTValRef fptrs ids
+    pushConst $ LConstGlobal (nameVTableD alias) vtdata
+    return [LAlias vtType]
+
+isVirt :: (Integer, (FnDefA, F.ClassInfo)) -> Bool
+isVirt (ix, (fn, cl)) = extractVirt fn
+
+nameVTableD, nameVTableT, nameVTable :: String -> String
+nameVTableD = (++ "_data") . nameVTable
+nameVTableT = (++ "_type") . nameVTable
+nameVTable  = (++ "_vtable")
+
+hasVirtual :: [F.ClassInfo] -> Bool
+hasVirtual cls = or $ extractVirt <$> (cls >>= M.elems . F._ciMethods)
+
+toFnPtr :: FnDefA -> TypeA
+toFnPtr fn = let F.FunSig args ret = F.toFnSig fn in Fun emptyAnot ret args
+
+nameMethod' :: (Integer, (FnDefA, F.ClassInfo)) -> FnDefA
+nameMethod' (ix, x@(fn, cl)) = fn { _fIdent = Ident $ nameMethod x }
+
+nameMethod :: (FnDefA, F.ClassInfo) -> LIdent
+nameMethod (fn, cl) = _ident (F._ciIdent cl) ++ "__" ++ _ident (_fIdent fn)
