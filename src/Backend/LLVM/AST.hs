@@ -93,7 +93,8 @@ data LValRef
 data LTValRef = LTValRef { _lTType :: LType, _lTVRef :: LValRef }
     deriving (Eq, Ord, Show, Read)
 
-data LFunRef = LFunRef { _lFrIdent :: LIdent, _lFrArgs :: LTValRefs }
+data LFunRef
+    = LFunRef { _lFrDyn :: Bool, _lFrIdent :: LIdent, _lFrArgs :: LTValRefs }
     deriving (Eq, Ord, Show, Read)
 
 data LInst

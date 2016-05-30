@@ -158,8 +158,9 @@ printTValRef :: LTValRef -> LLVMCode
 printTValRef (LTValRef t r) = printType t ++ " " ++ printValRef r
 
 printFunRef :: LFunRef -> LLVMCode
-printFunRef (LFunRef i args) =
-    printIdentFun i ++ parens (joinComma $ printTValRef <$> args)
+printFunRef (LFunRef dyn i args) =
+    pif i ++ parens (joinComma $ printTValRef <$> args)
+    where pif = if dyn then printLabRef else printIdentFun
 
 printInst :: LInst -> LLVMCode
 printInst = \case

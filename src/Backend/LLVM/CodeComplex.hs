@@ -48,7 +48,8 @@ compileSizeof t = assignTemp t (LGElemPtr (LTValRef t LNull) ione []) >>=
                   ptrToInt
 
 compileCalloc :: LTValRef -> LTValRef -> LComp LTValRef
-compileCalloc n sizeof = assignCall bytePType $ LFunRef "calloc" [n, sizeof]
+compileCalloc n sizeof = assignCall bytePType $
+                            LFunRef False "calloc" [n, sizeof]
 
 lenSize :: LTValRef
 lenSize = intTVR $ sizeofInt `div` 8

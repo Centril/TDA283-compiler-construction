@@ -34,6 +34,7 @@ module Backend.LLVM.CodeExpr where
 import Data.List
 import Data.Tuple
 import Data.Maybe
+import qualified Data.Map as M
 
 import Control.Monad
 
@@ -49,6 +50,8 @@ import Backend.LLVM.Environment
 import Backend.LLVM.Types
 import Backend.LLVM.CodeDSL
 import Backend.LLVM.CodeComplex
+
+import Frontend.Environment as F
 
 compileCondExpr :: ExprA -> LLabelRef -> LLabelRef -> LComp ()
 compileCondExpr c _then _else = compileExpr c >>= condBr _then _else
@@ -111,30 +114,66 @@ compileCastNull = compileType >$> flip LTValRef LNull
 
 compileApp :: ASTAnots -> Ident -> [ExprA] -> LComp LTValRef
 compileApp anots name es = do
-    fr <- LFunRef (_ident name) <$> mapM compileExpr es
-    compileAnotType anots >>= \case
+    fr <- LFunRef False (_ident name) <$> mapM compileExpr es
+    compileAnotType anots >>= callFSwitch fr
+
+callFSwitch :: LFunRef -> LType -> LComp LTValRef
+callFSwitch fr = \case
         LVoid -> vcall fr
         rtyp  -> assignCall rtyp fr
 
 compileMApp :: ASTAnots -> LValueA -> Ident -> [ExprA] -> LComp LTValRef
 compileMApp anots lv mname es = do
-    let typ  =  extractType lv
-    cls      <- getClass $ _tIdent typ
-{-
-    meth     <- getMethod mname cls
-    let virt = extractVirt $ snd meth
-    les      <- mapM compileExpr es
-    memObj   <- compileLVal lv
-    let dispatch = if virt then compileCallDyn else compileCallStatic
-    dispatch cls meth memObj les
--}
-    return u
+    let typ  = extractType lv
+    cls     <- getClass $ _tIdent typ
+    let meth = getMethod mname cls
+    let virt = extractVirt $ fst $ snd meth
+    les     <- mapM compileExpr es
+    this    <- compileLVal lv
+    let dispatch = if virt then compileCallDynamic else compileCallStatic
+    dispatch cls meth this les
 
-compileCallDyn cls meth mem les = do
-    return u
+hasVirtual :: [F.ClassInfo] -> Bool
+hasVirtual cls = or $ extractVirt <$> (cls >>= M.elems . F._ciMethods)
 
-compileCallStatic cls meth mem les = do
-    return u
+nameMethod :: F.ClassInfo -> FnDefA -> LIdent
+nameMethod cl fn = _ident (F._ciIdent cl) ++ "__" ++ _ident (_fIdent fn)
+
+compileCallStatic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
+                  -> LTValRef -> LTValRefs
+                  -> LComp LTValRef
+compileCallStatic cls (ix, (fn, cl)) this les = do
+    let name = nameMethod cl fn
+    let fr   = LFunRef False name (this : les)
+    lrtyp   <- compileType $ _fRetTyp fn
+    callFSwitch fr lrtyp
+
+nameVTable :: String -> String
+nameVTable name = name ++ "__vtable"
+
+vtableOf :: LType -> LType
+vtableOf (LAlias alias) = LAlias $ nameVTable alias
+
+compileCallDynamic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
+                  -> LTValRef -> LTValRefs
+                  -> LComp LTValRef
+compileCallDynamic cls (ix, (fn, cl)) this les = do
+    let ltyp  = _lTType this
+    -- load vtable:
+    let vttyp = vtableOf ltyp
+    vtabref  <- assignPtr vttyp $ deref [izero] this
+    vtable   <- load vttyp vtabref
+    -- load method:
+    ftyp     <- compileType $ toFnPtr fn
+    methref  <- assignPtr ftyp  $ deref [intTVR ix] vtable
+    methload <- load ftyp methref
+    -- call method:
+    let fr   = LFunRef True (_lRIdent $ _lTVRef methload) (this : les)
+    lrtyp   <- compileType $ _fRetTyp fn
+    callFSwitch fr lrtyp
+
+toFnPtr :: FnDefA -> TypeA
+toFnPtr fn = let FunSig args ret = F.toFnSig fn in Fun emptyAnot ret args
 
 compileInDeCr :: LValueA -> (ASTAnots -> AddOpA) -> Bool -> LComp LTValRef
 compileInDeCr lval op isPre = do

@@ -27,7 +27,7 @@ Portability : ALL
 
 Operating environment of LLVM Backend in Javalette compiler.
 -}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, TupleSections #-}
 
 module Backend.LLVM.Environment (
     -- * Modules
@@ -145,11 +145,11 @@ getClass' name  = do
     (node, graph) <- uses classGraph $ first (M.! name)
     return $ fromJust $ GF.lab graph node
 
-getMethod :: Ident -> [F.ClassInfo] -> (Integer, FnDefA)
+getMethod :: Ident -> [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
 getMethod name cls =
-    let meths = zip [0..] $ nubBy ((==) |. _fIdent) $
-                    cls >>= M.elems . F._ciMethods
-    in fromJust $ find ((name ==) . _fIdent . snd) meths
+    let meths0 = cls >>= \cl -> fmap (,cl) $ M.elems $ F._ciMethods cl
+        meths1 = zip [0..] $ nubBy ((==) |. (_fIdent . fst)) meths0
+    in fromJust $ find ((name ==) . _fIdent . fst . snd) meths1
 
 --------------------------------------------------------------------------------
 -- Alias operations:
