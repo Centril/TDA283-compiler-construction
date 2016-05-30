@@ -59,6 +59,8 @@ import Backend.LLVM.CodeComplex
 import Backend.LLVM.CodeExpr
 import Backend.LLVM.Print
 
+import Frontend.Environment as F
+
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 
@@ -77,13 +79,26 @@ predefDecls =
     , LFunDecl doubType  "readDouble"  []]
 
 compileFuns :: ProgramA -> LComp LFunDefs
-compileFuns = intoProg _TFnDef $ \(FnDef _ rtyp name args block) -> do
+compileFuns = intoProg _TFnDef $ \(FnDef _ rtyp name args block) ->
+    compileFun name rtyp args block
+
+compileFun :: Ident -> TypeA -> [ArgA] -> BlockA -> LComp LFunDef
+compileFun name rtyp args block = do
     let name'  = compileFName name
     rtyp'     <- compileFRTyp rtyp
     args'     <- mapM compileFArg args
     insts     <- compileFBlock args block
     let insts' = insts ++ unreachableMay block
     return $ LFunDef rtyp' name' args' insts'
+
+compileClasses :: [F.ClassInfo] -> LComp LFunDefs
+compileClasses = u
+
+compileClass :: F.ClassInfo -> LComp LFunDefs
+compileClass cl = u
+
+compileMethods :: ProgramA -> Ident -> LComp LFunDefs
+compileMethods = u
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $

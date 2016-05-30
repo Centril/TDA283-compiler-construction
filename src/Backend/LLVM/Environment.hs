@@ -100,23 +100,25 @@ type LATypeMap = M.Map LAliasRef LType
 
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
-      _constants  :: LConstGlobals -- ^ Accumulated list of constants.
-    , _constCount :: Int           -- ^ Counter for constants.
-    , _tempCount  :: Int           -- ^ Counter for temporary SSA in LLVM.
-    , _labelCount :: Int           -- ^ Counter for labels.
-    , _aliasCount :: Int           -- ^ Count of aliases.
-    , _aliasConvs :: LAConvMap     -- ^ Alias convertion map.
-    , _aliasTypes :: LATypeMap     -- ^ Alias type map.
-    , _structDefs :: StructDefMap  -- ^ Struct defs, copied from TCEnv.
-    , _classGraph :: F.ClassDAG    -- ^ Class graph.
-    , _insts      :: LInsts }      -- ^ Accumulated instructions.
+      _constants  :: LConstGlobals     -- ^ Accumulated list of constants.
+    , _constCount :: Int               -- ^ Counter for constants.
+    , _tempCount  :: Int               -- ^ Counter for temporary SSA in LLVM.
+    , _labelCount :: Int               -- ^ Counter for labels.
+    , _aliasCount :: Int               -- ^ Count of aliases.
+    , _aliasConvs :: LAConvMap         -- ^ Alias convertion map.
+    , _aliasTypes :: LATypeMap         -- ^ Alias type map.
+    , _structDefs :: StructDefMap      -- ^ Struct defs, copied from TCEnv.
+    , _classGraph :: F.ClassDAG        -- ^ Class graph.
+    , _currClass  :: Maybe F.ClassInfo -- ^ The classinfo the current class.
+    , _insts      :: LInsts }          -- ^ Accumulated instructions.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
 initialLEnv :: LEnv
-initialLEnv = LEnv [] 0 0 0 0 M.empty M.empty M.empty (M.empty, GF.empty) []
+initialLEnv =
+    LEnv [] 0 0 0 0 M.empty M.empty M.empty (M.empty, GF.empty) Nothing []
 
 --------------------------------------------------------------------------------
 -- Environment types:
