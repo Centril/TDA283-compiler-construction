@@ -114,6 +114,9 @@ outdeg = G.outdeg . unFlip
 pre :: G.Graph gr => Flip gr b a -> G.Node -> [G.Node]
 pre = G.pre . unFlip
 
+connected :: G.Graph gr => Flip gr e v -> G.Node -> G.Node -> Bool
+connected gr x y = x `elem` (fst <$> bfsL y gr)
+
 classGraphRoots :: G.Graph gr => Flip gr b a -> [G.LNode a] -> [G.Node]
 classGraphRoots gr = filter ((0 ==) . outdeg gr) . (fst <$>)
 
