@@ -41,7 +41,7 @@ module Backend.LLVM.Environment (
     initialLEnv,
 
     -- * Structs, Classes
-    getStructDef, getClass, getClass', getMethod,
+    getStructDef, getClass, getClass', getMethod, classGraph, currClass,
 
     -- ** Aliases
     bindAConv, insertAConv, getConv,

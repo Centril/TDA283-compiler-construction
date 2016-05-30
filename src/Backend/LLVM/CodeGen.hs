@@ -41,12 +41,14 @@ module Backend.LLVM.CodeGen (
 import Safe
 
 import Data.Maybe
+import qualified Data.Map as M
 
 import Control.Monad
 
 import Control.Lens hiding (Empty, op, uncons, to, pre, ix)
 
 import Utils.Monad
+import qualified Utils.GraphFlip as GF
 
 import Common.AST
 import Common.Annotations
@@ -59,13 +61,13 @@ import Backend.LLVM.CodeComplex
 import Backend.LLVM.CodeExpr
 import Backend.LLVM.Print
 
-import Frontend.Environment as F
+import qualified Frontend.Environment as F
 
 compileLLVM :: ProgramA -> LComp LLVMCode
 compileLLVM = compileLLVMAst >$> printLLVMAst
 
 compileLLVMAst :: ProgramA -> LComp LLVMAst
-compileLLVMAst = compileFuns >=>
+compileLLVMAst = compileFuns' >=>
     liftM4 LLVMAst getConsts allAliases (return predefDecls) . return
 
 predefDecls :: LFunDecls
@@ -77,6 +79,9 @@ predefDecls =
     , LFunDecl LVoid     "printString" [strType]
     , LFunDecl intType   "readInt"     []
     , LFunDecl doubType  "readDouble"  []]
+
+compileFuns' :: ProgramA -> LComp LFunDefs
+compileFuns' = liftM2 (++) compileClasses . compileFuns
 
 compileFuns :: ProgramA -> LComp LFunDefs
 compileFuns = intoProg _TFnDef $ \(FnDef _ rtyp name args block) ->
@@ -91,14 +96,28 @@ compileFun name rtyp args block = do
     let insts' = insts ++ unreachableMay block
     return $ LFunDef rtyp' name' args' insts'
 
-compileClasses :: [F.ClassInfo] -> LComp LFunDefs
-compileClasses = u
+compileClasses :: LComp LFunDefs
+compileClasses = use classGraph >>= \(conv, gr) -> do
+    let cls = reverse $ GF.topsort' gr
+    concat <$> mapM compileClass cls
 
 compileClass :: F.ClassInfo -> LComp LFunDefs
-compileClass cl = u
+compileClass cl = do
+    currClass .= Just cl
+    let cltyp = TRef emptyAnot $ F._ciIdent cl
+    funs   <- mapM (compileMethod cltyp cl) $ M.elems $ F._ciMethods cl
+    currClass .= Nothing
+    return funs
 
-compileMethods :: ProgramA -> Ident -> LComp LFunDefs
-compileMethods = u
+compileMethod :: TypeA -> F.ClassInfo -> FnDefA -> LComp LFunDef
+compileMethod cltyp cl meth@(FnDef _ rtyp name args block) = do
+    let name'  = nameMethod cl meth
+    rtyp'     <- compileFRTyp rtyp
+    this      <- compileFArg $ Arg emptyAnot cltyp $ Ident "this"
+    args1     <- mapM compileFArg args
+    insts     <- compileFBlock args block
+    let insts' = insts ++ unreachableMay block
+    return $ LFunDef rtyp' name' (this : args1) insts'
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $

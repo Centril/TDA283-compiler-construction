@@ -44,6 +44,7 @@ import Control.Arrow
 import Utils.Pointless
 import Utils.Foldable
 import Utils.Function
+import Utils.Monad
 
 newtype Flip f b a = Flip { unFlip :: f a b }
     deriving (Eq, Ord, Show, Read)
@@ -62,6 +63,9 @@ empty = Flip G.empty
 
 mkGraph :: G.Graph gr => [G.LNode a] -> [G.LEdge b] -> Flip gr b a
 mkGraph = Flip .| G.mkGraph
+
+labs :: G.Graph gr => Flip gr b a -> [a]
+labs = labNodes >$> snd
 
 labNodes :: G.Graph gr => Flip gr b a -> [G.LNode a]
 labNodes = G.labNodes . unFlip

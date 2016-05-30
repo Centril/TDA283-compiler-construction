@@ -144,7 +144,7 @@ nameMethod cl fn = _ident (F._ciIdent cl) ++ "__" ++ _ident (_fIdent fn)
 compileCallStatic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
                   -> LTValRef -> LTValRefs
                   -> LComp LTValRef
-compileCallStatic cls (ix, (fn, cl)) this les = do
+compileCallStatic _ (_, (fn, cl)) this les = do
     let name = nameMethod cl fn
     let fr   = LFunRef False name (this : les)
     lrtyp   <- compileType $ _fRetTyp fn
@@ -162,7 +162,7 @@ vtableOf _              = error "vtableOf no alias found"
 compileCallDynamic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
                   -> LTValRef -> LTValRefs
                   -> LComp LTValRef
-compileCallDynamic cls (ix, (fn, cl)) this les = do
+compileCallDynamic _ (ix, (fn, cl)) this les = do
     let ltyp  = _lTType this
     -- load vtable:
     let vttyp = vtableOf ltyp
