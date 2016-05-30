@@ -63,16 +63,10 @@ targetPreOpt      = targetTcX compilePO
 --------------------------------------------------------------------------------
 
 compileFrontend, compileAR, compilePO :: String -> TCComp ProgramA
-
-compileFrontend =
-    parseProgram <<=> infoP Parser "AST after parse" >=>
-    typeCheck    <<=> phaseEnd TypeChecker
-
-compileAR = (compileFrontend >=> alphaRename)
-            <<=> infoP AlphaRenamer "AST after alpha rename"
-
-compilePO = (compileAR >$> preOptimize)
-            <<=> infoP PreOptimizer "AST after pre optimizing"
+compileFrontend = parseProgram                <<=> phaseEnd Parser >=>
+                  typeCheck                   <<=> phaseEnd TypeChecker
+compileAR = (compileFrontend >=> alphaRename) <<=> phaseEnd AlphaRenamer
+compilePO = (compileAR >$> preOptimize)       <<=> phaseEnd PreOptimizer
 
 --------------------------------------------------------------------------------
 -- Utilities:
