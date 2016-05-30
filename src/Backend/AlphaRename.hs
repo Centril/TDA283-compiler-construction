@@ -90,9 +90,6 @@ alphaRename p = do
 arX :: (a -> ARComp c) -> a -> c
 arX f = flip evalState (AREnv M.empty [] 0) . f
 
-prereservedIdents :: [Ident]
-prereservedIdents = Ident <$> ["self", "this"]
-
 -- hlint is wrong, brackets are NOT redundant.
 arClass :: ClassInfo -> ARComp ClassInfo
 arClass = mapM_ bindMagic prereservedIdents                 >>.

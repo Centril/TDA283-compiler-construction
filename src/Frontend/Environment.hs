@@ -46,7 +46,7 @@ module Frontend.Environment (
     extendTypeName, lookupTypeName,
     extendStruct, lookupStruct, structs,
     ciIdent, ciHierarchy, ciMethods, ciFields, ciFieldsDer,
-    lookupClass, lookupMethod, classGraph
+    lookupClass, lookupMethod, classGraph, inClass
 ) where
 
 import Prelude hiding (lookup)
@@ -151,6 +151,7 @@ data TCEnv = TCEnv {
       _reserved   :: ReservedTypes  -- ^ Map of reserved type names -> TypeA.
     , _structs    :: StructDefMap   -- ^ Map of type names -> StructDefA
     , _classGraph :: ClassDAG       -- ^ Class graph.
+    , _inClass    :: Bool           -- ^ Are we inside a class at the moment?
     , _functions  :: FnSigMap       -- ^ Map of ident -> function signatures.
     , _contexts   :: Contexts }     -- ^ Stack of contexts.
     deriving (Eq, Show, Read)
@@ -160,7 +161,7 @@ concat <$> mapM (\n -> (++) <$> makeLenses n <*> makePrisms n)
 
 -- | 'initialTCEnv': The initial empty typechecker environment.
 initialTCEnv :: TCEnv
-initialTCEnv = TCEnv M.empty M.empty (M.empty, GF.empty) M.empty [M.empty]
+initialTCEnv = TCEnv M.empty M.empty (M.empty, GF.empty) False M.empty [M.empty]
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:
@@ -176,7 +177,8 @@ type TCComp a = Comp TCEnv a
 -- Type operations:
 --------------------------------------------------------------------------------
 
-lookupMethod :: (Ident -> TCComp FnDefA) -> Ident -> [ClassInfo] -> TCComp FnDefA
+lookupMethod :: Monad m => (Ident -> m FnDefA)
+             -> Ident -> [ClassInfo] -> m FnDefA
 lookupMethod onErr name cls =
     let meth = cls >>= M.elems . _ciMethods
     in maybeErr (onErr name) (find ((name ==) . _fIdent) meth)

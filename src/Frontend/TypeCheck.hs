@@ -98,6 +98,7 @@ typeCheck prog0 = do
     -- Part 6: Type check the program
     tinfo   "Type checking the program"
     prog4 <- checkProg prog3
+    checkClasses
     -- Part 7: Return check the program.
     info ReturnChecker "Return checking the program"
     returnCheck prog4
@@ -189,8 +190,8 @@ cgBindInherit cmap cgni edges cl =
 
 computeCIMap :: ProgramA -> TCComp [(Ident, ClassInfo)]
 computeCIMap = intoProg _TClassDef $ \(ClassDef _ name hier parts_) -> do
-    props   <- checkFields  classDupProps   name (sndsOfPrism _ClassProp parts_)
-    methods <- checkMethods classDupMethods name (sndsOfPrism _MethodDef parts_)
+    props   <- checkFields    classDupProps   name (sndsOfPrism _ClassProp parts_)
+    methods <- collectMethods classDupMethods name (sndsOfPrism _MethodDef parts_)
     extendTypeName typeIsReserved name (appConcrete $ flip TRef name)
     return (name, ClassInfo
            { _ciIdent     = name
@@ -199,11 +200,24 @@ computeCIMap = intoProg _TClassDef $ \(ClassDef _ name hier parts_) -> do
            , _ciMethods   = M.fromList $ (_fIdent &&& id) <$> methods
            , _ciHierarchy = hier ^? chIdent })
 
-checkMethods :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
+collectMethods :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
              ->  t -> [FnDefA] -> TCComp [FnDefA]
-checkMethods onErr name methods = do
+collectMethods onErr name methods = do
     checkNoDups onErr _fIdent name methods
     mapM checkFunSignature methods
+
+checkClasses :: TCComp ()
+checkClasses = classGraph %>= \(convs, gr) ->
+    (convs,) <$> mapM checkMethods gr
+
+checkMethods :: ClassInfo -> TCComp ClassInfo
+checkMethods cl = do
+    inClass .= True
+    cltyp <- lookupTypeName (error "checkMethods: never happens") $ _ciIdent cl
+    sInScope contexts $ do
+        mapM_ extendProp $ _ciFields cl
+        mapM_ (extendSelf cltyp) prereservedIdents
+        (ciMethods %%~ mapM checkFun $ cl) <* (inClass .= False)
 
 --------------------------------------------------------------------------------
 -- Classes (Fields):
@@ -258,9 +272,11 @@ markVirtual n f = pure . IM.insertWith M.union n (M.singleton (_fIdent f) True)
 --------------------------------------------------------------------------------
 
 checkProg :: ProgramA -> TCComp ProgramA
-checkProg = pTopDefs %%~ mapM . toFnDef %%~ \fun ->
-    sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
-    (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
+checkProg = pTopDefs %%~ mapM . toFnDef %%~ checkFun
+
+checkFun :: FnDefA -> TCComp FnDefA
+checkFun fun = sPushM contexts >> mapM_ extendArg (_fArgs fun) >>
+               (fBlock %%~ checkBlock (_fRetTyp fun) $ fun)
 
 checkBlock :: TypeA -> BlockA -> TCComp BlockA
 checkBlock rtyp block = (bStmts %%~ mapM (checkStm rtyp) $ block) <*
@@ -307,11 +323,23 @@ checkDecls decl = do
     where single vt it = checkDeclItem vt it <* extendLocal vt (_iIdent it)
 
 checkDeclItem :: TypeA -> ItemA -> TCComp ItemA
-checkDeclItem _    item@(NoInit _ _) = return item
-checkDeclItem vtyp item              = iExpr %%~ checkExp vtyp $ item
+checkDeclItem vtyp item = do
+    let name = _iIdent item
+    iclass <- use inClass
+    when (iclass && name `elem` prereservedIdents) $ canNotRedeclareIdent name
+    case item of
+        NoInit {} -> return item
+        _         -> iExpr %%~ checkExp vtyp $ item
 
 extendArg :: ArgA -> TCComp ()
 extendArg a = extendVar' argAlreadyDef $ Var (_aIdent a) (_aTyp a) VSArg 0
 
 extendLocal :: TypeA -> Ident -> TCComp ()
 extendLocal typ name = extendVar' varAlreadyDef $ Var name typ VSLocal 0
+
+extendProp :: SFieldA -> TCComp ()
+extendProp sf = extendVar' (error "extendProp: should never happen.")
+                    $ Var (_sfIdent sf) (_sfType sf) VSProp 0
+
+extendSelf :: TypeA -> Ident -> TCComp ()
+extendSelf typ name = extendVar' varAlreadyDef $ Var name typ VSThis 0

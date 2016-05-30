@@ -47,7 +47,7 @@ module Common.Annotations (
     -- * Operations
 
     -- ** General
-    toWillExecute, showKind, showVS,
+    toWillExecute, showKind, showVS, prereservedIdents,
     emptyAnot, appConcrete, defaultVal,
 
     -- ** Prisms, Lenses
@@ -145,14 +145,19 @@ toWillExecute Nothing      = Unknown
 --------------------------------------------------------------------------------
 
 -- | 'VarSource': Annotation for a source of an 'EVar'.
-data VarSource = VSArg | VSLocal
-    deriving (Eq, Ord, Enum, Show, Read, Data, Typeable)
+data VarSource = VSArg | VSLocal | VSProp | VSThis
+    deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 makePrisms ''VarSource
 
 showVS :: VarSource -> String
 showVS VSArg   = "argument"
 showVS VSLocal = "variable"
+showVS VSThis  = "class"
+showVS VSProp  = "property"
+
+prereservedIdents :: [Ident]
+prereservedIdents = Ident <$> ["self", "this"]
 
 --------------------------------------------------------------------------------
 -- Annotations:
@@ -230,7 +235,7 @@ instance Shrinkable TypeA where
                                    else b
 
 isPointable :: Type a -> Bool
-isPointable x = any ($ x) [is _Array, is _TStruct]
+isPointable x = any ($ x) [is _Array, is _TStruct, is _TRef]
 
 notArray :: Type a -> Bool
 notArray = isn't _Array

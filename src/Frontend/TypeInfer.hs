@@ -136,6 +136,7 @@ inferLVal lval = case lval of
     LValueS _ lvl lvr -> do
         (lvl', ltyp) <- inferLVal lvl
         case ltyp of
+            -- TODO FIX FOR CLASSES
             Array   {}      -> do
                 unless (isLVLength lvr) (arrayNotStruct ltyp)
                 addTyp' lval { _lvLLVal = lvl' } int

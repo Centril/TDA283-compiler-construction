@@ -55,26 +55,27 @@ compileCondExpr c _then _else = compileExpr c >>= condBr _then _else
 
 compileExpr :: ExprA -> LComp LTValRef
 compileExpr = \case
-    ENew      a _ ds  -> compileENew a ds
-    EVar      a lval  -> compileEVar a lval
-    ELitInt   _ v     -> return $ intTVR  v
-    ELitDoub  _ v     -> return $ doubTVR v
-    EString   _ v     -> compileCString   v
-    ELitTrue  _       -> return ltrue
-    ELitFalse _       -> return lfalse
-    ECastNull _ t     -> compileCastNull t
-    EApp      a i es  -> compileApp a i es
-    Incr      _ lval  -> compileInDeCr lval Plus  False
-    Decr      _ lval  -> compileInDeCr lval Minus False
-    PreIncr   _ lval  -> compileInDeCr lval Plus  True
-    PreDecr   _ lval  -> compileInDeCr lval Minus True
-    Neg       _ e     -> compileNeg e
-    Not       _ e     -> compileNot e
-    EMul      _ l o r -> compileMul  o l r
-    EAdd      _ l o r -> compileAdd  o l r
-    ERel      _ l o r -> compileLRel o l r
-    EAnd      _ l   r -> compileLBin l r 0 "land"
-    EOr       _ l   r -> compileLBin l r 1 "lor"
+    ENew      a _ ds    -> compileENew a ds
+    EVar      a lval    -> compileEVar a lval
+    ELitInt   _ v       -> return $ intTVR  v
+    ELitDoub  _ v       -> return $ doubTVR v
+    EString   _ v       -> compileCString   v
+    ELitTrue  _         -> return ltrue
+    ELitFalse _         -> return lfalse
+    ECastNull _ t       -> compileCastNull t
+    EApp      a i es    -> compileApp a i es
+    EMApp     a lv m es -> compileMApp a lv m es
+    Incr      _ lval    -> compileInDeCr lval Plus  False
+    Decr      _ lval    -> compileInDeCr lval Minus False
+    PreIncr   _ lval    -> compileInDeCr lval Plus  True
+    PreDecr   _ lval    -> compileInDeCr lval Minus True
+    Neg       _ e       -> compileNeg e
+    Not       _ e       -> compileNot e
+    EMul      _ l o r   -> compileMul  o l r
+    EAdd      _ l o r   -> compileAdd  o l r
+    ERel      _ l o r   -> compileLRel o l r
+    EAnd      _ l   r   -> compileLBin l r 0 "land"
+    EOr       _ l   r   -> compileLBin l r 1 "lor"
 
 compileENew :: ASTAnots -> [DimEA] -> LComp LTValRef
 compileENew = compileNew . getType
@@ -113,6 +114,26 @@ compileApp anots name es = do
     compileAnotType anots >>= \case
         LVoid -> vcall fr
         rtyp  -> assignCall rtyp fr
+
+compileMApp :: ASTAnots -> LValueA -> Ident -> [ExprA] -> LComp LTValRef
+compileMApp anots lv mname es = do
+    let typ  =  extractType lv
+    cls      <- getClass $ _tIdent typ
+{-
+    meth     <- getMethod mname cls
+    let virt = extractVirt $ snd meth
+    les      <- mapM compileExpr es
+    memObj   <- compileLVal lv
+    let dispatch = if virt then compileCallDyn else compileCallStatic
+    dispatch cls meth memObj les
+-}
+    return u
+
+compileCallDyn cls meth mem les = do
+    return u
+
+compileCallStatic cls meth mem les = do
+    return u
 
 compileInDeCr :: LValueA -> (ASTAnots -> AddOpA) -> Bool -> LComp LTValRef
 compileInDeCr lval op isPre = do

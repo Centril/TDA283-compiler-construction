@@ -39,7 +39,9 @@ module Backend.LLVM.Environment (
 
     -- * Operations
     initialLEnv,
-    getStructDef,
+
+    -- * Structs, Classes
+    getStructDef, getClass, getMethod,
 
     -- ** Aliases
     bindAConv, insertAConv, getConv,
@@ -60,13 +62,18 @@ module Backend.LLVM.Environment (
 
 import Prelude hiding (lookup)
 
+import Data.List
 import Data.Maybe
-import Data.Map (Map, empty, insert, lookup, toList, (!))
+import qualified Data.Map as M
+
+import Control.Arrow
 
 import Control.Lens hiding (Context, contexts, pre)
 
 import Utils.Foldable
 import Utils.Monad
+import qualified Utils.GraphFlip as GF
+import Utils.Pointless
 
 import Common.AST
 import Common.Annotations
@@ -75,38 +82,41 @@ import Common.StateOps
 
 import Backend.LLVM.AST
 
+import qualified Frontend.Environment as F
+
 --------------------------------------------------------------------------------
 -- Operating Environment:
 --------------------------------------------------------------------------------
 
 -- | 'StructDefMap': Map from struct type names to its fields.
-type StructDefMap = Map Ident [SFieldA]
+type StructDefMap = M.Map Ident [SFieldA]
 
 -- | 'LAConvMap': TypeA in Javalette AST -> alias references in LLVM.
-type LAConvMap = Map TypeA LAliasRef
+type LAConvMap = M.Map TypeA LAliasRef
 
 -- | 'LAliasMap': map from a type in Javalette AST to aliases and the
 -- corresponding 'LType'.
-type LATypeMap = Map LAliasRef LType
+type LATypeMap = M.Map LAliasRef LType
 
 -- | 'LEnv': The operating environment of the LLVM computation.
 data LEnv = LEnv {
-    _constants  :: LConstGlobals,   -- ^ Accumulated list of constants.
-    _constCount :: Int,             -- ^ Counter for constants.
-    _tempCount  :: Int,             -- ^ Counter for temporary SSA in LLVM.
-    _labelCount :: Int,             -- ^ Counter for labels.
-    _aliasCount :: Int,             -- ^ Count of aliases.
-    _aliasConvs :: LAConvMap,       -- ^ Alias convertion map.
-    _aliasTypes :: LATypeMap,       -- ^ Alias type map.
-    _structDefs :: StructDefMap,    -- ^ Struct defs, copied from TCEnv.
-    _insts      :: LInsts }         -- ^ Accumulated instructions.
+      _constants  :: LConstGlobals -- ^ Accumulated list of constants.
+    , _constCount :: Int           -- ^ Counter for constants.
+    , _tempCount  :: Int           -- ^ Counter for temporary SSA in LLVM.
+    , _labelCount :: Int           -- ^ Counter for labels.
+    , _aliasCount :: Int           -- ^ Count of aliases.
+    , _aliasConvs :: LAConvMap     -- ^ Alias convertion map.
+    , _aliasTypes :: LATypeMap     -- ^ Alias type map.
+    , _structDefs :: StructDefMap  -- ^ Struct defs, copied from TCEnv.
+    , _classGraph :: F.ClassDAG    -- ^ Class graph.
+    , _insts      :: LInsts }      -- ^ Accumulated instructions.
     deriving (Eq, Show, Read)
 
 makeLenses ''LEnv
 
 -- | 'initialLEnv': The initial empty LLVM environment.
 initialLEnv :: LEnv
-initialLEnv = LEnv [] 0 0 0 0 empty empty empty []
+initialLEnv = LEnv [] 0 0 0 0 M.empty M.empty M.empty (M.empty, GF.empty) []
 
 --------------------------------------------------------------------------------
 -- Environment types:
@@ -119,11 +129,22 @@ type IOLComp a = IOComp LEnv a
 type LComp a = Comp LEnv a
 
 --------------------------------------------------------------------------------
--- Struct operations:
+-- Class, Struct operations:
 --------------------------------------------------------------------------------
 
 getStructDef :: Ident -> LComp [SFieldA]
-getStructDef name = uses structDefs (! name)
+getStructDef name = uses structDefs (M.! name)
+
+getClass :: Ident -> LComp [F.ClassInfo]
+getClass name = do
+    (node, graph) <- uses classGraph $ first (M.! name)
+    return $ snd <$> GF.bfsL node graph
+
+getMethod :: Ident -> [F.ClassInfo] -> (Integer, FnDefA)
+getMethod name cls =
+    let meths = zip [0..] $ nubBy ((==) |. _fIdent) $
+                    cls >>= M.elems . F._ciMethods
+    in fromJust $ find ((name ==) . _fIdent . snd) meths
 
 --------------------------------------------------------------------------------
 -- Alias operations:
@@ -133,25 +154,25 @@ bindAConv :: TypeA -> LType -> LComp LAliasRef
 bindAConv orig conv = bindAlias conv <<= insertAConv orig
 
 insertAConv :: TypeA -> LAliasRef -> LComp ()
-insertAConv orig = (aliasConvs %=) . insert orig
+insertAConv orig = (aliasConvs %=) . M.insert orig
 
 getConv :: TypeA -> LComp (Maybe LAliasRef)
-getConv = uses aliasConvs . lookup
+getConv = uses aliasConvs . M.lookup
 
 bindAlias :: LType -> LComp LAliasRef
 bindAlias typ = newAlias <<= flip insertAlias typ
 
 insertAlias :: LAliasRef -> LType -> LComp ()
-insertAlias alias typ = aliasTypes %= insert alias typ
+insertAlias alias typ = aliasTypes %= M.insert alias typ
 
 newAlias :: LComp LAliasRef
 newAlias = freshOf "talias" aliasCount
 
 getAlias :: LAliasRef -> LComp (Maybe LType)
-getAlias = uses aliasTypes . lookup
+getAlias = uses aliasTypes . M.lookup
 
 allAliases :: LComp LAliases
-allAliases = uses aliasTypes toList
+allAliases = uses aliasTypes M.toList
 
 --------------------------------------------------------------------------------
 -- Temporary SSA operations:

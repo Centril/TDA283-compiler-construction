@@ -200,3 +200,7 @@ classDoesntHaveMethod mname =
 
 methAppOnNotClass :: TypeA -> TCComp a
 methAppOnNotClass typ = terr' ["Method call on non-class type", show typ]
+
+canNotRedeclareIdent :: Ident -> TCComp a
+canNotRedeclareIdent name =
+    terr' ["Can not redeclare special identifier", _ident name]

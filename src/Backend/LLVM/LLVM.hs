@@ -52,11 +52,10 @@ import Utils.Monad
 import Common.Computation
 import Common.FileOps
 
-import Frontend.TypeCheck
-
 import Backend.PreGen
-
 import Backend.LLVM.CodeGen
+
+import qualified Frontend.TypeCheck as F
 
 targetLLVM :: JlcTarget
 targetLLVM opts = evalIOComp compileLLIO opts initialLEnv
@@ -80,10 +79,11 @@ compileLL = fkeep (readF >=> rebase . compile) >=> \(orig, ll) ->
     view llIntermed >>= flip when (writeF (orig -<.> "ll") ll) >> return ll
 
 compile :: String -> LComp LLVMCode
-compile = flip (transST carryTC . compilePO) initialTCEnv >=> compileLLVM
+compile = flip (transST carryTC . compilePO) F.initialTCEnv >=> compileLLVM
 
-carryTC :: ((a, LEnv), TCEnv) -> (a, LEnv)
-carryTC ((a, lEnv), tcEnv) = (a, lEnv { _structDefs = _structs tcEnv } )
+carryTC :: ((a, LEnv), F.TCEnv) -> (a, LEnv)
+carryTC ((a, lEnv), tcEnv) = (a, lEnv { _structDefs = F._structs    tcEnv
+                                      , _classGraph = F._classGraph tcEnv } )
 
 llvmAssemble :: FilePath -> Int -> LLVMCode -> IOLComp FilePath
 llvmAssemble tmp count ll = let fp = bcFile tmp $ show count
