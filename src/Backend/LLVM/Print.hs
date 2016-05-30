@@ -73,16 +73,16 @@ unlineFun :: (a -> String) -> [a] -> String
 unlineFun = unlines .| (<$>)
 
 printConstGlobal :: LConstGlobal -> LLVMCode
-printConstGlobal (LConstGlobal i t v) =
-    unwords [printIdentFun i, "=", "global", printType t, printValue v]
+printConstGlobal (LConstGlobal i (LTValRef t v)) =
+    unwords [printIdentFun i, "=", "global", printType t, content]
+    where content = case v of
+                    LConst str  -> printValue str
+                    LVArray vrs -> block $ unlines $ printVTable <$> vrs
 
-printVTableGlobal :: LIdent -> [(LType, LIdent)] -> LLVMCode
-printVTableGlobal ident methods =
-    unwords [printIdentFun ident, "=", "global", printType (LAlias ident),
-             block $ unlines $ printVTableDefs <$> methods]
-
-printVTableDefs :: (LType, LIdent) -> LLVMCode
-printVTableDefs (typ, ident) = unwords [" ", printType typ, printIdentFun ident]
+printVTable :: LTValRef -> LLVMCode
+printVTable (LTValRef t vr) = case vr of
+    (LConst i) -> unwords [" ", printType t, printIdentFun i]
+    _          -> error "printVTableDefs Invalid global value"
 
 printAlias :: LAlias -> LLVMCode
 printAlias (r, t) = unwords [printAliasRef r, "=", "type", printType t]
@@ -244,5 +244,5 @@ printLabRef lr = "%" ++ lr
 printIdentFun :: LIdent -> LLVMCode
 printIdentFun i = "@" ++ i
 
-printValue :: LValue -> LLVMCode
+printValue :: LIdent -> LLVMCode
 printValue str = "c\"" ++  str ++ "\\00\""
