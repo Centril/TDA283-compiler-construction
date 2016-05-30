@@ -32,10 +32,12 @@ Type inference for Javalette compiler.
 
 module Frontend.TypeInfer (
     -- * Operations
-    inferExp, inferType, inferLVal
+    inferExp, inferType, inferLVal, checkExp
 ) where
 
 import Data.List
+import qualified Utils.GraphFlip as GF
+import qualified Data.Map        as M
 
 import Control.Arrow
 import Control.Monad
@@ -67,6 +69,13 @@ inferType typ = do
 -- Type inference:
 --------------------------------------------------------------------------------
 
+checkExp :: TypeA -> ExprA -> TCComp ExprA
+checkExp texpected expr = do
+    (expr', tactual) <- inferExp expr
+    assignableTo tactual texpected
+        >>= flip unless (wrongExpTyp expr texpected tactual)
+    return expr'
+
 inferExp :: ExprA -> TCComp (ExprA, TypeA)
 inferExp expr = case expr of
     ENew      {} -> inferENew expr
@@ -78,6 +87,7 @@ inferExp expr = case expr of
     ELitFalse _  -> lit bool
     ECastNull {} -> inferCastNull expr
     EApp      {} -> inferFun expr
+    EMApp     {} -> inferMeth expr
     Incr      {} -> iid
     Decr      {} -> iid
     PreIncr   {} -> iid
@@ -109,14 +119,13 @@ inferENew expr = do
     addTyp' (expr { _eDimEs = dims, _eTyp = bt }) typ
 
 inferEVar :: ExprA -> TCComp (ExprA, TypeA)
-inferEVar expr = do
-    (lval, typ) <- inferLVal $ _eLVal expr
-    addTyp' expr { _eLVal = lval } typ
+inferEVar expr = first (flip (eLVal .~) expr) <$> inferLVal (_eLVal expr)
+                 >>= uncurry addTyp'
 
 checkEVar :: [TypeA] -> ExprA -> TCComp (ExprA, TypeA)
 checkEVar allowed expr = do
     r@(_, typ) <- inferEVar expr
-    unless (typ `elem` allowed) (wrongExprTyp expr allowed typ)
+    unlessAssignableAny typ allowed $ wrongExprTyp expr allowed typ
     return r
 
 inferIncrDecr :: ExprA -> TCComp (ExprA, TypeA)
@@ -173,7 +182,7 @@ inferAccInts = mapM $ deExpr %%~ inferAccInt
 inferAccInt :: ExprA -> TCComp ExprA
 inferAccInt expr = do
     (expr', typ) <- inferExp expr
-    unless (typ == int) (accArrNotInt typ) >> return expr'
+    unlessAssignable typ int (accArrNotInt typ) >> return expr'
 
 relOp :: RelOpA -> TypeA -> Bool
 relOp oper | oper `elem` (($ emptyAnot) <$> [NE, EQU]) = const True
@@ -185,23 +194,71 @@ mulOp oper | oper == Mod emptyAnot = [int]
 
 inferBin :: (TypeA -> TypeA) -> ExprA -> (TypeA -> Bool) -> TCComp (ExprA, TypeA)
 inferBin mTyp expr acceptf = do
+    tinfo "inferBin"
+
+
     (exprl', typl) <- inferExp $ _eLExpr expr
     (exprr', typr) <- inferExp $ _eRExpr expr
-    if typl == typr && acceptf typl
-        then addTyp' (expr { _eLExpr = exprl', _eRExpr = exprr'}) (mTyp typl)
-        else wrongBinExp (_eLExpr expr) (_eRExpr expr) typl typr
+    refl1 <- assignableTo typl typr
+    refl2 <- assignableTo typr typl
+
+    tinfoP "refl1" refl1
+    tinfoP "refl2" refl2
+    tinfoP "unless" $ (refl1 || refl2) && acceptf typl
+
+    unless ((refl1 || refl2) && acceptf typl) $
+        wrongBinExp (_eLExpr expr) (_eRExpr expr) typl typr
+    addTyp' (expr { _eLExpr = exprl', _eRExpr = exprr'}) (mTyp typl)
 
 inferUnary :: ExprA -> [TypeA] -> TCComp (ExprA, TypeA)
 inferUnary expr accept = do
     (expr', etyp) <- inferExp $ _eExpr expr
-    if etyp `elem` accept
-        then addTyp' (expr {_eExpr = expr'}) etyp
-        else wrongUnaryExp expr accept etyp
+    unlessAssignableAny etyp accept $ wrongUnaryExp expr accept etyp
+    addTyp' (expr {_eExpr = expr'}) etyp
 
 inferFun :: ExprA -> TCComp (ExprA, TypeA)
 inferFun expr = do
-    FunSig texpected rtype <- lookupFunE $ _eIdent expr
+    sig <- lookupFunE $ _eIdent expr
+    inferFunX expr sig
+
+inferFunX :: ExprA -> FunSig -> TCComp (ExprA, TypeA)
+inferFunX expr (FunSig texpected rtype) = do
     (exprs', tactual)      <- mapAndUnzipM inferExp $ _eAppExprs expr
-    if texpected == tactual
-        then addTyp' (expr { _eAppExprs = exprs' }) rtype
-        else wrongArgsTyp (_eIdent expr) texpected tactual
+    unlessAssignableAll tactual texpected $
+        wrongArgsTyp (_eIdent expr) texpected tactual
+    addTyp' (expr { _eAppExprs = exprs' }) rtype
+
+inferMeth :: ExprA -> TCComp (ExprA, TypeA)
+inferMeth expr = do
+    (lv, lvtyp) <- inferLVal $ _eLVal expr
+    clName      <- maybeErr (methAppOnNotClass lvtyp) $ snd <$> lvtyp ^? _TRef
+    cls         <- lookupClass noSuchClass clName
+    meth        <- lookupMethod classDoesntHaveMethod (_eIdent expr) cls
+    inferFunX expr { _eLVal = lv } $ toFnSig meth
+
+--------------------------------------------------------------------------------
+-- Type assignability rules:
+--------------------------------------------------------------------------------
+
+unlessAssignableAny :: TypeA -> [TypeA] -> TCComp () -> TCComp ()
+unlessAssignableAny tfrom tto onNot = or <$> mapM (assignableTo tfrom) tto
+                                      >>= flip unless onNot
+
+unlessAssignableAll :: [TypeA] -> [TypeA] -> TCComp () -> TCComp ()
+unlessAssignableAll tfrom tto onNot = do
+    unless (length tfrom == length tto) onNot
+    and <$> zipWithM assignableTo tfrom tto >>= flip unless onNot
+
+unlessAssignable :: TypeA -> TypeA -> TCComp () -> TCComp ()
+unlessAssignable tfrom tto onNot = assignableTo tfrom tto >>= flip unless onNot
+
+assignableTo :: TypeA -> TypeA -> TCComp Bool
+assignableTo tfrom tto = case tfrom of
+    Array    _ bt ds -> (&& ds == _tDimTs tto) <$> assignableTo bt (_tTyp tto)
+    TRef     _ i     -> assignableClass i (_tIdent tto)
+    _                -> return $ tfrom == tto
+
+assignableClass :: Ident -> Ident -> TCComp Bool
+assignableClass ifrom_ ito_ = do
+    (conv, gr) <- uses classGraph $ first (M.!)
+    return $ GF.connected gr (conv ito_) (conv ifrom_)

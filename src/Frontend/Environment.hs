@@ -40,9 +40,9 @@ module Frontend.Environment (
     ClassInfo (..), ClassDAG, ClassGraph, ClassToCGNode, CGNode, CGEdge,
 
     -- * Operations
-    initialTCEnv, functions, contexts, toFunId,
+    initialTCEnv, functions, contexts,
     lookupVar', currUnused, extendVar',
-    lookupFun', extendFun',
+    lookupFun', extendFun', toFnSig, toFunId, toFnSigId,
     extendTypeName, lookupTypeName,
     extendStruct, lookupStruct, structs,
     ciIdent, ciHierarchy, ciMethods, ciFields, ciFieldsDer,
@@ -56,7 +56,7 @@ import Data.List (find)
 import Data.Maybe
 import qualified Data.Graph.Inductive as G
 import qualified Utils.GraphFlip as GF
-import Data.Map (Map, empty, lookup, insert, updateLookupWithKey, elems)
+import qualified Data.Map as M
 
 import Control.Lens hiding (Context, contexts, uncons)
 
@@ -73,7 +73,7 @@ import Common.Annotations as X
 --------------------------------------------------------------------------------
 
 -- | 'Context': A context for a scope, map from variables -> types.
-type Context = Map Ident Var
+type Context = M.Map Ident Var
 
 -- | 'Contexts': List of 'Context'
 type Contexts = [Context]
@@ -97,28 +97,34 @@ data FunId = FunId { fident :: Ident, fsig :: FunSig}
     deriving (Eq, Show, Read)
 
 -- | 'FnSigMap': Map of function identifiers -> signatures.
-type FnSigMap = Map Ident FunSig
+type FnSigMap = M.Map Ident FunSig
 
 toFunId :: (String, ([TypeA], TypeA)) -> FunId
 toFunId (name, sig) = FunId (Ident name) $ uncurry FunSig sig
+
+toFnSigId :: FnDefA -> FunId
+toFnSigId fn = FunId (_fIdent fn) $ toFnSig fn
+
+toFnSig :: FnDefA -> FunSig
+toFnSig (FnDef _ ret _ args _) = FunSig (_aTyp <$> args) ret
 
 --------------------------------------------------------------------------------
 -- Type names: Structs, Classes, Typedefs:
 --------------------------------------------------------------------------------
 
 -- | 'ReservedTypes': Map of type names -> actual types.
-type ReservedTypes = Map Ident TypeA
+type ReservedTypes = M.Map Ident TypeA
 
 -- | 'StructDefMap': Map from struct type names to its fields.
-type StructDefMap = Map Ident [SFieldA]
+type StructDefMap = M.Map Ident [SFieldA]
 
 -- | 'ClassInfo': considerably simplified way of describing 'ClassDef'.
 data ClassInfo = ClassInfo {
-      _ciIdent     :: Ident             -- ^ Name of class.
-    , _ciHierarchy :: Maybe Ident       -- ^ Potential parent.
-    , _ciMethods   :: Map Ident FnDefA  -- ^ map of Fun name -> Method
-    , _ciFieldsDer :: [SFieldA]         -- ^ Derived properties of class.
-    , _ciFields    :: [SFieldA]         -- ^ Properties of class.
+      _ciIdent     :: Ident               -- ^ Name of class.
+    , _ciHierarchy :: Maybe Ident         -- ^ Potential parent.
+    , _ciMethods   :: M.Map Ident FnDefA  -- ^ map of Fun name -> Method
+    , _ciFieldsDer :: [SFieldA]           -- ^ Derived properties of class.
+    , _ciFields    :: [SFieldA]           -- ^ Properties of class.
     } deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 -- | 'ClassDAG': 'ClassGraph' augmented with 'ClassToCGNode'.
@@ -134,7 +140,7 @@ type CGNode        = G.LNode ClassInfo
 type CGEdge        = G.UEdge
 
 -- | 'ClassToCGNode': Map for going from type name to 'CGNode' in 'ClassGraph'.
-type ClassToCGNode = Map Ident G.Node
+type ClassToCGNode = M.Map Ident G.Node
 
 --------------------------------------------------------------------------------
 -- Operating Environment:
@@ -154,7 +160,7 @@ concat <$> mapM (\n -> (++) <$> makeLenses n <*> makePrisms n)
 
 -- | 'initialTCEnv': The initial empty typechecker environment.
 initialTCEnv :: TCEnv
-initialTCEnv = TCEnv empty empty (empty, GF.empty) empty [empty]
+initialTCEnv = TCEnv M.empty M.empty (M.empty, GF.empty) M.empty [M.empty]
 
 --------------------------------------------------------------------------------
 -- Computations in compiler:
@@ -170,14 +176,16 @@ type TCComp a = Comp TCEnv a
 -- Type operations:
 --------------------------------------------------------------------------------
 
-lookupMethod :: (Ident -> TCComp FnDefA) -> Ident -> ClassInfo -> TCComp FnDefA
-lookupMethod onErr name cl =
-    maybeErr (onErr name) (find ((name ==) . _fIdent) $ _ciMethods cl)
+lookupMethod :: (Ident -> TCComp FnDefA) -> Ident -> [ClassInfo] -> TCComp FnDefA
+lookupMethod onErr name cls =
+    let meth = cls >>= M.elems . _ciMethods
+    in maybeErr (onErr name) (find ((name ==) . _fIdent) meth)
 
-lookupClass :: (Ident -> TCComp G.Node) -> Ident -> TCComp ClassInfo
+lookupClass :: (Ident -> TCComp G.Node) -> Ident -> TCComp [ClassInfo]
 lookupClass onErr name = do
-    (cgni, graph) <- use classGraph
-    fromJust . GF.lab graph <$> maybeErr (onErr name) (lookup name cgni)
+    (conv, graph) <- use classGraph
+    node <- maybeErr (onErr name) (M.lookup name conv)
+    return $ snd <$> GF.bfsL node graph
 
 getClass :: G.Node -> TCComp ClassInfo
 getClass node = uses classGraph (fromJust . flip GF.lab node . snd)
@@ -197,18 +205,18 @@ lookupTypeName = lookupX reserved
 -- | 'extendTypeX': Extends current map of type names with the one given,
 -- or fails with onErr if the type name already exists.
 -- Also puts a binding into the given part of the state on success.
-extendTypeX :: ASetter TCEnv TCEnv (Map Ident a) (Map Ident a)
+extendTypeX :: ASetter TCEnv TCEnv (M.Map Ident a) (M.Map Ident a)
                -> (Ident -> TypeA -> TCComp ())
                -> TypeA -> Ident -> a -> TCComp ()
 extendTypeX trav onErr typ name binding =
-    extendTypeName onErr name typ >> trav %= insert name binding
+    extendTypeName onErr name typ >> trav %= M.insert name binding
 
 -- | 'extendTypeName': Extends current map of type names with the one given,
 -- or fails with onErr if the type name already exists.
 extendTypeName :: (Ident -> TypeA -> TCComp ()) -> Ident -> TypeA -> TCComp ()
 extendTypeName onErr name typ =
-    reserved %>= maybe (return ()) (onErr name) . lookup name <=>
-                 return . insert name typ
+    reserved %>= maybe (return ()) (onErr name) . M.lookup name <=>
+                 return . M.insert name typ
 
 --------------------------------------------------------------------------------
 -- Variable operations:
@@ -216,7 +224,7 @@ extendTypeName onErr name typ =
 
 -- | 'currUnused': yields all unused variables in most local scope.
 currUnused :: TCComp [Var]
-currUnused = filter ((== 0) . vuses) <$> uses contexts (elems . head)
+currUnused = filter ((== 0) . vuses) <$> uses contexts (M.elems . head)
 
 -- | 'lookupVar': If var exists in any scope in the 'Contexts', the 'Var' of
 -- the identifier is 'return':ed, otherwise onErr is given the (name = 'Ident').
@@ -225,7 +233,7 @@ lookupVar' onErr name = contexts %%= mfindU (ctxLookup name) >>=
                         maybeErr (onErr name)
 
 ctxLookup :: Ident -> Context -> Maybe (Var, Context)
-ctxLookup name ctx = case updateLookupWithKey incUses name ctx of
+ctxLookup name ctx = case M.updateLookupWithKey incUses name ctx of
     (Just var, ctx') -> Just (var, ctx')
     (Nothing , _   ) -> Nothing
     where incUses _ var = Just $ var { vuses = 1 + vuses var }
@@ -236,9 +244,9 @@ extendVar' :: (Ident -> TCComp ()) -> Var -> TCComp ()
 extendVar' onErr var = do
     let name = vident var
     (c : ctxs) <- use contexts
-    maybe (contexts .= insert name var c:ctxs)
+    maybe (contexts .= M.insert name var c:ctxs)
           (const $ onErr name)
-          (lookup name c)
+          (M.lookup name c)
 
 --------------------------------------------------------------------------------
 -- Function operations:
@@ -254,10 +262,10 @@ lookupFun' = lookupX functions
 extendFun' :: (Ident -> TCComp ()) -> FunId -> TCComp ()
 extendFun' onErr (FunId name sig) = do
     funs <- use functions
-    maybe (functions .= insert name sig funs)
+    maybe (functions .= M.insert name sig funs)
           (const $ onErr name)
-          (lookup name funs)
+          (M.lookup name funs)
 
-lookupX :: Ord k => LensLike' (Const (Maybe b)) TCEnv (Map k b)
+lookupX :: Ord k => LensLike' (Const (Maybe b)) TCEnv (M.Map k b)
         -> (k -> TCComp b) -> k -> TCComp b
-lookupX store onErr k = uses store (lookup k) >>= maybeErr (onErr k)
+lookupX store onErr k = uses store (M.lookup k) >>= maybeErr (onErr k)

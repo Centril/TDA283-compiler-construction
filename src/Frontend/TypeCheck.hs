@@ -200,9 +200,10 @@ computeCIMap = intoProg _TClassDef $ \(ClassDef _ name hier parts_) -> do
            , _ciHierarchy = hier ^? chIdent })
 
 checkMethods :: (t -> [FnDefA] -> [FnDefA] -> TCComp ())
-            -> t -> [FnDefA] -> TCComp [FnDefA]
-checkMethods onErr name methods =
-    checkNoDups onErr _fIdent name methods >> return methods
+             ->  t -> [FnDefA] -> TCComp [FnDefA]
+checkMethods onErr name methods = do
+    checkNoDups onErr _fIdent name methods
+    mapM checkFunSignature methods
 
 --------------------------------------------------------------------------------
 -- Classes (Fields):
@@ -223,22 +224,6 @@ indexSFields x = zipWith (sfIndex .~) [x..]
 --------------------------------------------------------------------------------
 -- Classes (Virtual):
 --------------------------------------------------------------------------------
-
-assignableTo :: TypeA -> TypeA -> TCComp Bool
-assignableTo typ1 typ2 = case typ1 of
-    Array    _ t ds -> do bt <- assignableTo t (_tTyp typ2)
-                          return $ bt && ds == _tDimTs typ2
-    TRef     _ i    -> assignableClass i (_tIdent typ2)
-    ConstStr {}     -> error "ConstStr are not assignable."
-    Fun      {}     -> error "Fun are not assignable."
-    _               -> return $ typ1 == typ2
-
-assignableClass :: Ident -> Ident -> TCComp Bool
-assignableClass ibase isuper = do
-    (ma, gr) <- use classGraph
-    case lookup (ma M.! isuper) (GF.bfsL (ma M.! ibase) gr) of
-        Just _  -> return True
-        Nothing -> return False
 
 checkVirtual :: TCComp ()
 checkVirtual = classGraph %>= \(convs, gr) ->
@@ -324,13 +309,6 @@ checkDecls decl = do
 checkDeclItem :: TypeA -> ItemA -> TCComp ItemA
 checkDeclItem _    item@(NoInit _ _) = return item
 checkDeclItem vtyp item              = iExpr %%~ checkExp vtyp $ item
-
-checkExp :: TypeA -> ExprA -> TCComp ExprA
-checkExp texpected expr = do
-    (expr', tactual) <- (inferExp expr)
-    assignable       <- (assignableTo tactual texpected)
-    unless assignable (wrongExpTyp expr texpected tactual)
-    return expr'
 
 extendArg :: ArgA -> TCComp ()
 extendArg a = extendVar' argAlreadyDef $ Var (_aIdent a) (_aTyp a) VSArg 0

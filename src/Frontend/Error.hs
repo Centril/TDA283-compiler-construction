@@ -64,9 +64,11 @@ xNotDef what x = terr' ["The", what, _ident x, " is not defined."]
 wrongMainSig :: TCComp a
 wrongMainSig = terr "The function: main has the wrong signature."
 
-funNotDef, varNotDef :: Ident -> TCComp a
+noSuchClass, noSuchTypeName, funNotDef, varNotDef :: Ident -> TCComp a
 funNotDef = xNotDef "function"
 varNotDef = xNotDef "variable or parameter"
+noSuchTypeName = xNotDef "type"
+noSuchClass = xNotDef "class"
 
 funAlreadyDef, argAlreadyDef, varAlreadyDef :: Ident -> TCComp a
 funAlreadyDef = xAlreadyDef "function"
@@ -149,9 +151,6 @@ nullNotCastable typ =
     terr' ["Illegal attempt to cast null to the type", show typ,
            ", which is not a pointer type."]
 
-noSuchTypeName :: Ident -> TCComp a
-noSuchTypeName alias = terr' ["The type", _ident alias, "is not defined."]
-
 typeIsReserved :: Ident -> TypeA -> TCComp a
 typeIsReserved name typ =
     terr' ["Type name", _ident name,
@@ -175,7 +174,7 @@ classDupMethods name _ dups =
 noSuchSuperClass :: Ident -> Ident -> TCComp a
 noSuchSuperClass cname super =
     terr' ["The class", _ident cname, "can not extend super class",
-           _ident super, "since it does not exist."]
+           _ident super, "since it is not defined."]
 
 cycleDetectedInClasses :: [[ClassInfo]] -> TCComp a
 cycleDetectedInClasses cycles =
@@ -194,3 +193,10 @@ mismatchedOverridenMethod clazz fun super pfun =
            "extending class", _ident super ++ ".",
            joinComma [unwords ["Expected signature:", show pfun],
                       unwords ["actual:", show fun]]]
+
+classDoesntHaveMethod :: Ident -> TCComp a
+classDoesntHaveMethod mname =
+    terr' ["Class does not have the method", _ident mname]
+
+methAppOnNotClass :: TypeA -> TCComp a
+methAppOnNotClass typ = terr' ["Method call on non-class type", show typ]

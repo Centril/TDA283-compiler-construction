@@ -27,11 +27,11 @@ Portability : ALL
 
 Collecting function signatures & checking main.
 -}
-{-# LANGUAGE LambdaCase#-}
+{-# LANGUAGE LambdaCase #-}
 
 module Frontend.TypeFunSig (
     -- * Operations
-    mainCorrect, allFunctions, toFnSigId
+    mainCorrect, allFunctions, checkFunSignature
 ) where
 
 import Control.Monad
@@ -87,6 +87,3 @@ predefFuns = toFunId <$>
      ("printString", ([conststr], tvoid)),
      ("readInt",     ([        ], int )),
      ("readDouble",  ([        ], doub))]
-
-toFnSigId :: FnDefA -> FunId
-toFnSigId (FnDef _ ret name args _) = FunId name $ FunSig (_aTyp <$> args) ret
