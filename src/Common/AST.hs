@@ -142,8 +142,8 @@ data Expr a
     | ELitFalse { _eAnot :: a }
     | ECastNull { _eAnot :: a, _eTyp   :: Type a }
     | EApp      { _eAnot :: a, _eIdent :: Ident, _eAppExprs :: [Expr a] }
-    | EMApp     { _eAnot :: a, _eExpr  :: Expr a,
-                 _eIdent :: Ident, _eAppExprs :: [Expr a] }
+    | EMApp     { _eAnot :: a, _eLVal  :: LValue a, _eIdent :: Ident,
+                  _eAppExprs :: [Expr a] }
     | Incr      { _eAnot :: a, _eLVal  :: LValue a }
     | Decr      { _eAnot :: a, _eLVal  :: LValue a }
     | PreIncr   { _eAnot :: a, _eLVal  :: LValue a }
@@ -271,7 +271,7 @@ instance Functor Expr where
         ECastNull a t      -> ECastNull (f a) (f <$> t)
         EString   a v      -> EString   (f a) v
         EApp      a i es   -> EApp      (f a) i (f <$$> es)
-        EMApp     a e i es -> EMApp     (f a) (f <$> e) i (f <$$> es)
+        EMApp     a l r es -> EMApp     (f a) (f <$> l) r (f <$$> es)
         Incr      a lv     -> Incr      (f a) (f <$> lv)
         Decr      a lv     -> Decr      (f a) (f <$> lv)
         PreIncr   a lv     -> PreIncr   (f a) (f <$> lv)
@@ -385,8 +385,12 @@ convert (J.Program anot fns)          = Program anot $ cto <$> fns
           ce  (J.ECastNullX a x)      = ECastNull a $ TRef  a (ci x)
           ce  (J.ECastNullA a t d)    = ECastNull a $ Array a (ct t) (cdt <$> d)
           ce  (J.ECastNullS a s)      = ECastNull a $ TStruct a (ci s)
-          ce  (J.EApp      a i es)    = EApp      a (ci i) (ce <$> es)
-          ce  (J.EMApp     a e i es)  = EMApp     a (ce e) (ci i) (ce <$> es)
+          ce  (J.EApp      a lv es)   = case lv of
+                -- TODO: remove fugly hack...
+                J.LValueV _ i []     -> EApp      a (ci i) (ce <$> es)
+                J.LValueS _ i d (J.LValueV _ r []) ->
+                    EMApp  a (LValueV a (ci i) (cde <$> d)) (ci r) (ce <$> es)
+                _                    -> error "not implemented yet"
           ce  (J.Neg       a e)       = Neg       a (ce e)
           ce  (J.Not       a e)       = Not       a (ce e)
           ce  (J.Incr      a lv)      = Incr      a (cLV lv)

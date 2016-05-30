@@ -95,7 +95,6 @@ separator  nonempty DimT "" ;
 
 LValueV.   LValue ::= Ident [DimE] ;
 LValueS.   LValue ::= Ident [DimE] "->" LValue ;
--- shift reduce!
 LValueS.   LValue ::= Ident [DimE] "."  LValue ;
 
 -- Expressions ---------------------------------------------
@@ -114,8 +113,8 @@ ELitTrue.  Expr6 ::= "true" ;
 ELitFalse. Expr6 ::= "false" ;
 EString.   Expr6 ::= String ;
 
-EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
-EMApp.     Expr6 ::= Expr6 "." Ident "(" [Expr] ")" ;
+-- in a real language, this would probably be Expr6 instead of LValue.
+EApp.      Expr6 ::= LValue "(" [Expr] ")" ;
 
 Incr.      Expr6 ::= LValue "++" ;
 Decr.      Expr6 ::= LValue "--" ;
