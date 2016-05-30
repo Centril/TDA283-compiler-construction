@@ -81,8 +81,9 @@ compileENew :: ASTAnots -> [DimEA] -> LComp LTValRef
 compileENew = compileNew . getType
 
 compileNew :: TypeA -> [DimEA] -> LComp LTValRef
-compileNew bt  []     = compileType bt >>= \lbt -> salloc lbt return lbt
-compileNew typ (d:ds) = do
+compileNew t@(TStruct {}) [] = compileType t >>= \lbt -> salloc lbt return lbt
+compileNew t@(TRef    {}) [] = compileType t >>= \lbt -> salloc lbt return lbt
+compileNew typ          (d:ds) = do
     (bt, lbt) <- fkeep compileType $ shrink typ
     l         <- compileExpr $ _deExpr d
     (compileType typ >>= salloc (LPtr lbt) (imul l >=> iadd lenSize)) <<= setLength l
@@ -255,6 +256,7 @@ compileLVal = \case
         case lvlT of
             Array   {}      -> lengthRef llvl
             TStruct _ sname -> accStruct llvl a lvr sname
+            TRef    _ cname -> accClass llvl a lvr cname
             _               -> error "compileLVal: should not pass type check!"
     LValueV a name dimes ->
         arrAccs a dimes $ return . flip ptrRef (_ident $ markIfArg a name)
@@ -264,6 +266,10 @@ accStruct llvl a lvr sname =
     let LValueV _ rname dimes = lvr -- Works since LValue tree is left assoc.
     in arrAccs a dimes $ \ltopT -> intTVR <$> lookupFieldIx rname sname >>=
                                    assignPtr ltopT . flip deref llvl . return
+
+-- TODO: Rewrite because it happens for self.
+accClass :: LTValRef -> ASTAnots -> LValueA -> Ident -> LComp LTValRef
+accClass llvl a lvr cname = u
 
 lookupFieldIx :: Ident -> Ident -> LComp Integer
 lookupFieldIx rname = getStructDef >$>

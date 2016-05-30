@@ -41,7 +41,7 @@ module Backend.LLVM.Environment (
     initialLEnv,
 
     -- * Structs, Classes
-    getStructDef, getClass, getMethod,
+    getStructDef, getClass, getClass', getMethod,
 
     -- ** Aliases
     bindAConv, insertAConv, getConv,
@@ -139,6 +139,11 @@ getClass :: Ident -> LComp [F.ClassInfo]
 getClass name = do
     (node, graph) <- uses classGraph $ first (M.! name)
     return $ snd <$> GF.bfsL node graph
+
+getClass' :: Ident -> LComp F.ClassInfo
+getClass' name  = do
+    (node, graph) <- uses classGraph $ first (M.! name)
+    return $ fromJust $ GF.lab graph node
 
 getMethod :: Ident -> [F.ClassInfo] -> (Integer, FnDefA)
 getMethod name cls =

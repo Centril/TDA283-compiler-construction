@@ -39,6 +39,8 @@ import Common.Annotations
 
 import Backend.LLVM.Environment
 
+import qualified Frontend.Environment as F
+
 u = undefined
 
 --------------------------------------------------------------------------------
@@ -53,7 +55,7 @@ compileType = \case
     Void     _   -> return LVoid
     a@Array   {} -> aliasFor a
     s@TStruct {} -> aliasFor s
-    r@TRef    {} -> return u -- TODO (classes)
+    r@TRef    {} -> aliasFor r
     ConstStr _   -> return strType
     Fun      {}  -> error "compileType Fun not implemented."
 
@@ -93,4 +95,11 @@ createAlias typ = case typ of
         stAlias <- newAlias <<= insertAConv typ
         _sfType <$$> getStructDef (_tIdent typ) >>= mapM compileType >$> LStruct
             >>= insertAlias stAlias >> return stAlias
+    TRef   {}  -> do
+        stAlias <- newAlias <<= insertAConv typ
+        cl <- getClass' (_tIdent typ)
+        let propt = _sfType <$> (F._ciFieldsDer cl) ++ (F._ciFields cl)
+        types <- mapM compileType propt
+        insertAlias stAlias (LStruct types)
+        return stAlias
     _          -> error "createAlias: should be handled by compileType."
