@@ -32,10 +32,10 @@ module Utils.Monad (
     (>$>), (<$<), (<<$>), (<>$>), (<$$>), fkeep,
 
     -- * Applicative operations
-    (<!>), (<:>), (<++>),
+    (<!>), (<:>), (<++>), (<=>), (.>>), (>>.), (.<*),
 
     -- * Monad operations
-    (>?=>), (>=?>), (<<=), (<<=>), (<=>), (.>>), (>>.),
+    (>?=>), (>=?>), (<<=), (<<=>),
     maybeErr, unless', foldl1M, foldr1M, untilEqM, untilMatchM
 ) where
 
@@ -65,15 +65,23 @@ infixr 1 >?=>
 (>=?>) m1 m2 x = m1 >=> m2 x
 infixr 1 >=?>
 
--- | '.>>': blinding left to right Kleisli post-composition of monads.
+-- | '.>>': blinding Left to right Kleisli post-composition of applicatives.
 -- Is to '>=>' what '>>' is to '>>='.
-(.>>) :: Monad m => (a -> m b) -> m c -> a -> m c
-(.>>) fb c a = fb a >> c
+(.>>) :: Applicative m => (a -> m b) -> m c -> a -> m c
+(.>>) fb c a = fb a *> c
+infixl 3 .>>
 
--- | '>>.': blinding left to right Kleisli pre-composition of monads.
+-- | '>>.': blinding Left to right Kleisli pre-composition of applicatives.
 -- Is to '>=>' what '>>' is to '>>='.
-(>>.) :: Monad m => m a -> (b -> m c) -> b -> m c
-(>>.) ma fc b = ma >> fc b
+(>>.) :: Applicative m => m a -> (b -> m c) -> b -> m c
+(>>.) ma fc b = ma *> fc b
+infixl 2 >>.
+
+-- | '.<*': blinding Kleisli Left-to-right post-composition of yielding
+-- the result of the first computation.
+(.<*) :: Applicative m => (a -> m b) -> m c -> a -> m b
+(.<*) fb c a = fb a <* c
+infixl 4 .<*
 
 -- | '<<=': sequentially compose two actions, passing value produced by first as
 -- an argument to the second, but returning the value of produced by first.
@@ -87,11 +95,11 @@ infixl 5 <<=
 (<<=>) f g a = f a >>= \x -> g x >> return x
 infixl 5 <<=>
 
--- | '<=>': Blinding "Kleisli" operator taking two actions, given them the
+-- | '<=>': Blinding "Kleisli" operator taking two actions, giving them the
 -- same value, performing the first, ignoring result of that, then running the
 -- second monadic action and yielding the result of that one.
-(<=>) :: Monad m => (a -> m b) -> (a -> m c) -> a -> m c
-(<=>) f g a = f a >> g a
+(<=>) :: Applicative m => (a -> m b) -> (a -> m c) -> a -> m c
+(<=>) f g a = f a *> g a
 infixl 5 <=>
 
 -- | '<!>': sequential application of a non-applicative value
@@ -137,7 +145,7 @@ unless' m p e = m >>= \x -> if p x then return x else e x
 fkeep :: Functor f => (a -> f b) -> a -> f (a, b)
 fkeep f a = (\b -> (a, b)) <$> f a
 
--- | '<++>': 'mappend' a monoidal value inside a monad to another.
+-- | '<++>': 'mappend' a monoidal value inside an applicative to another.
 (<++>) :: (Applicative f, Monoid b) => f b -> f b -> f b
 (<++>) l r = mappend <$> l <*> r
 
