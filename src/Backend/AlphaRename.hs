@@ -36,8 +36,9 @@ module Backend.AlphaRename (
 ) where
 
 import Data.Maybe
-import Data.Map (Map, insert)
+import qualified Data.Map as M
 
+import Control.Arrow
 import Control.Monad
 import Control.Monad.State
 
@@ -51,39 +52,70 @@ import Common.StateOps
 import Common.AST
 import Common.Annotations
 
+-- TODO: reorganize?
+import Frontend.Environment
+import qualified Utils.GraphFlip as GF
+
+u = undefined
+
 --------------------------------------------------------------------------------
 -- Operating Environment:
 --------------------------------------------------------------------------------
 
 -- | 'AREnv': The operating environment of an alpha renaming computation.
-data AREnv = AREnv { _substs :: [Map Ident Ident], _nameCount :: Int }
+data AREnv = AREnv {
+      _magic     :: M.Map Ident Ident
+    , _substs    :: [M.Map Ident Ident]
+    , _nameCount :: Int }
+
 makeLenses ''AREnv
+
+-- | 'ARComp': The type of computations for alpha renaming.
+type ARComp a = State AREnv a
 
 --------------------------------------------------------------------------------
 -- API:
 --------------------------------------------------------------------------------
 
--- | 'alphaRename': alpha renames a 'ProgramA'.
-alphaRename :: ProgramA -> ProgramA
-alphaRename = flip evalState (AREnv [] 0) .
-              (pTopDefs %%~ mapM . toFnDef %%~ arFun)
-    where arFun f = sPushM substs >> arF f <* (nameCount .= 0)
-          arF     = fArgs %%~ mapM arArg >=> fBlock %%~ arBlock
-          arArg   = aIdent %%~ newSub
+-- | 'alphaRename': alpha renames a 'ProgramA' plus the classes.
+alphaRename :: ProgramA -> TCComp ProgramA
+alphaRename p = do
+    classGraph %= second (`GF.nmap` arX arClass)
+    return $ arX arTop p
 
 --------------------------------------------------------------------------------
--- Alpha Renaming:
+-- Special cases:
 --------------------------------------------------------------------------------
 
--- | 'ARComp': The type of computations for alpha renaming.
-type ARComp a = State AREnv a
+arX :: (a -> ARComp c) -> a -> c
+arX f = flip evalState (AREnv M.empty [] 0) . f
 
-arRef :: Ident -> ARComp Ident
-arRef i = uses substs $ fromJust .| ctxFirst $ i
+prereservedIdents :: [Ident]
+prereservedIdents = Ident <$> ["self", "this"]
 
-newSub :: Ident -> ARComp Ident
-newSub from = (Ident <$> freshOf "v" nameCount) <<=
-                (substs %=) . modifyf . insert from
+-- hlint is wrong, brackets are NOT redundant.
+arClass :: ClassInfo -> ARComp ClassInfo
+arClass = mapM_ bindMagic prereservedIdents                 >>.
+          sInScope substs     . (
+              mapM_ idSub     . (_ciFields >$> _sfIdent)    <=>
+              sInScope substs . (ciMethods %%~ mapM arFun)) .<*
+          nukeMagic
+
+arTop :: ProgramA -> ARComp ProgramA
+arTop = pTopDefs %%~ mapM . toFnDef %%~ arFun
+
+--------------------------------------------------------------------------------
+-- Functions:
+--------------------------------------------------------------------------------
+
+arFun :: FnDefA -> ARComp FnDefA
+arFun f = sPushM substs >> arF f <* (nameCount .= 0)
+
+arF :: FnDefA -> ARComp FnDefA
+arF     = fArgs %%~ mapM arArg >=> fBlock %%~ arBlock
+
+arArg :: ArgA -> ARComp ArgA
+arArg   = aIdent %%~ newSub
 
 arBlock :: BlockA -> ARComp BlockA
 arBlock b = (bStmts %%~ mapM arStmt) b <* sPopM substs
@@ -118,7 +150,8 @@ arExpr expr = case expr of
     ELitTrue  {} -> r
     ELitFalse {} -> r
     ECastNull {} -> r
-    EApp      {} -> eAppExprs %%~ mapM arExpr $ expr
+    EApp      {} -> arA expr
+    EMApp     {} -> arA >=> eExpr %%~ arExpr $ expr
     Incr      {} -> arL
     Decr      {} -> arL
     PreIncr   {} -> arL
@@ -133,6 +166,7 @@ arExpr expr = case expr of
     where arE = eExpr  %%~ arExpr $ expr
           arB = eLExpr %%~ arExpr >=> eRExpr %%~ arExpr $ expr
           arL = eLVal  %%~ arLVal $ expr
+          arA = eAppExprs %%~ mapM arExpr
           r   = return expr
 
 arLVal :: LValueA -> ARComp LValueA
@@ -141,3 +175,26 @@ arLVal lv = case lv of
                   lvDimEs %%~ mapM (deExpr %%~ arExpr) $ lv
     LValueS {} -> -- TODO alpha rename ONLY expressions on rhs.
                   lvLLVal %%~ arLVal $ lv
+
+--------------------------------------------------------------------------------
+-- Building blocks:
+--------------------------------------------------------------------------------
+
+arRef :: Ident -> ARComp Ident
+arRef i = uses magic (M.lookup i) >>=
+          maybeErr (uses substs $ fromJust .| ctxFirst $ i)
+
+bindSub :: Ident -> Ident -> ARComp ()
+bindSub x = (substs %=) . modifyf . M.insert x
+
+newSub :: Ident -> ARComp Ident
+newSub from = (Ident <$> freshOf "v" nameCount) <<= bindSub from
+
+idSub :: Ident -> ARComp ()
+idSub from = bindSub from from
+
+bindMagic :: Ident -> ARComp Ident
+bindMagic from = return from <<= (magic %=) . M.insert from
+
+nukeMagic :: ARComp ()
+nukeMagic = magic .= M.empty
