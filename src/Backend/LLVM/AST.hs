@@ -46,8 +46,7 @@ data LLVMAst = LLVMAst {
     , _lFDefs   :: LFunDefs }
     deriving (Eq, Ord, Show, Read)
 
-data LConstGlobal = LConstGlobal {
-    _lCGIdent :: LIdent, _lCGType :: LType, _lCFVal :: LValue }
+data LConstGlobal = LConstGlobal { _lCGIdent :: LIdent, _lCFVal :: LCValue }
     deriving (Eq, Ord, Show, Read)
 
 type LAlias = (LAliasRef, LType)
@@ -83,10 +82,11 @@ data LFCmpOp = LFOeq | LFOgt | LFOge | LFOlt | LFOle | LFOne | LFOrd
     deriving (Eq, Ord, Show, Read, Enum)
 
 data LValRef
-    = LVInt   { _lVInt   :: Integer }
-    | LVFloat { _lVFloat :: Double  }
-    | LRef    { _lRIdent :: LIdent  }
-    | LConst  { _lRIdent :: LIdent  }
+    = LVInt   { _lVInt   :: Integer   }
+    | LVFloat { _lVFloat :: Double    }
+    | LRef    { _lRIdent :: LIdent    }
+    | LConst  { _lRIdent :: LIdent    }
+    | LVArray { _lvArray :: LTValRefs }
     | LNull
     deriving (Eq, Ord, Show, Read)
 
@@ -142,7 +142,6 @@ data LPhiRef = LPhiRef LValRef LLabelRef
 
 type LLabelRef = LIdent
 type LAliasRef = LIdent
-type LValue  = String
 type LIdent  = String
 
 type LConstGlobals = [LConstGlobal]
@@ -154,6 +153,7 @@ type LPhiRefs      = [LPhiRef]
 type LInsts        = [LInst]
 type LTypes        = [LType]
 type LArgs         = [LArg]
+type LCValue       = LTValRef
 
 --------------------------------------------------------------------------------
 -- Lenses and Prisms:
