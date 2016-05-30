@@ -57,7 +57,7 @@ compileType = \case
     s@TStruct {} -> aliasFor s
     r@TRef    {} -> aliasFor r
     ConstStr _   -> return strType
-    Fun      {}  -> error "compileType Fun not implemented."
+    f@Fun     {} -> funType f
 
 boolType, intType, doubType, charType, strType, byteType, bytePType :: LType
 boolType  = LInt sizeofBool
@@ -77,6 +77,12 @@ sizeofFloat = 64
 
 compileAnotType :: ASTAnots -> LComp LType
 compileAnotType = compileType . getType
+
+funType :: TypeA ->  LComp LType
+funType f = do
+    lrtyp <- compileType (_tfRetTyp f)
+    largs <- mapM compileType (_tfArgsTyps f)
+    return $ LFunPtr lrtyp largs
 
 --------------------------------------------------------------------------------
 -- Aliases:

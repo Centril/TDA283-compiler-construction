@@ -130,6 +130,8 @@ compileMApp anots lv mname es = do
     let virt = extractVirt $ fst $ snd meth
     les     <- mapM compileExpr es
     this    <- compileLVal lv
+    ttyp    <- compileType typ
+    tload   <- load ttyp this
     let dispatch = if virt then compileCallDynamic else compileCallStatic
     dispatch cls meth this les
 
@@ -151,8 +153,11 @@ compileCallStatic cls (ix, (fn, cl)) this les = do
 nameVTable :: String -> String
 nameVTable name = name ++ "__vtable"
 
+-- TODO: Check if this is correct
 vtableOf :: LType -> LType
 vtableOf (LAlias alias) = LAlias $ nameVTable alias
+vtableOf (LPtr ptr)     = vtableOf ptr
+vtableOf _              = error "vtableOf no alias found"
 
 compileCallDynamic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
                   -> LTValRef -> LTValRefs
