@@ -78,6 +78,7 @@ printConstGlobal (LConstGlobal i (LTValRef t v)) =
     where content = case v of
                     LConst str  -> printValue str
                     LVArray vrs -> block $ unlines $ printVTable <$> vrs
+                    _           -> error "printConstGlobal Invalid global value"
 
 printVTable :: LTValRef -> LLVMCode
 printVTable (LTValRef t vr) = case vr of
