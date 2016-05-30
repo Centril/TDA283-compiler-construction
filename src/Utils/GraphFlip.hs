@@ -39,6 +39,8 @@ import Data.Traversable
 import qualified Data.Graph.Inductive as G
 import qualified Utils.Graph as UG
 
+import Control.Arrow
+
 import Utils.Pointless
 import Utils.Foldable
 import Utils.Function
@@ -88,7 +90,10 @@ bfsL n gr = addLabels gr $ bfs n gr
 lab' :: G.Graph gr => Flip gr b a -> G.Node -> a
 lab' = fromJust .| lab
 
-lnmap :: G.Graph gr => Flip gr b a -> (G.LNode a -> G.LNode a) -> Flip gr b a
+nmap :: G.Graph gr => Flip gr b a -> (a -> c) -> Flip gr b c
+nmap = lnmap .$ second
+
+lnmap :: G.Graph gr => Flip gr b a -> (G.LNode a -> G.LNode c) -> Flip gr b c
 lnmap gr f = reconstr gr $ f <$> labNodes gr
 
 gaction :: (Monad m, G.Graph gr)
