@@ -149,12 +149,6 @@ Array.     Type ::= Type [DimT] ;
 separator  nonempty DimT "" ;
 ```
 
-Dimensions of LValues can be empty:
-```c
-LValueS.   LValue ::= Ident [DimE] "."  LValue ;
-separator  DimE "" ;
-```
-
 Coercions causes issues with the brackets "(" and ")":
 ```c
 ECastNullX. Expr7 ::= "(" Ident ")" "null" ;
