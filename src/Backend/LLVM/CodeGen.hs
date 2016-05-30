@@ -104,10 +104,13 @@ compileClasses = use classGraph >>= \(conv, gr) -> do
 compileClass :: F.ClassInfo -> LComp LFunDefs
 compileClass cl = do
     currClass .= Just cl
-    let cltyp = TRef emptyAnot $ F._ciIdent cl
+    let cltyp = makeCLTyp cl
     funs   <- mapM (compileMethod cltyp cl) $ M.elems $ F._ciMethods cl
     currClass .= Nothing
     return funs
+
+makeCLTyp :: F.ClassInfo -> TypeA
+makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
 
 compileMethod :: TypeA -> F.ClassInfo -> FnDefA -> LComp LFunDef
 compileMethod cltyp cl meth@(FnDef _ rtyp name args block) = do

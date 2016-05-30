@@ -131,9 +131,9 @@ compileMApp anots lv mname es = do
     les     <- mapM compileExpr es
     this    <- compileLVal lv
     ttyp    <- compileType typ
-    tload   <- load ttyp this
+    lthis   <- load ttyp this
     let dispatch = if virt then compileCallDynamic else compileCallStatic
-    dispatch cls meth this les
+    dispatch cls meth lthis les
 
 hasVirtual :: [F.ClassInfo] -> Bool
 hasVirtual cls = or $ extractVirt <$> (cls >>= M.elems . F._ciMethods)
