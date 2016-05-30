@@ -126,9 +126,7 @@ expandTDs = U.transformBiM $ \case
 
 expandTD :: TypeA -> Ident -> TCComp TypeA
 expandTD typ alias = lookupTypeName noSuchTypeName alias >>= \case
-    typ'@(TRef _ alias') -> do
-                            assignable <- assignableTo typ typ'
-                            if assignable then return typ
+    typ'@(TRef _ alias') -> if typ == typ' then return typ
                             else expandTD typ' alias'
     x                    -> return x
 
