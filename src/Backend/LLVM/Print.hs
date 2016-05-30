@@ -76,6 +76,14 @@ printConstGlobal :: LConstGlobal -> LLVMCode
 printConstGlobal (LConstGlobal i t v) =
     unwords [printIdentFun i, "=", "global", printType t, printValue v]
 
+printVTableGlobal :: LIdent -> [(LType, LIdent)] -> LLVMCode
+printVTableGlobal ident methods =
+    unwords [printIdentFun ident, "=", "global", printType (LAlias ident),
+             block $ unlines $ printVTableDefs <$> methods]
+
+printVTableDefs :: (LType, LIdent) -> LLVMCode
+printVTableDefs (typ, ident) = unwords [" ", printType typ, printIdentFun ident]
+
 printAlias :: LAlias -> LLVMCode
 printAlias (r, t) = unwords [printAliasRef r, "=", "type", printType t]
 
