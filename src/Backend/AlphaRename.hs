@@ -151,7 +151,7 @@ arExpr expr = case expr of
     ELitFalse {} -> r
     ECastNull {} -> r
     EApp      {} -> arA expr
-    EMApp     {} -> arA >=> eExpr %%~ arExpr $ expr
+    EMApp     {} -> arA >=> eLVal  %%~ arLVal $ expr
     Incr      {} -> arL
     Decr      {} -> arL
     PreIncr   {} -> arL
