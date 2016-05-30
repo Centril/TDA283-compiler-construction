@@ -305,19 +305,29 @@ compileLVal = \case
     LValueV a name dimes ->
         arrAccs a dimes $ return . flip ptrRef (_ident $ markIfArg a name)
 
+accClass :: LTValRef -> ASTAnots -> LValueA -> Ident -> LComp LTValRef
+accClass llvl a lvr sname =
+    let LValueV _ rname dimes = lvr -- Works since LValue tree is left assoc.
+    in arrAccs a dimes $ \ltopT -> intTVR <$> lookupPropIx rname sname >>=
+                                   assignPtr ltopT . flip deref llvl . return
+
 accStruct :: LTValRef -> ASTAnots -> LValueA -> Ident -> LComp LTValRef
 accStruct llvl a lvr sname =
     let LValueV _ rname dimes = lvr -- Works since LValue tree is left assoc.
     in arrAccs a dimes $ \ltopT -> intTVR <$> lookupFieldIx rname sname >>=
                                    assignPtr ltopT . flip deref llvl . return
 
--- TODO: Rewrite because it happens for self.
-accClass :: LTValRef -> ASTAnots -> LValueA -> Ident -> LComp LTValRef
-accClass llvl a lvr cname = u
+lookupPropIx :: Ident -> Ident -> LComp Integer
+lookupPropIx rname cname = do
+    cls@(cl:_) <- getClass cname
+    let offset = if hasVirtual cls then 1 else 0
+    return $ offset + fieldIx rname (_ciFields cl)
 
 lookupFieldIx :: Ident -> Ident -> LComp Integer
-lookupFieldIx rname = getStructDef >$>
-                      _sfIndex . fromJust . find ((rname ==) . _sfIdent)
+lookupFieldIx rname = getStructDef >$> fieldIx rname
+
+fieldIx :: Foldable t => Ident -> t (SField a) -> Integer
+fieldIx rname = _sfIndex . fromJust . find ((rname ==) . _sfIdent)
 
 markIfArg :: ASTAnots -> Ident -> Ident
 markIfArg anots = ident %~ (case mayVS anots of Just VSArg -> "p"; _ -> ""; ++)

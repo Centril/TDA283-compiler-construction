@@ -136,7 +136,6 @@ inferLVal lval = case lval of
     LValueS _ lvl lvr -> do
         (lvl', ltyp) <- inferLVal lvl
         case ltyp of
-            -- TODO FIX FOR CLASSES
             Array   {}      -> do
                 unless (isLVLength lvr) (arrayNotStruct ltyp)
                 addTyp' lval { _lvLLVal = lvl' } int
@@ -148,9 +147,34 @@ inferLVal lval = case lval of
                     [] -> addTyp' lvr typ
                     _  -> inferLValArr lvr typ
                 addTyp' lval { _lvLLVal = lvl', _lvRLVal = lvr' } rtyp
+            TRef _ cname    -> do
+                ic <- use inClass
+                unless ic noAccPrivProp
+                -- Works because the LValue tree is left associative:
+                let LValueV _ rname dimes = lvr
+                typ <- _sfType <$> lookupProp cname rname
+                (lvr', rtyp) <- case dimes of
+                    [] -> addTyp' lvr typ
+                    _  -> inferLValArr lvr typ
+                addTyp' lval { _lvLLVal = lvl', _lvRLVal = lvr' } rtyp
             _         -> primNoAccProps ltyp
-    LValueV _ name [] -> uncurry addTyp <$> lookupVarE' name lval
-    LValueV _ name _  -> lookupVarE' name lval >>= uncurry inferLValArr
+    LValueV _ name [] -> adjustPropInMeth $
+                         uncurry addTyp <$> lookupVarE' name lval
+    LValueV _ name _  -> adjustPropInMeth $
+                         lookupVarE' name lval >>= uncurry inferLValArr
+
+adjustPropInMeth :: TCComp (LValueA, t) -> TCComp (LValueA, t)
+adjustPropInMeth mlv = do
+    (lv, typ) <- mlv
+    lv' <- case extractVS lv of
+           VSThis     -> return lv {_lvIdent = Ident "this" }
+           VSProp cid -> do
+            ctyp <- lookupTypeName (error "never happens") cid
+            let this0 = LValueV emptyAnot (Ident "this") []
+            let (this1, _) = addTyp (addSource this0 VSThis) ctyp
+            return $ LValueS (_lvAnot lv) this1 lv
+           _          -> return lv
+    return (lv', typ)
 
 inferLValArr :: LValueA -> TypeA -> TCComp (LValueA, TypeA)
 inferLValArr lv typ = do
@@ -160,6 +184,12 @@ inferLValArr lv typ = do
     let dimDiff = ldts - ldes
     unless (dimDiff >= 0) $ accArrOverDimen name ldts ldes
     flip addTyp (growN dimDiff bt) <$> (lvDimEs %%~ inferAccInts $ lv)
+
+lookupProp :: Ident -> Ident -> TCComp SFieldA
+lookupProp cname rname = do
+    fields <- _ciFields <$> lookupClass' noSuchClass cname
+    typ    <- lookupTypeName noSuchTypeName cname
+    maybeErr (propNotExists rname typ) $ find ((rname ==) . _sfIdent) fields
 
 lookupField :: Ident -> Ident -> TCComp SFieldA
 lookupField sname rname = do
@@ -195,18 +225,10 @@ mulOp oper | oper == Mod emptyAnot = [int]
 
 inferBin :: (TypeA -> TypeA) -> ExprA -> (TypeA -> Bool) -> TCComp (ExprA, TypeA)
 inferBin mTyp expr acceptf = do
-    tinfo "inferBin"
-
-
     (exprl', typl) <- inferExp $ _eLExpr expr
     (exprr', typr) <- inferExp $ _eRExpr expr
     refl1 <- assignableTo typl typr
     refl2 <- assignableTo typr typl
-
-    tinfoP "refl1" refl1
-    tinfoP "refl2" refl2
-    tinfoP "unless" $ (refl1 || refl2) && acceptf typl
-
     unless ((refl1 || refl2) && acceptf typl) $
         wrongBinExp (_eLExpr expr) (_eRExpr expr) typl typr
     addTyp' (expr { _eLExpr = exprl', _eRExpr = exprr'}) (mTyp typl)

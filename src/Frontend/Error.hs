@@ -204,3 +204,6 @@ methAppOnNotClass typ = terr' ["Method call on non-class type", show typ]
 canNotRedeclareIdent :: Ident -> TCComp a
 canNotRedeclareIdent name =
     terr' ["Can not redeclare special identifier", _ident name]
+
+noAccPrivProp :: TCComp a
+noAccPrivProp = terr' ["Can not access properties from outside of class methods"]

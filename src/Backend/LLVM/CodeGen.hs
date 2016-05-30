@@ -97,7 +97,7 @@ compileFun name rtyp args block = do
     return $ LFunDef rtyp' name' args' insts'
 
 compileClasses :: LComp LFunDefs
-compileClasses = use classGraph >>= \(conv, gr) -> do
+compileClasses = use classGraph >>= \(_, gr) -> do
     let cls = reverse $ GF.topsort' gr
     concat <$> mapM compileClass cls
 
@@ -113,14 +113,14 @@ makeCLTyp :: F.ClassInfo -> TypeA
 makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
 
 compileMethod :: TypeA -> F.ClassInfo -> FnDefA -> LComp LFunDef
-compileMethod cltyp cl meth@(FnDef _ rtyp name args block) = do
-    let name'  = nameMethod cl meth
+compileMethod cltyp cl meth@(FnDef _ rtyp _ args block) = do
+    let name  = nameMethod cl meth
     rtyp'     <- compileFRTyp rtyp
-    this      <- compileFArg $ Arg emptyAnot cltyp $ Ident "this"
-    args1     <- mapM compileFArg args
+    let this   = Arg emptyAnot cltyp $ Ident "this"
+    args1     <- mapM compileFArg $ this : args
     insts     <- compileFBlock args block
     let insts' = insts ++ unreachableMay block
-    return $ LFunDef rtyp' name' (this : args1) insts'
+    return $ LFunDef rtyp' name args1 insts'
 
 unreachableMay :: BlockA -> LInsts
 unreachableMay block = maybe [LUnreachable] (const []) $

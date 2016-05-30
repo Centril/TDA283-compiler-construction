@@ -145,16 +145,16 @@ toWillExecute Nothing      = Unknown
 --------------------------------------------------------------------------------
 
 -- | 'VarSource': Annotation for a source of an 'EVar'.
-data VarSource = VSArg | VSLocal | VSProp | VSThis
+data VarSource = VSArg | VSLocal | VSProp { _vsCI :: Ident } | VSThis
     deriving (Eq, Ord, Show, Read, Data, Typeable)
 
 makePrisms ''VarSource
 
 showVS :: VarSource -> String
-showVS VSArg   = "argument"
-showVS VSLocal = "variable"
-showVS VSThis  = "class"
-showVS VSProp  = "property"
+showVS VSArg       = "argument"
+showVS VSLocal     = "variable"
+showVS VSThis      = "class"
+showVS (VSProp _)  = "property"
 
 prereservedIdents :: [Ident]
 prereservedIdents = Ident <$> ["self", "this"]

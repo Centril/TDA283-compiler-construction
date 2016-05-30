@@ -46,7 +46,7 @@ module Frontend.Environment (
     extendTypeName, lookupTypeName,
     extendStruct, lookupStruct, structs,
     ciIdent, ciHierarchy, ciMethods, ciFields, ciFieldsDer,
-    lookupClass, lookupMethod, classGraph, inClass
+    lookupClass', lookupClass, lookupMethod, classGraph, inClass
 ) where
 
 import Prelude hiding (lookup)
@@ -182,6 +182,12 @@ lookupMethod :: Monad m => (Ident -> m FnDefA)
 lookupMethod onErr name cls =
     let meth = cls >>= M.elems . _ciMethods
     in maybeErr (onErr name) (find ((name ==) . _fIdent) meth)
+
+lookupClass' :: (Ident -> TCComp G.Node) -> Ident -> TCComp ClassInfo
+lookupClass' onErr name = do
+    (conv, graph) <- use classGraph
+    node <- maybeErr (onErr name) (M.lookup name conv)
+    getClass node
 
 lookupClass :: (Ident -> TCComp G.Node) -> Ident -> TCComp [ClassInfo]
 lookupClass onErr name = do

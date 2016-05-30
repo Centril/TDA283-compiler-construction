@@ -215,7 +215,7 @@ checkMethods cl = do
     inClass .= True
     cltyp <- lookupTypeName (error "checkMethods: never happens") $ _ciIdent cl
     sInScope contexts $ do
-        mapM_ extendProp $ _ciFields cl
+        mapM_ (extendProp cl) $ _ciFields cl
         mapM_ (extendSelf cltyp) prereservedIdents
         (ciMethods %%~ mapM checkFun $ cl) <* (inClass .= False)
 
@@ -337,9 +337,10 @@ extendArg a = extendVar' argAlreadyDef $ Var (_aIdent a) (_aTyp a) VSArg 0
 extendLocal :: TypeA -> Ident -> TCComp ()
 extendLocal typ name = extendVar' varAlreadyDef $ Var name typ VSLocal 0
 
-extendProp :: SFieldA -> TCComp ()
-extendProp sf = extendVar' (error "extendProp: should never happen.")
-                    $ Var (_sfIdent sf) (_sfType sf) VSProp 0
+extendProp :: ClassInfo -> SFieldA -> TCComp ()
+extendProp cl sf = extendVar' (error "extendProp: should never happen.")
+                        $ Var (_sfIdent sf) (_sfType sf)
+                              (VSProp $ _ciIdent cl) 0
 
 extendSelf :: TypeA -> Ident -> TCComp ()
 extendSelf typ name = extendVar' varAlreadyDef $ Var name typ VSThis 0
