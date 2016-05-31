@@ -104,17 +104,15 @@ compileClasses = use classGraph >>= \(_, gr) -> do
 compileClass :: F.ClassInfo -> LComp LFunDefs
 compileClass cl = do
     currClass .= Just cl
-    let cltyp = makeCLTyp cl
-    funs   <- mapM (compileMethod cltyp cl) $ M.elems $ F._ciMethods cl
+    funs     <- mapM (compileMethod cl) $ M.elems $ F._ciMethods cl
     currClass .= Nothing
     return funs
 
-compileMethod :: TypeA -> F.ClassInfo -> FnDefA -> LComp LFunDef
-compileMethod cltyp cl meth@(FnDef _ rtyp _ args block) = do
-    let name  = nameMethod cl meth
+compileMethod :: F.ClassInfo -> FnDefA -> LComp LFunDef
+compileMethod cl meth@(FnDef _ rtyp _ args block) = do
+    let name  = nameMethod (meth, cl)
     rtyp'     <- compileFRTyp rtyp
-    let this   = Arg emptyAnot cltyp $ Ident "this"
-    let args1  = this : args
+    let args1  = argThis cl : args
     args2     <- mapM compileFArg args1
     insts     <- compileFBlock args1 block
     let insts' = insts ++ unreachableMay block

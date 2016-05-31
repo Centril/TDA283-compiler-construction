@@ -42,7 +42,7 @@ module Backend.LLVM.Environment (
 
     -- * Structs, Classes
     getStructDef, getClass, getClass',
-    getMethodsUniq, getMethod, classGraph, currClass,
+    getMethodsUniq, findMethod, classGraph, currClass,
 
     -- ** Aliases
     bindAConv, insertAConv, getConv,
@@ -148,14 +148,15 @@ getClass' name  = do
     (node, graph) <- uses classGraph $ first (M.! name)
     return $ fromJust $ GF.lab graph node
 
-getMethod :: Ident -> [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
-getMethod name cls =
-    fromJust $ find ((name ==) . _fIdent . fst . snd) $ getMethodsUniq cls
+findMethod :: Ident -> [(FnDefA, F.ClassInfo)]
+           -> (Integer, (FnDefA, F.ClassInfo))
+findMethod name meths = fromJust $ find ((name ==) . _fIdent . fst . snd)
+                                    $ zip [0..] meths
 
-getMethodsUniq :: [F.ClassInfo] -> [(Integer, (FnDefA, F.ClassInfo))]
+getMethodsUniq :: [F.ClassInfo] -> [(FnDefA, F.ClassInfo)]
 getMethodsUniq cls =
     let meths0 = cls >>= \cl -> fmap (,cl) $ M.elems $ F._ciMethods cl
-    in zip [0..] $ nubBy ((==) |. (_fIdent . fst)) meths0
+    in nubBy ((==) |. (_fIdent . fst)) meths0
 
 --------------------------------------------------------------------------------
 -- Alias operations:

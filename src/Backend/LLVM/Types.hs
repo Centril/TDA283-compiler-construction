@@ -35,6 +35,8 @@ import qualified Data.Map as M
 
 import Control.Arrow
 
+import Control.Lens ((%~))
+
 import Utils.Monad
 import Utils.Sizeables
 
@@ -122,19 +124,19 @@ makeVTable' alias cls = do
     let virtMs = filter isVirt $ getMethodsUniq cls
     if null virtMs then return [] else makeVTable alias virtMs
 
-makeVTable :: LAliasRef -> [(Integer, (FnDefA, F.ClassInfo))] -> LComp [LType]
+makeVTable :: LAliasRef -> [(FnDefA, F.ClassInfo)] -> LComp [LType]
 makeVTable alias virts = do
-    let (typs, ids)  = unzip $ (toFnPtr . fst &&& LRef . nameMethod)
-                             . snd <$> virts
+    let (typs, ids)  = unzip $ (methToFnPtr &&& LRef . nameMethod)
+                            <$> virts
     fptrs     <- mapM compileType typs
     let vtType = nameVTableT alias
     insertAlias vtType (LStruct fptrs)
     let vtdata = LTValRef (LAlias vtType) $ LVArray $ zipWith LTValRef fptrs ids
     pushConst $ LConstGlobal (nameVTableD alias) vtdata
-    return [LAlias vtType]
+    return [LPtr $ LAlias vtType]
 
-isVirt :: (Integer, (FnDefA, F.ClassInfo)) -> Bool
-isVirt (ix, (fn, cl)) = extractVirt fn
+isVirt :: (FnDefA, F.ClassInfo) -> Bool
+isVirt (fn, cl) = extractVirt fn
 
 nameVTableD, nameVTableT, nameVTable :: String -> String
 nameVTableD = (++ "_data") . nameVTable
@@ -143,6 +145,15 @@ nameVTable  = (++ "_vtable")
 
 hasVirtual :: [F.ClassInfo] -> Bool
 hasVirtual cls = or $ extractVirt <$> (cls >>= M.elems . F._ciMethods)
+
+makeCLTyp :: F.ClassInfo -> TypeA
+makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
+
+argThis :: F.ClassInfo -> ArgA
+argThis cl = Arg emptyAnot (makeCLTyp cl) (Ident "this")
+
+methToFnPtr :: (FnDefA, F.ClassInfo) -> TypeA
+methToFnPtr (fn, cl) = toFnPtr $ fArgs %~ (argThis cl:) $ fn
 
 toFnPtr :: FnDefA -> TypeA
 toFnPtr fn = let F.FunSig args ret = F.toFnSig fn in Fun emptyAnot ret args

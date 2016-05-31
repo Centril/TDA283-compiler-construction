@@ -43,8 +43,8 @@ import Backend.LLVM.AST
 
 printLLVMAst :: LLVMAst -> LLVMCode
 printLLVMAst (LLVMAst g a c d) =
-    trim $ unlines [unlineFun printConstGlobal g
-                   ,unlineFun printAlias a
+    trim $ unlines [unlineFun printAlias a
+                   ,unlineFun printConstGlobal g
                    ,unlineFun printFunDecl c
                    ,unlineFun printFunDef d]
 
@@ -81,7 +81,7 @@ printConstGlobal (LConstGlobal i (LTValRef t v)) =
 
 printVTable :: LTValRef -> LLVMCode
 printVTable (LTValRef t vr) = case vr of
-    (LConst i) -> unwords [" ", printType t, printIdentFun i]
+    (LRef i) -> unwords [" ", printType t, printIdentFun i]
     _          -> error "printVTableDefs Invalid global value"
 
 printAlias :: LAlias -> LLVMCode

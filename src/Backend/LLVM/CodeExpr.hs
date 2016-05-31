@@ -34,7 +34,6 @@ module Backend.LLVM.CodeExpr where
 import Data.List
 import Data.Tuple
 import Data.Maybe
-import qualified Data.Map as M
 
 import Control.Monad
 
@@ -106,7 +105,7 @@ compileCString :: String -> LComp LTValRef
 compileCString v = do
     ref  <- newConstRef "cstring"
     let typ   = LArray (1 + genericLength v) charType
-    pushConst $ LConstGlobal ref typ v
+    pushConst $ LConstGlobal ref (LTValRef typ $ LConst v)
     assignTemp strType $ strPointer (LPtr typ) ref
 
 compileCastNull :: TypeA -> LComp LTValRef
@@ -124,23 +123,22 @@ callFSwitch fr = \case
 
 compileMApp :: ASTAnots -> LValueA -> Ident -> [ExprA] -> LComp LTValRef
 compileMApp _ lv mname es = do
-    let typ  = extractType lv
-    cls     <- getClass $ _tIdent typ
-    let meth = getMethod mname cls
-    let virt = extractVirt $ fst $ snd meth
-    les     <- mapM compileExpr es
-    this    <- compileLVal lv
-    ttyp    <- compileType typ
-    lthis   <- load ttyp this
+    let typ   = extractType lv
+    cls      <- getClass $ _tIdent typ
+    let meths = getMethodsUniq cls
+    let meth  = findMethod mname meths
+    let virt  = extractVirt $ fst $ snd meth
+    let meth' = if virt then findMethod mname (filter isVirt meths) else meth
+    les      <- mapM compileExpr es
+    this     <- compileLVal lv
+    ttyp     <- compileType typ
+    lthis    <- load ttyp this
     let dispatch = if virt then compileCallDynamic else compileCallStatic
-    dispatch cls meth lthis les
+    dispatch cls meth' lthis les
 
 castIfNeed :: LType -> LTValRef -> LComp LTValRef
 castIfNeed tlhs rhs | tlhs == _lTType rhs = return rhs
                     | otherwise           = bitcast tlhs rhs
-
-makeCLTyp :: F.ClassInfo -> TypeA
-makeCLTyp cl = appConcrete $ flip TRef (F._ciIdent cl)
 
 castApp :: FnDefA -> LTValRefs -> LComp LTValRefs
 castApp fn les = do
@@ -166,7 +164,7 @@ compileCallStatic _ (_, (fn, cl)) this les = do
 
 -- TODO: Check if this is correct
 vtableOf :: LType -> LType
-vtableOf (LAlias alias) = LAlias $ nameVTable alias
+vtableOf (LAlias alias) = LPtr $ LAlias $ nameVTableT alias
 vtableOf (LPtr ptr)     = vtableOf ptr
 vtableOf _              = error "vtableOf no alias found"
 
@@ -180,7 +178,7 @@ compileCallDynamic _ (ix, (fn, cl)) this les = do
     vtabref  <- assignPtr vttyp $ deref [izero] this
     vtable   <- load vttyp vtabref
     -- load method:
-    ftyp     <- compileType $ toFnPtr fn
+    ftyp     <- compileType $ methToFnPtr (fn, cl)
     methref  <- assignPtr ftyp  $ deref [intTVR ix] vtable
     methload <- load ftyp methref
     -- call method:
