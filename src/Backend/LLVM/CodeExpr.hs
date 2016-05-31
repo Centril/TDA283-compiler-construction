@@ -83,14 +83,33 @@ compileENew :: ASTAnots -> [DimEA] -> LComp LTValRef
 compileENew = compileNew . getType
 
 compileNew :: TypeA -> [DimEA] -> LComp LTValRef
-compileNew t@(TRef    {}) [] = compileType t >>= \lbt -> salloc lbt return lbt
-compileNew t              [] = compileType t >>= \lbt -> salloc lbt return lbt
+compileNew t@(TRef _ cname) [] = compileNewClass t cname
+compileNew t                [] = allocStd t
 compileNew typ          (d:ds) = do
     (bt, lbt) <- fkeep compileType $ shrink typ
     l         <- compileExpr $ _deExpr d
     (compileType typ >>= salloc (LPtr lbt) (imul l >=> iadd lenSize)) <<= setLength l
         <<= \newed -> unless (null ds) $ basicFor "newSubArr" lbt newed l $
             (compileNew bt ds >>=) . flip store
+
+u = undefined
+
+compileNewClass :: TypeA -> Ident -> LComp LTValRef
+compileNewClass t cname = do
+    this <- allocStd t
+    cls  <- getClass cname
+    when (hasVirtual cls) $ do
+        let ltyp   =  _lTType this
+        let vttyp  = vtableOf ltyp
+        let vtdata = LTValRef vttyp (vtableData ltyp)
+        vtableref <- refVTable this vttyp
+        store vtdata vtableref
+        return u
+        -- TODO
+    return this
+
+allocStd :: TypeA -> LComp LTValRef
+allocStd t = compileType t >>= \lbt -> salloc lbt return lbt
 
 salloc :: LType -> (LTValRef -> LComp LTValRef) -> LType -> LComp LTValRef
 salloc et sc rt = compileSizeof et >>= sc >>= flip compileCalloc ione
@@ -162,11 +181,19 @@ compileCallStatic _ (_, (fn, cl)) this les = do
     lrtyp   <- compileType $ _fRetTyp fn
     callFSwitch fr lrtyp
 
--- TODO: Check if this is correct
+extractAlias :: LType -> LIdent
+extractAlias (LAlias alias) = alias
+extractAlias (LPtr ptr)     = extractAlias ptr
+extractAlias _              = error "extractAlias no alias found"
+
 vtableOf :: LType -> LType
-vtableOf (LAlias alias) = LPtr $ LAlias $ nameVTableT alias
-vtableOf (LPtr ptr)     = vtableOf ptr
-vtableOf _              = error "vtableOf no alias found"
+vtableOf = LPtr . LAlias . nameVTableT . extractAlias
+
+vtableData :: LType -> LValRef
+vtableData = LConst . nameVTableD . extractAlias
+
+refVTable :: LTValRef -> LType -> LComp LTValRef
+refVTable this vttyp = assignPtr vttyp $ deref [izero] this
 
 compileCallDynamic :: [F.ClassInfo] -> (Integer, (FnDefA, F.ClassInfo))
                   -> LTValRef -> LTValRefs
@@ -175,8 +202,7 @@ compileCallDynamic _ (ix, (fn, cl)) this les = do
     let ltyp  = _lTType this
     -- load vtable:
     let vttyp = vtableOf ltyp
-    vtabref  <- assignPtr vttyp $ deref [izero] this
-    vtable   <- load vttyp vtabref
+    vtable   <- refVTable this vttyp >>= load vttyp
     -- load method:
     ftyp     <- compileType $ methToFnPtr (fn, cl)
     methref  <- assignPtr ftyp  $ deref [intTVR ix] vtable
@@ -251,8 +277,6 @@ compileBArith th gf l r = do
     l'            <- compileExpr l
     LTValRef t r' <- compileExpr r
     assignTemp (th t) (gf t l' r')
-
-
 
 compileLRel :: RelOpA -> ExprA -> ExprA -> LComp LTValRef
 compileLRel op l r = do

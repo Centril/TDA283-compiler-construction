@@ -126,7 +126,7 @@ makeVTable' alias cls = do
 
 makeVTable :: LAliasRef -> [(FnDefA, F.ClassInfo)] -> LComp [LType]
 makeVTable alias virts = do
-    let (typs, ids)  = unzip $ (methToFnPtr &&& LRef . nameMethod)
+    let (typs, ids)  = unzip $ (methToFnPtr &&& LConst . nameMethod)
                             <$> virts
     fptrs     <- mapM compileType typs
     let vtType = nameVTableT alias

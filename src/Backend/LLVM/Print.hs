@@ -82,7 +82,7 @@ printConstGlobal (LConstGlobal i (LTValRef t v)) =
 
 printVTable :: LTValRef -> LLVMCode
 printVTable (LTValRef t vr) = case vr of
-    (LRef i) -> unwords [" ", printType t, printIdentFun i]
+    (LConst i) -> unwords [" ", printType t, printIdentFun i]
     _          -> error "printVTableDefs Invalid global value"
 
 printAlias :: LAlias -> LLVMCode
