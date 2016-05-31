@@ -30,11 +30,12 @@ Distributed under GPL2 or any later version.
 
 Usage: jlc FILES... [-o|--output FILE] [--outtype exec | asm | bc]
            [-w|--fwarn-error] [-n|--fno-warn-unused] [-t|--typecheck]
-           ([-q|--quiet] | [--info] | [--warn]) ([-0|--O0] | [-1|--O1] |
-           [-2|--O2] | [-3|--O3] | [-4|--O4] | [-5|--O5] | [-6|--O6])
-           [-l|--llvm-extras FILES...] [-i|--llvm-inter]
+           [-a|--alpha-rename] [-p|--pre-opt] ([-q|--quiet] | [--info] |
+           [--warn]) ([-0|--O0] | [-1|--O1] | [-2|--O2] | [-3|--O3] | [-4|--O4]
+           | [-5|--O5] | [-6|--O6]) [-l|--llvm-extras FILES...]
+           [-i|--llvm-inter]
 
-  To compile and link a complete Javalette program, run the compiler like so
+  To compile and link a complete Javalette program, run the compiler like so   
   (assuming it is on the PATH):
 
       jlc myprogram.jl
@@ -57,6 +58,8 @@ Available options:
   -w,--fwarn-error         Turn all warnings into errors
   -n,--fno-warn-unused     Do not warn about unused parameter and variables
   -t,--typecheck           Only perform typechecking
+  -a,--alpha-rename        Stop after alpha renaming
+  -p,--pre-opt             Stop after pre-optimization
   -q,--quiet               Suppress all messages except for errors
   --info                   Verbose mode. Show all types of messages including
                            info messages
@@ -70,7 +73,7 @@ Available options:
   -5,--O5                  Optimization level 5, for LLVM this is -O3
   -6,--O6                  Optimization level 6, for LLVM this is -O4
   -l,--llvm-extras FILES...
-                           FILE paths to additional llvm code for compilation
+                           FILE paths to additional llvm code for compilation  
                            Applies in conjunction with the llvm backend
   -i,--llvm-inter          Emit all intermediary produced .ll files
                            Applies in conjunction with the llvm backend
