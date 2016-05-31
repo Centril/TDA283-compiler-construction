@@ -136,7 +136,7 @@ makeVTable alias virts = do
     return [LPtr $ LAlias vtType]
 
 isVirt :: (FnDefA, F.ClassInfo) -> Bool
-isVirt (fn, cl) = extractVirt fn
+isVirt (fn, _) = extractVirt fn
 
 nameVTableD, nameVTableT, nameVTable :: String -> String
 nameVTableD = (++ "_data") . nameVTable
@@ -159,7 +159,7 @@ toFnPtr :: FnDefA -> TypeA
 toFnPtr fn = let F.FunSig args ret = F.toFnSig fn in Fun emptyAnot ret args
 
 nameMethod' :: (Integer, (FnDefA, F.ClassInfo)) -> FnDefA
-nameMethod' (ix, x@(fn, cl)) = fn { _fIdent = Ident $ nameMethod x }
+nameMethod' (_, x@(fn, _)) = fn { _fIdent = Ident $ nameMethod x }
 
 nameMethod :: (FnDefA, F.ClassInfo) -> LIdent
 nameMethod (fn, cl) = _ident (F._ciIdent cl) ++ "__" ++ _ident (_fIdent fn)

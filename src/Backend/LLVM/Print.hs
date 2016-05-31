@@ -161,6 +161,7 @@ printValRef = \case
     LVFloat f -> show f
     LRef    r -> printIdentVar r
     LConst  c -> printIdentFun c
+    LVArray _ -> error "Not implemented"
     LNull     -> "null"
 
 printTValRef :: LTValRef -> LLVMCode
