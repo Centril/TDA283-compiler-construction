@@ -102,8 +102,6 @@ compileNewClass t cname = do
         let vtdata = LTValRef vttyp (vtableData ltyp)
         vtableref <- refVTable this vttyp
         store vtdata vtableref
-        return u
-        -- TODO
     return this
 
 allocStd :: TypeA -> LComp LTValRef
