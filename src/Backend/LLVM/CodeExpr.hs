@@ -92,8 +92,6 @@ compileNew typ          (d:ds) = do
         <<= \newed -> unless (null ds) $ basicFor "newSubArr" lbt newed l $
             (compileNew bt ds >>=) . flip store
 
-u = undefined
-
 compileNewClass :: TypeA -> Ident -> LComp LTValRef
 compileNewClass t cname = do
     this <- allocStd t
